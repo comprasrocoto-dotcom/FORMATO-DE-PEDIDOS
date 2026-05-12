@@ -157,7 +157,7 @@ export default function ProveedorCard({
           <tr><td class="data-label">ENVIAR A:</td><td class="data-value">${sede || 'Rocoto Laureles'}</td></tr>
           <tr><td class="data-label">Dirección:</td><td class="data-value"> Calle 45 #22-18, Laureles</td></tr>
           <tr><td class="data-label">Teléfono:</td><td class="data-value">(604) 987 6543</td></tr>
-          <tr><td class="data-label">Email:</td><td class="data-value">mari@rocoto.co</td></tr>
+          <tr><td class="data-label">Email:</td><td class="data-value">comprasrocoto@gmail.com</td></tr>
         </table>
       </div>
     </div>
