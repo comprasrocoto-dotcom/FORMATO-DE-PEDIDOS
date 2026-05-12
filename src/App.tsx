@@ -1,8 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Database, Plus, FileSpreadsheet, Download, RefreshCw, BarChart3, List, LayoutGrid, LogIn, LogOut } from 'lucide-react';
-import { INSUMOS, PROVEEDORES, SEDES } from './data/mockData';
-import { Insumo, Proveedor } from './types';
+import { Database, Download, RefreshCw, BarChart3, List, LayoutGrid, LogIn, LogOut, ShoppingCart, Send, FileText, CheckCircle, AlertCircle, X } from 'lucide-react';
+import { Insumo, Proveedor, Pedido, ItemPedido } from './types';
 import Filters from './components/Filters';
 import InsumoTable from './components/InsumoTable';
 import ProveedorCard from './components/ProveedorCard';
@@ -10,706 +9,566 @@ import { cn } from './lib/utils';
 import { dbService, Sede } from './services/db';
 import { auth } from './lib/firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, User } from 'firebase/auth';
+import { fetchCatalogo } from './services/sheetsService';
+import { guardarPedido, getNextNumeroPedido } from './services/pedidosService';
+import { enviarCorreoPedido } from './services/emailService';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
-export default function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [insumos, setInsumos] = useState<Insumo[]>([]);
-  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
-  const [sedes, setSedes] = useState<Sede[]>([]);
-  
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedProveedorId, setSelectedProveedorId] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [quantities, setQuantities] = useState<Record<string, number>>({});
-  
-  // Header fields state
-  const [sede, setSede] = useState(() => localStorage.getItem('order_config_sede') || '');
-  const [direccionEntrega, setDireccionEntrega] = useState(() => localStorage.getItem('order_config_direccion') || '');
-  const [horarioRecepcion, setHorarioRecepcion] = useState(() => localStorage.getItem('order_config_horario') || '');
-  const [notas, setNotas] = useState('');
-  const [responsable, setResponsable] = useState('');
+type ToastType = 'success' | 'error' | 'info';
+interface Toast { id: number; msg: string; type: ToastType; }
 
-  // Auth Listener
-  useEffect(() => {
-    const unsubAuth = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setAuthLoading(false);
-    });
-    return () => unsubAuth();
+export default function App() {
+    const [user, setUser] = useState<User | null>(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [insumos, setInsumos] = useState<Insumo[]>([]);
+    const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+    const [sedes, setSedes] = useState<Sede[]>([]);
+    const [sheetsLoading, setSheetsLoading] = useState(false);
+    const [sheetsError, setSheetsError] = useState('');
+
+  const [searchTerm, setSearchTerm] = useState('');
+    const [selectedProveedorId, setSelectedProveedorId] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('');
+    const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+    const [isUpdating, setIsUpdating] = useState(false);
+    const [quantities, setQuantities] = useState<Record<string, number>>({});
+
+  const [sede, setSede] = useState(() => localStorage.getItem('order_config_sede') || '');
+    const [direccionEntrega, setDireccionEntrega] = useState(() => localStorage.getItem('order_config_direccion') || '');
+    const [horarioRecepcion, setHorarioRecepcion] = useState(() => localStorage.getItem('order_config_horario') || '');
+    const [notas, setNotas] = useState('');
+    const [responsable, setResponsable] = useState('');
+    const [correoResponsable, setCorreoResponsable] = useState(() => localStorage.getItem('order_config_correo') || '');
+
+  const [isSaving, setIsSaving] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [lastPedido, setLastPedido] = useState<Pedido | null>(null);
+    const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = useCallback((msg: string, type: ToastType = 'info') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, msg, type }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5000);
   }, []);
 
-  // Initialize and Subscribe
   useEffect(() => {
-    if (!user) return;
+        const unsub = onAuthStateChanged(auth, (u) => { setUser(u); setAuthLoading(false); });
+        return () => unsub();
+  }, []);
 
-    dbService.initializeIfEmpty(INSUMOS, PROVEEDORES, SEDES);
+  const loadFromSheets = useCallback(async () => {
+        setSheetsLoading(true);
+        setSheetsError('');
+        try {
+                const { proveedores: ps, insumos: ins } = await fetchCatalogo();
+                if (ps.length > 0) {
+                          setProveedores(ps);
+                          setInsumos(ins);
+                          addToast(`Catalogo actualizado: ${ps.length} proveedores, ${ins.length} articulos`, 'success');
+                } else {
+                          throw new Error('La hoja esta vacia o la API Key no esta configurada.');
+                }
+        } catch (err: any) {
+                setSheetsError(err.message || 'Error al cargar desde Google Sheets');
+                addToast('Error al cargar desde Sheets. Usando datos locales.', 'error');
+        } finally {
+                setSheetsLoading(false);
+        }
+  }, [addToast]);
 
-    const unsubInsumos = dbService.subscribeToInsumos(setInsumos);
-    const unsubProveedores = dbService.subscribeToProveedores(setProveedores);
-    const unsubSedes = dbService.subscribeToSedes(setSedes);
-
-    return () => {
-      unsubInsumos();
-      unsubProveedores();
-      unsubSedes();
-    };
-  }, [user]);
+  useEffect(() => {
+        if (!user) return;
+        dbService.initializeIfEmpty([], [], []);
+        const unsubSedes = dbService.subscribeToSedes(setSedes);
+        // Try loading from Sheets, fallback to Firestore
+                loadFromSheets().catch(() => {
+                        const unsubInsumos = dbService.subscribeToInsumos(setInsumos);
+                        const unsubProveedores = dbService.subscribeToProveedores(setProveedores);
+                        return () => { unsubInsumos(); unsubProveedores(); };
+                });
+        return () => unsubSedes();
+  }, [user, loadFromSheets]);
 
   const handleLogin = async () => {
-    try {
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login error:", error);
-    }
+        try { await signInWithPopup(auth, new GoogleAuthProvider()); }
+        catch (e) { console.error(e); }
   };
+    const handleLogout = async () => {
+          try { await signOut(auth); }
+          catch (e) { console.error(e); }
+    };
 
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-    } catch (error) {
-      console.error("Logout error:", error);
-    }
-  };
-
-  const handleConfigChange = (field: 'sede' | 'direccion' | 'horario', value: string) => {
-    if (field === 'sede') {
-      setSede(value);
-      localStorage.setItem('order_config_sede', value);
-      
-      // Auto-fill address and schedule if it's a known sede
-      const foundSede = sedes.find(s => s.nombre === value);
-      if (foundSede) {
-        setDireccionEntrega(foundSede.direccion);
-        localStorage.setItem('order_config_direccion', foundSede.direccion);
-        setHorarioRecepcion(foundSede.horario);
-        localStorage.setItem('order_config_horario', foundSede.horario);
-      }
-    } else if (field === 'direccion') {
-      setDireccionEntrega(value);
-      localStorage.setItem('order_config_direccion', value);
-    } else if (field === 'horario') {
-      setHorarioRecepcion(value);
-      localStorage.setItem('order_config_horario', value);
-    }
+  const handleConfigChange = (field: 'sede' | 'direccion' | 'horario' | 'correo', value: string) => {
+        if (field === 'sede') {
+                setSede(value);
+                localStorage.setItem('order_config_sede', value);
+                const found = sedes.find(s => s.nombre === value);
+                if (found) {
+                          setDireccionEntrega(found.direccion);
+                          localStorage.setItem('order_config_direccion', found.direccion);
+                          setHorarioRecepcion(found.horario);
+                          localStorage.setItem('order_config_horario', found.horario);
+                }
+        } else if (field === 'direccion') {
+                setDireccionEntrega(value);
+                localStorage.setItem('order_config_direccion', value);
+        } else if (field === 'horario') {
+                setHorarioRecepcion(value);
+                localStorage.setItem('order_config_horario', value);
+        } else if (field === 'correo') {
+                setCorreoResponsable(value);
+                localStorage.setItem('order_config_correo', value);
+        }
   };
 
   const handleQuantityChange = (id: string, value: number) => {
-    setQuantities(prev => ({
-      ...prev,
-      [id]: Math.max(0, value)
-    }));
+        setQuantities(prev => ({ ...prev, [id]: Math.max(0, value) }));
   };
 
-  // Derive categories from data
   const categories = useMemo(() => {
-    const cats = new Set(insumos.map(i => i.categoria));
-    return Array.from(cats).sort();
+        return Array.from(new Set(insumos.map(i => i.categoria))).sort();
   }, [insumos]);
 
-  // Filtering & Sorting Logic
   const filteredInsumos = useMemo<Insumo[]>(() => {
-    return insumos.filter(insumo => {
-      const proveedor = proveedores.find(p => p.id === insumo.proveedorId);
-      const matchesSearch = 
-        insumo.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        insumo.categoria.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        proveedor?.nombre.toLowerCase().includes(searchTerm.toLowerCase());
-      
-      const matchesProveedor = !selectedProveedorId || insumo.proveedorId === selectedProveedorId;
-      const matchesCategory = !selectedCategory || insumo.categoria === selectedCategory;
-
-      return matchesSearch && matchesProveedor && matchesCategory;
-    }).sort((a, b) => a.nombre.localeCompare(b.nombre));
+        return insumos.filter(insumo => {
+                const proveedor = proveedores.find(p => p.id === insumo.proveedorId);
+                const matchesSearch = !searchTerm ||
+                          insumo.nombre.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          insumo.categoria.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                          proveedor?.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+                const matchesProveedor = !selectedProveedorId || insumo.proveedorId === selectedProveedorId;
+                const matchesCategory = !selectedCategory || insumo.categoria === selectedCategory;
+                return matchesSearch && matchesProveedor && matchesCategory;
+        }).sort((a, b) => a.nombre.localeCompare(b.nombre));
   }, [insumos, proveedores, searchTerm, selectedProveedorId, selectedCategory]);
 
-  const handleSimulateUpdate = () => {
-    setIsUpdating(true);
-    setTimeout(() => setIsUpdating(false), 800);
+  const activeItems = useMemo((): ItemPedido[] => {
+        return filteredInsumos
+          .filter(i => (quantities[i.id] || 0) > 0)
+          .map(i => ({
+                    insumoId: i.id,
+                    nombre: i.nombre,
+                    categoria: i.categoria,
+                    unidad: i.unidad,
+                    precio: i.precio,
+                    cantidad: quantities[i.id],
+                    subtotal: i.precio * quantities[i.id],
+          }));
+  }, [filteredInsumos, quantities]);
+
+  const totalPedido = useMemo(() => activeItems.reduce((s, i) => s + i.subtotal, 0), [activeItems]);
+
+      const buildPedidoData = async (): Promise<Pedido | null> => {
+            if (!responsable.trim()) { addToast('Ingresa el nombre del responsable.', 'error'); return null; }
+            if (!correoResponsable.trim()) { addToast('Ingresa el correo del responsable.', 'error'); return null; }
+            if (activeItems.length === 0) { addToast('Agrega al menos un articulo con cantidad > 0.', 'error'); return null; }
+            const proveedor = proveedores.find(p => p.id === selectedProveedorId);
+            const numeroPedido = await getNextNumeroPedido();
+            return {
+                    proveedor: proveedor?.nombre || 'Todos los Proveedores',
+                    proveedorEmail: proveedor?.email || '',
+                    puntoDeVenta: sede || 'Sin especificar',
+                    direccionEntrega,
+                    horarioRecepcion,
+                    responsable,
+                    correoResponsable,
+                    notas,
+                    fecha: new Date().toLocaleDateString('es-CO'),
+                    numeroPedido,
+                    items: activeItems,
+                    total: totalPedido,
+            };
+      };
+
+  const handleGuardarPedido = async () => {
+        setIsSaving(true);
+        try {
+                const pedido = await buildPedidoData();
+                if (!pedido) return;
+                const id = await guardarPedido(pedido);
+                setLastPedido({ ...pedido, id });
+                addToast(`Pedido ${pedido.numeroPedido} guardado correctamente.`, 'success');
+        } catch (e: any) {
+                addToast('Error al guardar pedido: ' + e.message, 'error');
+        } finally {
+                setIsSaving(false);
+        }
   };
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <RefreshCw className="w-8 h-8 text-brand-500 animate-spin" />
-          <p className="text-sm font-medium text-slate-500 animate-pulse uppercase tracking-widest">Iniciando Sistema...</p>
-        </div>
-      </div>
-    );
-  }
+  const handleEnviarCorreo = async () => {
+        if (!lastPedido) { addToast('Primero guarda el pedido.', 'error'); return; }
+        setIsSendingEmail(true);
+        try {
+                await enviarCorreoPedido(lastPedido);
+                addToast('Correo enviado a ' + lastPedido.correoResponsable, 'success');
+        } catch (e: any) {
+                addToast('Error al enviar correo: ' + e.message, 'error');
+        } finally {
+                setIsSendingEmail(false);
+        }
+  };
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-900 overflow-hidden relative">
-        {/* Abstract Background Design */}
-        <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
-            <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] bg-brand-500 rounded-full blur-[120px]" />
-            <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] bg-blue-500 rounded-full blur-[120px]" />
-        </div>
-
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="w-full max-w-md bg-white p-10 rounded-3xl shadow-2xl relative z-10 border border-white/10"
-        >
-          <div className="flex flex-col items-center text-center mb-10">
-            <div className="w-20 h-20 bg-brand-500 rounded-3xl flex items-center justify-center shadow-xl shadow-brand-500/30 mb-8 border-4 border-white">
-              <Database className="w-10 h-10 text-white" />
-            </div>
-            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-3">InsumoMaster</h1>
-            <p className="text-slate-500 text-lg font-medium leading-relaxed">
-              Consola Maestra de <span className="text-brand-600 font-bold">Rocoto</span> para la gestión de suministros.
-            </p>
-          </div>
-
-          <div className="space-y-6">
-            <button 
-              onClick={handleLogin}
-              className="w-full group flex items-center justify-center gap-4 bg-slate-900 hover:bg-slate-800 text-white py-4 px-6 rounded-2xl font-bold text-lg transition-all shadow-xl hover:shadow-slate-900/20 active:scale-[0.98]"
-            >
-              <LogIn className="w-6 h-6 group-hover:translate-x-1 transition-transform" />
-              Acceder con Google
-            </button>
-            <div className="flex items-center gap-4 py-2">
-                <div className="flex-1 h-px bg-slate-100" />
-                <span className="text-[10px] uppercase font-bold text-slate-300 tracking-[0.3em]">Acceso Restringido</span>
-                <div className="flex-1 h-px bg-slate-100" />
-            </div>
-          </div>
-
-          <p className="text-center mt-12 text-slate-400 text-sm font-medium">
-            Solo personal autorizado de <span className="text-slate-600 font-bold">Rocoto</span>.
-          </p>
-        </motion.div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      {/* Top Navigation */}
-      <header className="bg-slate-900 text-white shadow-lg z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center shadow-lg shadow-brand-500/20">
-                <Database className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex flex-col">
-                <h1 className="text-lg font-bold tracking-tight">InsumoMaster</h1>
-                <span className="text-[10px] text-slate-400 font-medium uppercase tracking-[0.2em]">Catalogo de Proveedores</span>
-              </div>
-            </div>
-
-            <div className="hidden md:flex items-center gap-4">
-              <div className="flex items-center gap-2 mr-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50">
-                <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold">
-                  {user?.email?.charAt(0).toUpperCase()}
-                </div>
-                <span className="text-xs font-medium text-slate-300">{user?.email}</span>
-              </div>
-              <button 
-                onClick={handleLogout}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-800 transition-all text-slate-300"
-              >
-                <LogOut className="w-4 h-4" />
-                Salir
-              </button>
-              <button 
-                onClick={handleSimulateUpdate}
-                disabled={isUpdating}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-800 transition-all text-slate-300 disabled:opacity-50"
-              >
-                <RefreshCw className={cn("w-4 h-4", isUpdating && "animate-spin")} />
-                Sincronizar
-              </button>
-              <button className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium bg-brand-600 hover:bg-brand-700 transition-all text-white shadow-md shadow-brand-600/20">
-                <Plus className="w-4 h-4" />
-                Nuevo Insumo
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Filters Bar */}
-      <div className="filters-bar">
-                  <Filters
-                    searchTerm={searchTerm}
-                    setSearchTerm={setSearchTerm}
-                    selectedProveedorId={selectedProveedorId}
-                    setSelectedProveedorId={setSelectedProveedorId}
-                    selectedCategory={selectedCategory}
-                    setSelectedCategory={setSelectedCategory}
-                    viewMode={viewMode}
-                    setViewMode={setViewMode}
-                    proveedores={proveedores}
-                    categories={categories}
-                  />
-      </div>
-
-      {/* Main Content Area */}
-      <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        
-        {/* Configuration Section */}
-        <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-8">
-          <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <LayoutGrid className="w-4 h-4" />
-            Configuración de Orden de Compra
-          </h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sede</label>
-              <div className="relative">
-                <select 
-                  value={sede}
-                  onChange={(e) => handleConfigChange('sede', e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all appearance-none cursor-pointer"
-                >
-                  <option value="">Seleccionar Sede...</option>
-                  {sedes.map(s => (
-                    <option key={s.id} value={s.nombre}>{s.nombre}</option>
-                  ))}
-                  <option value="Otra">Otra (Manual)</option>
-                </select>
-                <div className="absolute inset-y-0 right-3 flex items-center pointer-events-none">
-                  <LayoutGrid className="w-3 h-3 text-slate-400" />
-                </div>
-              </div>
-              {sede === 'Otra' && (
-                <input 
-                  type="text" 
-                  autoFocus
-                  placeholder="Escribir sede..."
-                  onChange={(e) => setSede(e.target.value)}
-                  className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-                />
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dirección de Entrega</label>
-              <input 
-                type="text" 
-                value={direccionEntrega}
-                onChange={(e) => handleConfigChange('direccion', e.target.value)}
-                placeholder="Ej: Calle 45 # 22 - 18"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider underline decoration-brand-500/30 underline-offset-2">Horario de Recepción</label>
-              <input 
-                type="text" 
-                value={horarioRecepcion}
-                onChange={(e) => handleConfigChange('horario', e.target.value)}
-                placeholder="Ej: 7:00 AM - 11:00 AM"
-                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-              />
-            </div>
-          </div>
-          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                    <label htmlFor="responsable" className="text-[10px] uppercase font-bold text-slate-400 mb-1.5 block tracking-wider">
-                      Nombre de quien realiza el pedido (obligatorio)
-                    </label>
-                    <input 
-                      id="responsable"
-                      type="text"
-                      value={responsable}
-                      onChange={(e) => setResponsable(e.target.value)}
-                      placeholder="Ingresa tu nombre..."
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-                    />
-                </div>
-                <div className="space-y-1.5">
-                    <label htmlFor="notas" className="text-[10px] uppercase font-bold text-slate-400 mb-1.5 block tracking-wider">
-                      Notas del pedido (opcional)
-                    </label>
-                    <textarea 
-                      id="notas"
-                      value={notas}
-                      onChange={(e) => setNotas(e.target.value)}
-                      placeholder="Escribe aquí notas adicionales..."
-                      rows={1}
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all resize-none"
-                    />
-                </div>
-          </div>
-          <div className="mt-4 pt-4 border-t border-slate-100 flex items-center justify-between">
-             <div className="flex items-center gap-4">
-                <div className="flex flex-col">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Orden Global</span>
-                  <button 
-                    onClick={async () => {
-                      const val = prompt("Ingresa el nuevo número consecutivo (ej: 13 para que la siguiente sea OC-14):");
-                      if (val !== null && !isNaN(parseInt(val))) {
-                        await dbService.setGlobalConsecutive(parseInt(val));
-                        alert("Consecutivo actualizado exitosamente.");
-                      }
-                    }}
-                    className="text-[9px] text-brand-600 hover:underline text-left font-bold"
-                  >
-                    Ajustar Consecutivo
-                  </button>
-                  <span className="text-xs font-mono text-slate-500 italic">Sincronizado vía Firebase</span>
-                </div>
-             </div>
-             <p className="text-[10px] text-slate-400 italic">Los datos se guardan en tiempo real en la base de datos.</p>
-          </div>
-        </div>
-
-        {/* Statistics Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 statistics-row">
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between overflow-hidden relative group">
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Proveedores Activos</p>
-              <h4 className="text-3xl font-bold text-slate-900 font-mono tracking-tighter">{proveedores.length}</h4>
-            </div>
-            <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <BarChart3 className="w-6 h-6" />
-            </div>
-          </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between overflow-hidden relative group">
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Insumos Registrados</p>
-              <h4 className="text-3xl font-bold text-slate-900 font-mono tracking-tighter">{filteredInsumos.length}</h4>
-            </div>
-            <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <Database className="w-6 h-6" />
-            </div>
-          </div>
-          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between overflow-hidden relative group">
-            <div>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">Ultima Actualización</p>
-              <h4 className="text-lg font-bold text-slate-900">Hoy, 10:45 AM</h4>
-            </div>
-            <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-              <FileSpreadsheet className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-
-        {/* Dynamic Display Mode */}
-        <AnimatePresence mode="wait">
-          {viewMode === 'list' ? (
-            <motion.div
-              key="list-view"
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <List className="w-4 h-4" />
-                  Lista Detallada
-                </h2>
-                <div className="flex items-center gap-3">
-                  <button 
-                    onClick={async () => {
-                      if (!responsable.trim()) {
-                        alert("⚠ Debes ingresar el nombre de quien realiza el pedido.");
-                        return;
-                      }
-
-                      const active = filteredInsumos.filter(i => (quantities[i.id] || 0) > 0);
-                      if (active.length === 0) {
-                        alert("No hay insumos con cantidades mayores a 0.");
-                        return;
-                      }
-
-                      // Get and increment consecutive number from Firebase
-                      const nextNumber = await dbService.getNextGlobalConsecutive();
-
-                      const proveedorName = selectedProveedorId 
-                        ? proveedores.find(p => p.id === selectedProveedorId)?.nombre 
-                        : "Todos los Proveedores";
-
-                      const rows = active.map(i => `
-                        <tr>
-                          <td style="padding: 10px; border-bottom: 1px solid #eee;">${i.nombre}</td>
-                          <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center;">${i.unidad}</td>
-                          <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: center; font-weight: bold;">${quantities[i.id] || 0}</td>
-                          <td style="padding: 10px; border-bottom: 1px solid #eee; text-align: right; font-family: monospace;">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format((quantities[i.id] || 0) * i.precio)}</td>
-                        </tr>
-                      `).join('');
-
-                      const total = active.reduce((acc, i) => acc + (i.precio * (quantities[i.id] || 0)), 0);
-                      const html = `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap');
-    body { font-family: 'Roboto', sans-serif; color: #000; padding: 0; margin: 0; font-size: 11px; }
-    .page { padding: 60px; }
-    
-    .title-centered { text-align: center; color: #002060; font-size: 32px; font-weight: 900; margin-bottom: 40px; letter-spacing: 1px; }
-    
-    .flex { display: flex; }
-    .justify-between { justify-content: space-between; }
-    .items-center { align-items: center; }
-    .gap-20 { gap: 20px; }
-    
-    .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #002060; padding-bottom: 5px; }
-    .section-icon { width: 32px; height: 32px; background: #002060; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
-    .section-title { font-weight: 700; color: #002060; font-size: 13px; text-transform: uppercase; }
-    
-    .data-table { border: none; width: 100%; border-collapse: collapse; }
-    .data-table td { padding: 4px 0; vertical-align: top; border: none; }
-    .data-label { font-weight: 700; width: 110px; color: #000; padding-right: 15px; }
-    .data-value { color: #333; }
-    
-    .order-info-row { display: flex; align-items: flex-end; gap: 40px; margin: 25px 0; padding: 10px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; }
-    .order-info-group { display: flex; align-items: baseline; gap: 8px; }
-    .order-info-label { font-weight: 700; font-size: 11px; text-transform: uppercase; color: #002060; }
-    .order-info-value { font-weight: 900; font-size: 16px; color: #000; }
-    .order-info-value.date { font-weight: 400; font-size: 14px; }
-    
-    .logistics-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #ccc; }
-    .logistics-table th { background-color: #002060; color: white; padding: 8px; font-size: 11px; font-weight: 700; text-align: center; border: 1px solid #002060; }
-    .logistics-table td { border: 1px solid #ccc; padding: 15px 10px; text-align: center; width: 33.33%; vertical-align: middle; min-height: 50px; }
-    
-    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; border: 1px solid #ccc; }
-    .items-table th { background-color: #002060; color: white; padding: 10px; font-size: 11px; font-weight: 700; border: 1px solid #002060; text-transform: uppercase; text-align: center; }
-    .items-table td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-    .items-table .text-center { text-align: center; }
-    .items-table .text-right { text-align: right; }
-    
-    .footer-flex { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
-    .comments-wrap { width: 55%; border: 1px solid #ccc; border-radius: 0; overflow: hidden; }
-    .comments-header { background: white; padding: 8px 12px; border-bottom: 1px solid #ccc; font-weight: 700; text-transform: uppercase; font-size: 11px; color: #002060; }
-    .comments-body { padding: 12px; min-height: 80px; line-height: 1.4; color: #333; }
-    
-    .totals-wrap { width: 42%; }
-    .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #ccc; }
-    .totals-table td { border: 1px solid #ccc; padding: 8px 12px; font-size: 11px; }
-    .totals-table .label { background: white; font-weight: 700; text-transform: uppercase; width: 50%; color: #000; }
-    .totals-table .value { text-align: right; font-weight: 500; color: #000; }
-    .totals-table .total-row td { background: #002060; color: white; font-weight: 900; border: 1px solid #002060; }
-    
-    .signature-area { margin-top: 60px; }
-    .signature-label { font-weight: 700; color: #002060; text-transform: uppercase; font-size: 11px; margin-bottom: 30px; }
-    .signature-line { width: 400px; border-bottom: 2px solid #000; margin-bottom: 5px; }
-    .signature-name { text-align: center; width: 400px; font-weight: 600; font-size: 13px; text-transform: lowercase; }
-    
-    .final-phrase { text-align: center; margin-top: 80px; color: #2e5a9e; font-style: italic; font-size: 16px; border-top: 1px solid #e2e8f0; padding-top: 30px; }
-  </style>
-</head>
-<body>
-  <div class="page">
-    <h1 class="title-centered">ORDEN DE COMPRA</h1>
-
-    <div class="flex justify-between" style="margin-bottom: 30px;">
-      <div style="width: 48%;">
-        <div class="section-header">
-          <div class="section-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>
-          </div>
-          <span class="section-title">Datos del Proveedor</span>
-        </div>
-        <table class="data-table">
-          <tr><td class="data-label">Proveedor:</td><td class="data-value">${proveedorName}</td></tr>
-          <tr><td class="data-label">Contacto:</td><td class="data-value">${selectedProveedorId ? proveedores.find(p => p.id === selectedProveedorId)?.contacto || 'Varios' : 'Varios'}</td></tr>
-          <tr><td class="data-label">Teléfono:</td><td class="data-value">(604) 123 4567</td></tr>
-          <tr><td class="data-label">Email:</td><td class="data-value">${selectedProveedorId ? proveedores.find(p => p.id === selectedProveedorId)?.email || 'N/A' : 'Varios'}</td></tr>
-          <tr><td class="data-label">Dirección:</td><td class="data-value">Cra 43A # 1-50, Medellín</td></tr>
-        </table>
-      </div>
-      
-      <div style="width: 48%;">
-        <div class="section-header">
-          <div class="section-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          </div>
-          <span class="section-title">Datos de quien realiza el pedido</span>
-        </div>
-        <table class="data-table">
-          <tr><td class="data-label">Solicitado por:</td><td class="data-value">${responsable}</td></tr>
-          <tr><td class="data-label">ENVIAR A:</td><td class="data-value">${sede || 'Rocoto Laureles'}</td></tr>
-          <tr><td class="data-label">Dirección:</td><td class="data-value"> Calle 45 #22-18, Laureles</td></tr>
-          <tr><td class="data-label">Teléfono:</td><td class="data-value">(604) 987 6543</td></tr>
-          <tr><td class="data-label">Email:</td><td class="data-value">${user?.email || 'mari@rocoto.co'}</td></tr>
-        </table>
-      </div>
-    </div>
-
-    <div class="order-info-row">
-      <div class="order-info-group">
-        <span class="order-info-label">N° ORDEN:</span>
-        <span class="order-info-value">OC-${nextNumber}</span>
-      </div>
-      <div class="order-info-group">
-        <span class="order-info-label">Fecha:</span>
-        <span class="order-info-value date">${new Date().toLocaleDateString()}</span>
-      </div>
-    </div>
-
-    <table class="items-table">
-      <thead>
-        <tr>
-          <th style="width: 10%;">CANT</th>
-          <th style="width: 45%;">DESCRIPCIÓN</th>
-          <th style="width: 15%;">IMPUESTO</th>
-          <th style="width: 15%;">PRECIO UNITARIO</th>
-          <th style="width: 15%;">TOTAL</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${active.map((i) => `
-          <tr>
-            <td class="text-center">${quantities[i.id] || 0}</td>
-            <td>${i.nombre} (${i.categoria})</td>
-            <td class="text-center">0%</td>
-            <td class="text-right">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(i.precio)}</td>
-            <td class="text-right">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format((quantities[i.id] || 0) * i.precio)}</td>
-          </tr>
-        `).join('')}
-        ${Array(Math.max(0, 3 - active.length)).fill(0).map(() => `
-          <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
-        `).join('')}
-      </tbody>
-    </table>
-
-    <div class="footer-flex">
-      <div class="comments-wrap">
-        <div class="comments-header">Otros Comentarios o Instrucciones Especiales</div>
-        <div class="comments-body">${notas || 'Sin comentarios.'}</div>
-      </div>
-      
-      <div class="totals-wrap">
-        <table class="totals-table">
-          <tr><td class="label">SUBTOTAL</td><td class="value">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(total)}</td></tr>
-          <tr><td class="label">IMPONIBLE</td><td class="value">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(total)}</td></tr>
-          <tr><td class="label">IVA 0%</td><td class="value">$0.00</td></tr>
-          <tr><td class="label">IMPUESTOS</td><td class="value">$0.00</td></tr>
-          <tr class="total-row">
-            <td class="label" style="background:transparent;color:white;font-size:14px;padding-top:12px;padding-bottom:12px;">TOTAL</td>
-            <td class="value" style="font-size:20px;padding-top:12px;padding-bottom:12px;">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(total).replace('$', '$ ')}</td>
-          </tr>
-        </table>
-      </div>
-    </div>
-
-  </div>
-</body>
-</html>
-                       `;
-
-
-                      const opt = {
-                        margin: 30,
-                        filename: `OrdenMaestra_${Date.now()}.pdf`,
-                        image: { type: 'jpeg' as const, quality: 0.98 },
-                        html2canvas: { 
-                          scale: 3, 
-                          useCORS: true,
-                          onclone: (clonedDoc: Document) => {
-                            // Fix for oklch error in html2canvas (Tailwind 4)
-                            // Remove stylesheets that might contain oklch
-                            const styles = clonedDoc.getElementsByTagName('style');
-                            for (let i = 0; i < styles.length; i++) {
-                              const style = styles[i];
-                              if (style.innerHTML.includes('oklch')) {
-                                style.innerHTML = style.innerHTML.replace(/oklch\([^)]+\)/g, '#ccc');
-                              }
-                            }
+  const handleDescargarPDF = async () => {
+        const pedido = lastPedido || await buildPedidoData();
+        if (!pedido) return;
+        const proveedor = proveedores.find(p => p.nombre === pedido.proveedor);
+        const rows = pedido.items.map(i => `<tr>
+              <td style="padding:8px;border-bottom:1px solid #eee">${i.nombre}</td>
+                    <td style="padding:8px;border-bottom:1px solid #eee;text-align:center">${i.unidad}</td>
+                          <td style="padding:8px;border-bottom:1px solid #eee;text-align:center;font-weight:bold">${i.cantidad}</td>
+                                <td style="padding:8px;border-bottom:1px solid #eee;text-align:right;font-family:monospace">$${i.subtotal.toLocaleString('es-CO')}</td>
+                                    </tr>`).join('');
+        const html = `<!DOCTYPE html><html><head>
+            <style>
+                  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap');
+                        body{font-family:'Roboto',sans-serif;color:#000;padding:0;margin:0;font-size:11px}
+                              .page{padding:50px}
+                                    h1{text-align:center;color:#002060;font-size:28px;font-weight:900;margin-bottom:30px}
+                                          .grid{display:flex;justify-content:space-between;margin-bottom:25px}
+                                                .col{width:48%}
+                                                      .sh{border-bottom:2px solid #002060;padding-bottom:4px;margin-bottom:10px;font-weight:700;color:#002060;font-size:12px;text-transform:uppercase}
+                                                            table.dt{width:100%;border-collapse:collapse}
+                                                                  table.dt td{padding:3px 0;vertical-align:top;font-size:11px}
+                                                                        .lbl{font-weight:700;width:110px;color:#000}
+                                                                              .ord{display:flex;gap:30px;padding:8px 0;border-top:1px solid #eee;border-bottom:1px solid #eee;margin:15px 0}
+                                                                                    .oi-lbl{font-weight:700;font-size:11px;color:#002060}
+                                                                                          .oi-val{font-weight:900;font-size:16px}
+                                                                                                table.it{width:100%;border-collapse:collapse;margin-bottom:15px;border:1px solid #ccc}
+                                                                                                      table.it th{background:#002060;color:white;padding:9px;font-size:11px;text-align:center;font-weight:700}
+                                                                                                            table.it td{border:1px solid #ccc;padding:8px 10px}
+                                                                                                                  .tc{text-align:center}.tr{text-align:right}
+                                                                                                                        .footer-row{display:flex;justify-content:space-between;gap:15px;align-items:flex-start;margin-top:10px}
+                                                                                                                              .notes{width:55%;border:1px solid #ccc;overflow:hidden}
+                                                                                                                                    .nh{background:white;padding:7px 10px;border-bottom:1px solid #ccc;font-weight:700;text-transform:uppercase;font-size:11px;color:#002060}
+                                                                                                                                          .nb{padding:10px;min-height:60px;color:#333}
+                                                                                                                                                .totals{width:42%}
+                                                                                                                                                      table.tt{width:100%;border-collapse:collapse;border:1px solid #ccc}
+                                                                                                                                                            table.tt td{border:1px solid #ccc;padding:7px 10px;font-size:11px}
+                                                                                                                                                                  .tl{font-weight:700;width:50%}.tv{text-align:right;font-weight:500}
+                                                                                                                                                                        .tr-tot td{background:#002060;color:white;font-weight:900;border:1px solid #002060;font-size:14px;padding:10px}
+                                                                                                                                                                              .final{text-align:center;margin-top:50px;color:#2e5a9e;font-style:italic;font-size:14px;border-top:1px solid #e2e8f0;padding-top:20px}
+                                                                                                                                                                                  </style></head><body><div class="page">
+                                                                                                                                                                                      <h1>ORDEN DE COMPRA</h1>
+                                                                                                                                                                                          <div class="grid">
+                                                                                                                                                                                                <div class="col">
+                                                                                                                                                                                                        <div class="sh">Datos del Proveedor</div>
+                                                                                                                                                                                                                <table class="dt">
+                                                                                                                                                                                                                          <tr><td class="lbl">Proveedor:</td><td>${pedido.proveedor}</td></tr>
+                                                                                                                                                                                                                                    <tr><td class="lbl">Email:</td><td>${pedido.proveedorEmail || 'N/A'}</td></tr>
+                                                                                                                                                                                                                                            </table>
+                                                                                                                                                                                                                                                  </div>
+                                                                                                                                                                                                                                                        <div class="col">
+                                                                                                                                                                                                                                                                <div class="sh">Datos del Pedido</div>
+                                                                                                                                                                                                                                                                        <table class="dt">
+                                                                                                                                                                                                                                                                                  <tr><td class="lbl">Solicitado por:</td><td>${pedido.responsable}</td></tr>
+                                                                                                                                                                                                                                                                                            <tr><td class="lbl">Correo:</td><td>${pedido.correoResponsable}</td></tr>
+                                                                                                                                                                                                                                                                                                      <tr><td class="lbl">Sede:</td><td>${pedido.puntoDeVenta}</td></tr>
+                                                                                                                                                                                                                                                                                                                <tr><td class="lbl">Direccion:</td><td>${pedido.direccionEntrega}</td></tr>
+                                                                                                                                                                                                                                                                                                                          <tr><td class="lbl">Horario:</td><td>${pedido.horarioRecepcion}</td></tr>
+                                                                                                                                                                                                                                                                                                                                  </table>
+                                                                                                                                                                                                                                                                                                                                        </div>
+                                                                                                                                                                                                                                                                                                                                            </div>
+                                                                                                                                                                                                                                                                                                                                                <div class="ord">
+                                                                                                                                                                                                                                                                                                                                                      <div><span class="oi-lbl">N ORDEN: </span><span class="oi-val">${pedido.numeroPedido}</span></div>
+                                                                                                                                                                                                                                                                                                                                                            <div><span class="oi-lbl">Fecha: </span><span class="oi-val" style="font-size:14px;font-weight:400">${pedido.fecha}</span></div>
+                                                                                                                                                                                                                                                                                                                                                                </div>
+                                                                                                                                                                                                                                                                                                                                                                    <table class="it"><thead><tr>
+                                                                                                                                                                                                                                                                                                                                                                          <th style="width:10%">CANT</th><th style="width:48%">DESCRIPCION</th>
+                                                                                                                                                                                                                                                                                                                                                                                <th style="width:14%">UNIDAD</th><th style="width:14%">PRECIO</th><th style="width:14%">TOTAL</th>
+                                                                                                                                                                                                                                                                                                                                                                                    </tr></thead><tbody>${rows}
+                                                                                                                                                                                                                                                                                                                                                                                        ${Array(Math.max(0,3-pedido.items.length)).fill('<tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>').join('')}
+                                                                                                                                                                                                                                                                                                                                                                                            </tbody></table>
+                                                                                                                                                                                                                                                                                                                                                                                                <div class="footer-row">
+                                                                                                                                                                                                                                                                                                                                                                                                      <div class="notes"><div class="nh">Notas y Comentarios</div><div class="nb">${pedido.notas || 'Sin notas adicionales.'}</div></div>
+                                                                                                                                                                                                                                                                                                                                                                                                            <div class="totals"><table class="tt">
+                                                                                                                                                                                                                                                                                                                                                                                                                    <tr><td class="tl">SUBTOTAL</td><td class="tv">$${pedido.total.toLocaleString('es-CO')}</td></tr>
+                                                                                                                                                                                                                                                                                                                                                                                                                            <tr><td class="tl">IVA 0%</td><td class="tv">$0</td></tr>
+                                                                                                                                                                                                                                                                                                                                                                                                                                    <tr class="tr-tot"><td>TOTAL</td><td style="text-align:right">$${pedido.total.toLocaleString('es-CO')}</td></tr>
+                                                                                                                                                                                                                                                                                                                                                                                                                                          </table></div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                              </div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                  <div class="final">Documento generado por InsumoMaster - comprasrocoto.com</div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                                      </div></body></html>`;
+        html2pdf().set({
+                margin: 25,
+                filename: `Pedido-${pedido.numeroPedido}-${pedido.proveedor.slice(0,20)}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 3, useCORS: true, onclone: (d: Document) => {
+                          const styles = d.getElementsByTagName('style');
+                          for (let i = 0; i < styles.length; i++) {
+                                      if (styles[i].innerHTML.includes('oklch')) {
+                                                    styles[i].innerHTML = styles[i].innerHTML.replace(/oklch\([^)]+\)/g, '#888');
+                                      }
                           }
-                        },
-                        jsPDF: { unit: 'mm' as const, format: 'letter' as const, orientation: 'landscape' as const }
-                      };
+                }},
+                jsPDF: { unit: 'mm', format: 'letter', orientation: 'landscape' }
+        }).from(html).save();
+  };
 
-                      html2pdf().set(opt).from(html).save();
-                    }}
-                    className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    Descargar PDF
-                  </button>
-                  <button className="text-xs font-semibold text-brand-600 hover:text-brand-700 flex items-center gap-1.5 transition-colors">
-                    <Download className="w-3.5 h-3.5" />
-                    Exportar CSV
-                  </button>
-                </div>
-              </div>
-              <InsumoTable 
-                insumos={filteredInsumos} 
-                proveedores={proveedores} 
-                quantities={quantities}
-                onQuantityChange={handleQuantityChange}
-              />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="grid-view"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.3 }}
-            >
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
-                  <LayoutGrid className="w-4 h-4" />
-                  Paneles por Proveedor
-                </h2>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {proveedores.filter(p => !selectedProveedorId || p.id === selectedProveedorId).map(p => (
-                  <ProveedorCard 
-                    key={p.id} 
-                    proveedor={p} 
-                    insumos={filteredInsumos as Insumo[]} 
-                    quantities={quantities}
-                    onQuantityChange={handleQuantityChange}
-                    sede={sede}
-                    direccionEntrega={direccionEntrega}
-                    horarioRecepcion={horarioRecepcion}
-                    notas={notas}
-                    responsable={responsable}
-                  />
-                ))}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+  if (authLoading) return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50">
+              <RefreshCw className="w-8 h-8 text-brand-500 animate-spin" />
+        </div>div>
+      );
+  
+    if (!user) return (
+          <div className="min-h-screen flex items-center justify-center bg-slate-900">
+                <motion.div initial={{opacity:0,y:20}} animate={{opacity:1,y:0}}
+                          className="w-full max-w-md bg-white p-10 rounded-3xl shadow-2xl text-center">
+                        <div className="w-20 h-20 bg-brand-500 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
+                                  <Database className="w-10 h-10 text-white" />
+                        </div>div>
+                        <h1 className="text-4xl font-extrabold text-slate-900 mb-2">InsumoMaster</h1>h1>
+                        <p className="text-slate-500 mb-8">Gestion de Pedidos <span className="text-brand-600 font-bold">Rocoto</span>span></p>p>
+                        <button onClick={handleLogin}
+                                    className="w-full flex items-center justify-center gap-3 bg-slate-900 hover:bg-slate-800 text-white py-4 rounded-2xl font-bold text-lg transition-all">
+                                  <LogIn className="w-5 h-5" /> Acceder con Google
+                        </button>button>
+                </motion.div>motion.div>
+          </div>div>
+        );
+  
+    return (
+          <div className="min-h-screen flex flex-col bg-slate-50">
+            {/* Toast Notifications */}
+                <div className="fixed top-4 right-4 z-50 space-y-2">
+                        <AnimatePresence>
+                          {toasts.map(t => (
+                        <motion.div key={t.id} initial={{opacity:0,x:60}} animate={{opacity:1,x:0}} exit={{opacity:0,x:60}}
+                                        className={cn('flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-white text-sm font-medium max-w-sm',
+                                                                      t.type==='success'?'bg-emerald-600':t.type==='error'?'bg-red-600':'bg-blue-600')}>
+                          {t.type==='success'?<CheckCircle className="w-4 h-4 shrink-0"/>:t.type==='error'?<AlertCircle className="w-4 h-4 shrink-0"/>:null}
+                                      <span className="flex-1">{t.msg}</span>span>
+                                      <button onClick={()=>setToasts(prev=>prev.filter(x=>x.id!==t.id))} className="ml-1 opacity-70 hover:opacity-100"><X className="w-4 h-4"/></button>button>
+                        </motion.div>motion.div>
+                      ))}
+                        </AnimatePresence>AnimatePresence>
+                </div>div>
+          
+            {/* Header */}
+                <header className="bg-slate-900 text-white shadow-lg z-30">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                                  <div className="flex items-center justify-between h-16">
+                                              <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center shadow-lg">
+                                                                            <Database className="w-6 h-6 text-white" />
+                                                            </div>div>
+                                                            <div>
+                                                                            <h1 className="text-lg font-bold">InsumoMaster</h1>h1>
+                                                                            <span className="text-[10px] text-slate-400 uppercase tracking-widest">Catalogo de Proveedores</span>span>
+                                                            </div>div>
+                                              </div>div>
+                                              <div className="flex items-center gap-3">
+                                                {sheetsLoading && <RefreshCw className="w-4 h-4 text-brand-400 animate-spin" />}
+                                                            <button onClick={loadFromSheets} disabled={sheetsLoading}
+                                                                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-800 transition-all text-slate-300 disabled:opacity-50">
+                                                                            <RefreshCw className={cn("w-4 h-4", sheetsLoading && "animate-spin")} /> Sincronizar Sheets
+                                                            </button>button>
+                                                            <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800/50 rounded-lg border border-slate-700/50">
+                                                                            <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-[10px] font-bold">
+                                                                              {user?.email?.charAt(0).toUpperCase()}
+                                                                            </div>div>
+                                                                            <span className="text-xs text-slate-300 hidden md:block">{user?.email}</span>span>
+                                                            </div>div>
+                                                            <button onClick={handleLogout}
+                                                                              className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-slate-800 text-slate-300">
+                                                                            <LogOut className="w-4 h-4" /> Salir
+                                                            </button>button>
+                                              </div>div>
+                                  </div>div>
+                        </div>div>
+                </header>header></div>
 
-        {/* Empty State */}
-        {filteredInsumos.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-6">
-              <Database className="w-10 h-10 text-slate-300" />
+      {/* Filters */}
+      <div className="filters-bar">
+              <Filters searchTerm={searchTerm} setSearchTerm={setSearchTerm}
+                          selectedProveedorId={selectedProveedorId} setSelectedProveedorId={setSelectedProveedorId}
+                          selectedCategory={selectedCategory} setSelectedCategory={setSelectedCategory}
+                          viewMode={viewMode} setViewMode={setViewMode}
+                          proveedores={proveedores} categories={categories} />
+      </div>div>
+        
+              <main className="flex-1 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+              
+                {/* Google Sheets Error Banner */}
+                {sheetsError && (
+                          <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+                                      <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                      <div>
+                                                    <p className="text-sm font-semibold text-amber-800">Google Sheets no disponible</p>p>
+                                                    <p className="text-xs text-amber-700 mt-1">{sheetsError}</p>p>
+                                                    <p className="text-xs text-amber-600 mt-1">Tip: Configura VITE_SHEETS_API_KEY en .env.local y verifica que la hoja este publica.</p>p>
+                                      </div>div>
+                          </div>div>
+                      )}
+              
+                {/* Pedido Guardado Banner */}
+                {lastPedido && (
+                          <div className="mb-6 p-4 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center gap-3">
+                                      <CheckCircle className="w-5 h-5 text-emerald-600" />
+                                      <div className="flex-1">
+                                                    <p className="text-sm font-semibold text-emerald-800">Pedido {lastPedido.numeroPedido} guardado</p>p>
+                                                    <p className="text-xs text-emerald-700">{lastPedido.proveedor} — {lastPedido.items.length} articulos — ${lastPedido.total.toLocaleString('es-CO')}</p>p>
+                                      </div>div>
+                                      <button onClick={handleEnviarCorreo} disabled={isSendingEmail}
+                                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50">
+                                                    <Send className="w-3.5 h-3.5" />{isSendingEmail ? 'Enviando...' : 'Enviar Correo'}
+                                      </button>button>
+                                      <button onClick={handleDescargarPDF}
+                                                      className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold">
+                                                    <FileText className="w-3.5 h-3.5" /> Descargar PDF
+                                      </button>button>
+                          </div>div>
+                      )}</div>
+
+  {/* Order Configuration */}
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm mb-8">
+                    <h3 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                <LayoutGrid className="w-4 h-4" /> Configuracion del Pedido
+                    </h3>h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="space-y-1.5">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sede / Punto de Venta</label>label>
+                                              <select value={sede} onChange={e => handleConfigChange('sede', e.target.value)}
+                                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all">
+                                                              <option value="">Seleccionar Sede...</option>option>
+                                                {sedes.map(s => <option key={s.id} value={s.nombre}>{s.nombre}</option>option>)}
+                                                              <option value="Otra">Otra (Manual)</option>option>
+                                              </select>select>
+                                  {sede === 'Otra' && (
+                            <input type="text" autoFocus placeholder="Escribir sede..."
+                                                onChange={e => setSede(e.target.value)}
+                                                className="mt-2 w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all" />
+                          )}
+                                </div>div>
+                                <div className="space-y-1.5">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Direccion de Entrega</label>label>
+                                              <input type="text" value={direccionEntrega} onChange={e => handleConfigChange('direccion', e.target.value)}
+                                                                placeholder="Ej: Calle 45 # 22 - 18"
+                                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all" />
+                                </div>div>
+                                <div className="space-y-1.5">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Horario de Recepcion</label>label>
+                                              <input type="text" value={horarioRecepcion} onChange={e => handleConfigChange('horario', e.target.value)}
+                                                                placeholder="Ej: 7:00 AM - 11:00 AM"
+                                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all" />
+                                </div>div>
+                    </div>div>
+                    <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="space-y-1.5">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Responsable del Pedido *</label>label>
+                                              <input type="text" value={responsable} onChange={e => setResponsable(e.target.value)}
+                                                                placeholder="Nombre completo..."
+                                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all" />
+                                </div>div>
+                                <div className="space-y-1.5">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Correo del Responsable *</label>label>
+                                              <input type="email" value={correoResponsable} onChange={e => handleConfigChange('correo', e.target.value)}
+                                                                placeholder="correo@empresa.com"
+                                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all" />
+                                </div>div>
+                                <div className="space-y-1.5 md:col-span-2">
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Notas del Pedido (opcional)</label>label>
+                                              <textarea value={notas} onChange={e => setNotas(e.target.value)}
+                                                                placeholder="Instrucciones especiales, observaciones..." rows={2}
+                                                                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all resize-none" />
+                                </div>div>
+                    </div>div>
+          
+            {/* Action Buttons */}
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-wrap gap-3">
+                                <button onClick={handleGuardarPedido} disabled={isSaving || activeItems.length === 0}
+                                                className="flex items-center gap-2 px-5 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl font-semibold text-sm transition-all shadow-md shadow-brand-600/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                                              <ShoppingCart className="w-4 h-4" />
+                                  {isSaving ? 'Guardando...' : `Guardar Pedido (${activeItems.length} items)`}
+                                </button>button>
+                                <button onClick={handleEnviarCorreo} disabled={!lastPedido || isSendingEmail}
+                                                className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                              <Send className="w-4 h-4" />
+                                  {isSendingEmail ? 'Enviando...' : 'Enviar Correo'}
+                                </button>button>
+                                <button onClick={handleDescargarPDF} disabled={activeItems.length === 0}
+                                                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                                              <Download className="w-4 h-4" /> Descargar PDF
+                                </button>button>
+                      {activeItems.length > 0 && (
+                          <span className="flex items-center text-sm text-slate-500 ml-auto">
+                                          <BarChart3 className="w-4 h-4 mr-1.5" />
+                            {activeItems.length} items — Total: <strong className="ml-1 text-slate-900">${totalPedido.toLocaleString('es-CO')}</strong>strong>
+                          </span>span>
+                                )}
+                    </div>div>
+          </div>div></div>
+
+            {/* Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8 statistics-row">
+                      {[
+            { label: 'Proveedores', value: proveedores.length, icon: <BarChart3 className="w-6 h-6" />, color: 'text-blue-500 bg-blue-50' },
+            { label: 'Insumos Filtrados', value: filteredInsumos.length, icon: <Database className="w-6 h-6" />, color: 'text-emerald-500 bg-emerald-50' },
+            { label: 'Items en Pedido', value: activeItems.length, icon: <ShoppingCart className="w-6 h-6" />, color: 'text-brand-500 bg-brand-50' },
+                      ].map(s => (
+                                    <div key={s.label} className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between">
+                                                  <div>
+                                                                  <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{s.label}</p>p>
+                                                                  <h4 className="text-3xl font-bold text-slate-900 font-mono">{s.value}</h4>h4>
+                                                  </div>div>
+                                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center ${s.color}`}>{s.icon}</div>div>
+                                    </div>div>
+                                  ))}
+                    </div>div>
+          
+            {/* Main List / Grid */}
+                  <AnimatePresence mode="wait">
+                    {viewMode === 'list' ? (
+                        <motion.div key="list" initial={{opacity:0,y:10}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-10}} transition={{duration:0.25}}>
+                                      <div className="flex items-center justify-between mb-4">
+                                                      <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                                                        <List className="w-4 h-4" /> Lista Detallada
+                                                      </h2>h2>
+                                      </div>div>
+                                      <InsumoTable insumos={filteredInsumos} proveedores={proveedores} quantities={quantities} onQuantityChange={handleQuantityChange} />
+                        </motion.div>motion.div>
+                      ) : (
+                        <motion.div key="grid" initial={{opacity:0,scale:0.98}} animate={{opacity:1,scale:1}} exit={{opacity:0,scale:0.98}} transition={{duration:0.25}}>
+                                      <div className="flex items-center justify-between mb-4">
+                                                      <h2 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                                                                        <LayoutGrid className="w-4 h-4" /> Catalogo por Proveedor
+                                                      </h2>h2>
+                                      </div>div>
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                        {proveedores.filter(p => !selectedProveedorId || p.id === selectedProveedorId).map(p => (
+                                            <ProveedorCard key={p.id} proveedor={p} insumos={filteredInsumos as Insumo[]}
+                                                                  quantities={quantities} onQuantityChange={handleQuantityChange}
+                                                                  sede={sede} direccionEntrega={direccionEntrega} horarioRecepcion={horarioRecepcion}
+                                                                  notas={notas} responsable={responsable} />
+                                          ))}
+                                      </div>div>
+                        </motion.div>motion.div>
+                      )}
+                  </AnimatePresence>AnimatePresence>
+          
+            {filteredInsumos.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-24 text-center">
+                                  <div className="w-20 h-20 bg-slate-100 rounded-full flex items-center justify-center mb-6">
+                                                <Database className="w-10 h-10 text-slate-300" />
+                                  </div>div>
+                                  <h3 className="text-xl font-bold text-slate-900 mb-2">Sin resultados</h3>h3>
+                                  <p className="text-slate-500 max-w-sm">Ajusta los filtros o sincroniza el catalogo desde Google Sheets.</p>p>
+                                  <button onClick={() => { setSearchTerm(''); setSelectedProveedorId(''); setSelectedCategory(''); }}
+                                                  className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-semibold hover:bg-slate-800 transition-all">
+                                                Limpiar filtros
+                                  </button>button>
+                      </div>div>
+                  )}
+          </>main>
+            
+                  <footer className="bg-white border-t border-slate-200 py-6">
+                          <div className="max-w-7xl mx-auto px-4 text-center">
+                                    <p className="text-xs text-slate-400 font-medium tracking-wide uppercase">
+                                                InsumoMaster — comprasrocoto.com — {new Date().getFullYear()}
+                                    </p>p>
+                          </div>div>
+                  </footer>footer>
             </div>
-            <h3 className="text-xl font-bold text-slate-900 mb-2">No se encontraron resultados</h3>
-            <p className="text-slate-500 max-w-sm">
-              Intenta ajustar los filtros de proveedor o categoría para encontrar lo que buscas.
-            </p>
-            <button 
-              onClick={() => {
-                setSearchTerm('');
-                setSelectedProveedorId('');
-                setSelectedCategory('');
-              }}
-              className="mt-6 px-6 py-2 bg-slate-900 text-white rounded-lg font-semibold hover:bg-slate-800 transition-all"
-            >
-              Limpiar todos los filtros
-            </button>
-          </div>
-        )}
-      </main>
-
-      <footer className="bg-white border-t border-slate-200 py-8">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <p className="text-xs text-slate-400 font-medium tracking-wide uppercase">
-            InsumoMaster Dashboard • {new Date().getFullYear()}
-          </p>
-        </div>
-      </footer>
-    </div>
-  );
-}
+              );
+              }</div>
