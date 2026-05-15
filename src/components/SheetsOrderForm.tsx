@@ -275,7 +275,28 @@ export default function SheetsOrderForm() {
 
           const numeroOrden = await dbService.getNextGlobalConsecutive();
 
-          // Save to Firebase
+        // Guardar cada linea en Google Sheets via Apps Script
+                    for (const linea of lineasSeleccionadas) {
+                                    try {
+                                                        await appendPedido({
+                                                                                fecha: new Date().toISOString(),
+                                                                                sede: selectedSede,
+                                                                                proveedor: selectedProveedorSheet,
+                                                                                articulo: linea.articulo,
+                                                                                subArticulo: linea.subArticulo,
+                                                                                cantidad: linea.cantidad,
+                                                                                unidad: '',
+                                                                                responsable,
+                                                                                correoResponsable,
+                                                                                notas,
+                                                                                numeroOrden,
+                                                        });
+                                    } catch (sheetErr) {
+                                                        console.warn('No se pudo guardar en Sheets:', sheetErr);
+                                    }
+                    }
+            
+            // Save to Firebase
           await (dbService as any).savePedido?.({
                     numeroOrden,
                     fecha: new Date().toISOString(),
