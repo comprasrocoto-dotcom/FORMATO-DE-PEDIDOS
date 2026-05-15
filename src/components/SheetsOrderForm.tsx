@@ -21,7 +21,7 @@ import { dbService } from '../services/db';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
-// ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Types ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+// ─── Types ───────────────────────────────────────────────────────────────────
 interface LineItem {
     codigo: string;
     articulo: string;
@@ -29,7 +29,7 @@ interface LineItem {
     cantidad: number;
 }
 
-// ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ PDF Generator ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+// ─── PDF Generator ───────────────────────────────────────────────────────────
 function generarPDF(params: {
     sede: SedeSheet | null;
     proveedor: ProveedorSheet | null;
@@ -105,7 +105,7 @@ function generarPDF(params: {
                                                                                               <div style="margin-top:8px;font-size:10px;color:#718096;">Generado: ${fecha} ${hora}</div>
                                                                                                   </div>
                                                                                                       <div class="order-badge">
-                                                                                                            <div class="label">NÃÂÃÂ° Orden</div>
+                                                                                                            <div class="label">N° Orden</div>
                                                                                                                   <div class="number">OC-${numeroOrden}</div>
                                                                                                                         <div class="date">${fecha}</div>
                                                                                                                             </div>
@@ -119,10 +119,10 @@ function generarPDF(params: {
                                                                                                                                                                 </div>
                                                                                                                                                                       <div class="info-box-body">
                                                                                                                                                                               <div class="info-row"><span class="info-label">Empresa:</span><span class="info-value">${proveedor?.nombre || proveedorSheetName}</span></div>
-                                                                                                                                                                                      <div class="info-row"><span class="info-label">TelÃÂÃÂ©fono:</span><span class="info-value">${proveedor?.telefono || 'ÃÂ¢ÃÂÃÂ'}</span></div>
-                                                                                                                                                                                              <div class="info-row"><span class="info-label">Correo:</span><span class="info-value">${proveedor?.correo || 'ÃÂ¢ÃÂÃÂ'}</span></div>
-                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Asesor:</span><span class="info-value">${proveedor?.asesor || 'ÃÂ¢ÃÂÃÂ'}</span></div>
-                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Pago:</span><span class="info-value">${proveedor?.medioPago || 'ÃÂ¢ÃÂÃÂ'}</span></div>
+                                                                                                                                                                                      <div class="info-row"><span class="info-label">Teléfono:</span><span class="info-value">${proveedor?.telefono || '—'}</span></div>
+                                                                                                                                                                                              <div class="info-row"><span class="info-label">Correo:</span><span class="info-value">${proveedor?.correo || '—'}</span></div>
+                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Asesor:</span><span class="info-value">${proveedor?.asesor || '—'}</span></div>
+                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Pago:</span><span class="info-value">${proveedor?.medioPago || '—'}</span></div>
                                                                                                                                                                                                                     </div>
                                                                                                                                                                                                                         </div>
                                                                                                                                                                                                                             <div class="info-box">
@@ -131,10 +131,10 @@ function generarPDF(params: {
                                                                                                                                                                                                                                                   Sede de Entrega
                                                                                                                                                                                                                                                         </div>
                                                                                                                                                                                                                                                               <div class="info-box-body">
-                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Sede:</span><span class="info-value">${sede?.nombre || 'ÃÂ¢ÃÂÃÂ'}</span></div>
-                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">DirecciÃÂÃÂ³n:</span><span class="info-value">${sede?.direccion || 'ÃÂ¢ÃÂÃÂ'}</span></div>
-                                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">TelÃÂÃÂ©fono:</span><span class="info-value">${sede?.telefono || 'ÃÂ¢ÃÂÃÂ'}</span></div>
-                                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Horario:</span><span class="info-value">${sede?.horaEntrega || 'ÃÂ¢ÃÂÃÂ'}</span></div>
+                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Sede:</span><span class="info-value">${sede?.nombre || '—'}</span></div>
+                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Dirección:</span><span class="info-value">${sede?.direccion || '—'}</span></div>
+                                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Teléfono:</span><span class="info-value">${sede?.telefono || '—'}</span></div>
+                                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Horario:</span><span class="info-value">${sede?.horaEntrega || '—'}</span></div>
                                                                                                                                                                                                                                                                                                       <div class="info-row"><span class="info-label">Responsable:</span><span class="info-value">${responsable}</span></div>
                                                                                                                                                                                                                                                                                                             </div>
                                                                                                                                                                                                                                                                                                                 </div>
@@ -143,10 +143,10 @@ function generarPDF(params: {
                                                                                                                                                                                                                                                                                                                     <table class="items-table">
                                                                                                                                                                                                                                                                                                                         <thead>
                                                                                                                                                                                                                                                                                                                               <tr>
-                                                                                                                                                                                                                                                                                                                                      <th style="width:12%;">CÃÂÃÂ³digo</th>
-                                                                                                                                                                                                                                                                                                                                              <th style="width:40%;">ArtÃÂÃÂ­culo</th>
-                                                                                                                                                                                                                                                                                                                                                      <th style="width:30%;">SubArtÃÂÃÂ­culo / PresentaciÃÂÃÂ³n</th>
-                                                                                                                                                                                                                                                                                                                                                              <th style="width:18%;text-align:center;">Cantidad<span class="count-badge">${lineas.filter(l => l.cantidad > 0).length} ÃÂÃÂ­tem(s)</span></th>
+                                                                                                                                                                                                                                                                                                                                      <th style="width:12%;">Código</th>
+                                                                                                                                                                                                                                                                                                                                              <th style="width:40%;">Artículo</th>
+                                                                                                                                                                                                                                                                                                                                                      <th style="width:30%;">SubArtículo / Presentación</th>
+                                                                                                                                                                                                                                                                                                                                                              <th style="width:18%;text-align:center;">Cantidad<span class="count-badge">${lineas.filter(l => l.cantidad > 0).length} ítem(s)</span></th>
                                                                                                                                                                                                                                                                                                                                                                     </tr>
                                                                                                                                                                                                                                                                                                                                                                         </thead>
                                                                                                                                                                                                                                                                                                                                                                             <tbody>
@@ -163,7 +163,7 @@ function generarPDF(params: {
                                                                                                                                                                                                                                                                                                                                                                                                                         <div class="signature-box">
                                                                                                                                                                                                                                                                                                                                                                                                                               <div class="signature-line"></div>
                                                                                                                                                                                                                                                                                                                                                                                                                                     <div class="signature-name">${responsable}</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                          <div class="signature-role">ElaborÃÂÃÂ³ el Pedido</div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                          <div class="signature-role">Elaboró el Pedido</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                 <div class="signature-email">${correoResponsable}</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                     </div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                       </div>
@@ -180,7 +180,7 @@ function generarPDF(params: {
   }).from(html).save();
 }
 
-// ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ Component ÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂÃÂ¢ÃÂÃÂ
+// ─── Component ───────────────────────────────────────────────────────────────
 export default function SheetsOrderForm() {
     // Data from Google Sheets
   const [proveedores, setProveedores] = useState<ProveedorSheet[]>([]);
@@ -351,8 +351,8 @@ export default function SheetsOrderForm() {
   if (loading) return (
         <div className="flex items-center justify-center min-h-64 gap-3 text-slate-500">
               <RefreshCw className="w-5 h-5 animate-spin" />
-              <span className="text-sm font-medium">Cargando datos desde Google Sheets...</span>
-        </div>
+              <span className="text-sm font-medium">Cargando datos desde Google Sheets...</span>span>
+        </div>div>
       );
   
     return (
@@ -363,48 +363,48 @@ export default function SheetsOrderForm() {
                     <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
                               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                               <div>
-                                          <p className="font-semibold text-sm">Error de conexiÃÂÃÂ³n</p>
-                                          <p className="text-xs mt-0.5">{error}</p>
-                                          <button onClick={() => setError(null)} className="text-xs underline mt-1">Cerrar</button>
-                              </div>
-                    </div>
+                                          <p className="font-semibold text-sm">Error de conexión</p>p>
+                                          <p className="text-xs mt-0.5">{error}</p>p>
+                                          <button onClick={() => setError(null)} className="text-xs underline mt-1">Cerrar</button>button>
+                              </div>div>
+                    </div>div>
                 )}
           
             {/* Success banner */}
             {success && (
                     <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700">
                               <CheckCircle className="w-5 h-5" />
-                              <p className="text-sm font-semibold">ÃÂÃÂ¡Pedido guardado exitosamente! El PDF se estÃÂÃÂ¡ descargando.</p>
-                    </div>
+                              <p className="text-sm font-semibold">¡Pedido guardado exitosamente! El PDF se está descargando.</p>p>
+                    </div>div>
                 )}
           
             {/* Step 1: Sede + Responsable */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                   <User className="w-4 h-4 text-brand-500" />
-                                  1. InformaciÃÂÃÂ³n del Pedido
-                        </h2>
+                                  1. Información del Pedido
+                        </h2>h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                   <div>
-                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Sede *</label>
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Sede *</label>label>
                                               <select
                                                               value={selectedSede}
                                                               onChange={e => setSelectedSede(e.target.value)}
                                                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                             >
-                                                            <option value="">Seleccionar sede...</option>
-                                                {sedes.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>)}
-                                              </select>
-                                  </div>
+                                                            <option value="">Seleccionar sede...</option>option>
+                                                {sedes.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>option>)}
+                                              </select>select>
+                                  </div>div>
                           {sedeSeleccionada && (
                         <div className="col-span-1 bg-slate-50 rounded-lg p-3 text-xs space-y-0.5">
-                                      <p className="font-bold text-slate-600">ÃÂ°ÃÂÃÂÃÂ {sedeSeleccionada.direccion}</p>
-                          {sedeSeleccionada.telefono && <p className="text-slate-500">ÃÂ°ÃÂÃÂÃÂ {sedeSeleccionada.telefono}</p>}
-                          {sedeSeleccionada.horaEntrega && <p className="text-slate-500">ÃÂ°ÃÂÃÂÃÂ {sedeSeleccionada.horaEntrega}</p>}
-                        </div>
+                                      <p className="font-bold text-slate-600">📍 {sedeSeleccionada.direccion}</p>p>
+                          {sedeSeleccionada.telefono && <p className="text-slate-500">📞 {sedeSeleccionada.telefono}</p>p>}
+                          {sedeSeleccionada.horaEntrega && <p className="text-slate-500">🕐 {sedeSeleccionada.horaEntrega}</p>p>}
+                        </div>div>
                                   )}
                                   <div>
-                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Responsable *</label>
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Responsable *</label>label>
                                               <input
                                                               type="text"
                                                               value={responsable}
@@ -412,9 +412,9 @@ export default function SheetsOrderForm() {
                                                               placeholder="Tu nombre completo"
                                                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                             />
-                                  </div>
+                                  </div>div>
                                   <div>
-                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Correo</label>
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Correo</label>label>
                                               <input
                                                               type="email"
                                                               value={correoResponsable}
@@ -422,63 +422,63 @@ export default function SheetsOrderForm() {
                                                               placeholder="correo@empresa.com"
                                                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                             />
-                                  </div>
-                        </div>
-                </div>
+                                  </div>div>
+                        </div>div>
+                </div>div>
           
             {/* Step 2: Proveedor */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                   <Truck className="w-4 h-4 text-brand-500" />
                                   2. Seleccionar Proveedor ({sheetNames.length} disponibles)
-                        </h2>
+                        </h2>h2>
                         <select
                                     value={selectedProveedorSheet}
                                     onChange={e => setSelectedProveedorSheet(e.target.value)}
                                     className="w-full md:w-96 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                   >
-                                  <option value="">Seleccionar proveedor...</option>
-                          {sheetNames.map(name => <option key={name} value={name}>{name}</option>)}
-                        </select>
+                                  <option value="">Seleccionar proveedor...</option>option>
+                          {sheetNames.map(name => <option key={name} value={name}>{name}</option>option>)}
+                        </select>select>
                   {proveedorSeleccionado && (
                       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
                         {proveedorSeleccionado.telefono && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">TelÃÂÃÂ©fono</p>
-                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.telefono}</p>
-                                      </div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Teléfono</p>p>
+                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.telefono}</p>p>
+                                      </div>div>
                                   )}
                         {proveedorSeleccionado.correo && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Correo</p>
-                                                      <p className="text-slate-700 font-medium truncate">{proveedorSeleccionado.correo}</p>
-                                      </div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Correo</p>p>
+                                                      <p className="text-slate-700 font-medium truncate">{proveedorSeleccionado.correo}</p>p>
+                                      </div>div>
                                   )}
                         {proveedorSeleccionado.asesor && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Asesor</p>
-                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.asesor}</p>
-                                      </div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Asesor</p>p>
+                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.asesor}</p>p>
+                                      </div>div>
                                   )}
                         {proveedorSeleccionado.medioPago && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Medio de Pago</p>
-                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.medioPago}</p>
-                                      </div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Medio de Pago</p>p>
+                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.medioPago}</p>p>
+                                      </div>div>
                                   )}
-                      </div>
+                      </div>div>
                         )}
-                </div>
+                </div>div>
           
             {/* Step 3: Products */}
             {selectedProveedorSheet && (
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                           <ShoppingCart className="w-4 h-4 text-brand-500" />
-                                          3. Productos ÃÂ¢ÃÂÃÂ {selectedProveedorSheet}
+                                          3. Productos — {selectedProveedorSheet}
                                 {loadingProductos && <RefreshCw className="w-3 h-3 animate-spin text-slate-400 ml-2" />}
-                                          <span className="ml-auto text-xs font-normal text-slate-400 normal-case">{lineasSeleccionadas.length} ÃÂÃÂ­tem(s) seleccionado(s)</span>
-                              </h2>
+                                          <span className="ml-auto text-xs font-normal text-slate-400 normal-case">{lineasSeleccionadas.length} ítem(s) seleccionado(s)</span>span>
+                              </h2>h2>
                     
                       {/* Search */}
                               <div className="relative mb-4">
@@ -487,27 +487,27 @@ export default function SheetsOrderForm() {
                                                           type="text"
                                                           value={searchTerm}
                                                           onChange={e => setSearchTerm(e.target.value)}
-                                                          placeholder="Buscar artÃÂÃÂ­culo por nombre o cÃÂÃÂ³digo..."
+                                                          placeholder="Buscar artículo por nombre o código..."
                                                           className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                         />
-                              </div>
+                              </div>div>
                     
                       {loadingProductos ? (
                                   <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
                                                 <RefreshCw className="w-4 h-4 animate-spin" />
-                                                <span className="text-sm">Cargando productos...</span>
-                                  </div>
+                                                <span className="text-sm">Cargando productos...</span>span>
+                                  </div>div>
                                 ) : (
                                   <div className="overflow-x-auto rounded-xl border border-slate-200">
                                                 <table className="w-full text-sm">
                                                                 <thead>
                                                                                   <tr className="bg-slate-900 text-white">
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">CÃÂÃÂ³digo</th>
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">ArtÃÂÃÂ­culo</th>
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">SubArtÃÂÃÂ­culo</th>
-                                                                                                      <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-32">Cantidad</th>
-                                                                                    </tr>
-                                                                </thead>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Código</th>th>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Artículo</th>th>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">SubArtículo</th>th>
+                                                                                                      <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-32">Cantidad</th>th>
+                                                                                    </tr>tr>
+                                                                </thead>thead>
                                                                 <tbody>
                                                                   {productosFiltrados.map((p, idx) => {
                                                         const qty = cantidades[p.codigo] || 0;
@@ -516,15 +516,15 @@ export default function SheetsOrderForm() {
                                                                                                           key={p.codigo || idx}
                                                                                                           className={`border-b border-slate-100 transition-colors ${qty > 0 ? 'bg-emerald-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
                                                                                                         >
-                                                                                                        <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
-                                                                                                        <td className="py-2.5 px-4 font-medium text-slate-800">{p.articulo}</td>
-                                                                                                        <td className="py-2.5 px-4 text-slate-500 hidden md:table-cell text-xs">{p.subArticulo}</td>
+                                                                                                        <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>td>
+                                                                                                        <td className="py-2.5 px-4 font-medium text-slate-800">{p.articulo}</td>td>
+                                                                                                        <td className="py-2.5 px-4 text-slate-500 hidden md:table-cell text-xs">{p.subArticulo}</td>td>
                                                                                                         <td className="py-2.5 px-4">
                                                                                                                                   <div className="flex items-center gap-1.5 justify-center">
                                                                                                                                                               <button
                                                                                                                                                                                               onClick={() => handleCantidad(p.codigo, qty - 1)}
                                                                                                                                                                                               className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold transition-colors flex items-center justify-center text-slate-600"
-                                                                                                                                                                                            >ÃÂ¢ÃÂÃÂ</button>
+                                                                                                                                                                                            >−</button>button>
                                                                                                                                                               <input
                                                                                                                                                                                               type="number"
                                                                                                                                                                                               min={0}
@@ -536,20 +536,20 @@ export default function SheetsOrderForm() {
                                                                                                                                                               <button
                                                                                                                                                                                               onClick={() => handleCantidad(p.codigo, qty + 1)}
                                                                                                                                                                                               className="w-7 h-7 rounded-lg bg-brand-500 hover:bg-brand-600 font-bold text-white transition-colors flex items-center justify-center"
-                                                                                                                                                                                            >+</button>
-                                                                                                                                    </div>
-                                                                                                          </td>
-                                                                                  </tr>
+                                                                                                                                                                                            >+</button>button>
+                                                                                                                                    </div>div>
+                                                                                                          </td>td>
+                                                                                  </tr>tr>
                                                                               );
                                   })}
                                                                   {productosFiltrados.length === 0 && (
-                                                        <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">No se encontraron productos{searchTerm ? ` para "${searchTerm}"` : ''}.</td></tr>
+                                                        <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">No se encontraron productos{searchTerm ? ` para "${searchTerm}"` : ''}.</td>td></tr>tr>
                                                                                   )}
-                                                                </tbody>
-                                                </table>
-                                  </div>
+                                                                </tbody>tbody>
+                                                </table>table>
+                                  </div>div>
                               )}
-                    </div>
+                    </div>div>
                 )}
           
             {/* Step 4: Notes + Actions */}
@@ -557,7 +557,7 @@ export default function SheetsOrderForm() {
                         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                   <Building2 className="w-4 h-4 text-brand-500" />
                                   4. Observaciones y Registro
-                        </h2>
+                        </h2>h2>
                         <textarea
                                     value={notas}
                                     onChange={e => setNotas(e.target.value)}
@@ -569,16 +569,16 @@ export default function SheetsOrderForm() {
                   {/* Summary */}
                   {lineasSeleccionadas.length > 0 && (
                       <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                                  <p className="text-xs font-bold text-emerald-700 uppercase mb-1.5">Resumen del Pedido</p>
+                                  <p className="text-xs font-bold text-emerald-700 uppercase mb-1.5">Resumen del Pedido</p>p>
                                   <div className="space-y-0.5">
                                     {lineasSeleccionadas.map(l => (
                                         <div key={l.codigo} className="flex justify-between text-xs text-emerald-800">
-                                                          <span>{l.articulo}</span>
-                                                          <span className="font-bold">x{l.cantidad}</span>
-                                        </div>
+                                                          <span>{l.articulo}</span>span>
+                                                          <span className="font-bold">x{l.cantidad}</span>span>
+                                        </div>div>
                                       ))}
-                                  </div>
-                      </div>
+                                  </div>div>
+                      </div>div>
                         )}
                 
                         <div className="flex flex-wrap gap-3">
@@ -589,7 +589,7 @@ export default function SheetsOrderForm() {
                                               >
                                     {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                     {saving ? 'Guardando...' : 'Guardar y Descargar PDF'}
-                                  </button>
+                                  </button>button>
                                   <button
                                                 onClick={handleDescargarPDF}
                                                 disabled={lineasSeleccionadas.length === 0}
@@ -597,9 +597,10 @@ export default function SheetsOrderForm() {
                                               >
                                               <Download className="w-4 h-4" />
                                               Solo Descargar PDF
-                                  </button>
-                        </div>
-                </div>
-          </div>
+                                  </button>button>
+                        </div>div>
+                </div>div>
+          </div>div>
         );
 }
+</div>
