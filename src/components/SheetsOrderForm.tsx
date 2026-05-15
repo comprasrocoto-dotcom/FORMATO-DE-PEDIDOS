@@ -276,28 +276,27 @@ export default function SheetsOrderForm() {
 
           const numeroOrden = await dbService.getNextGlobalConsecutive();
 
-        // Guardar cada linea en Google Sheets via Apps Script
-                    for (const linea of lineasSeleccionadas) {
-                                    try {
-                                                        await appendPedido({
-                                                                                fecha: new Date().toISOString(),
-                                                                                sede: selectedSede,
-                                                                                proveedor: selectedProveedorSheet,
-                                                                                articulo: linea.articulo,
-                                                                                subArticulo: linea.subArticulo,
-                                                                                cantidad: linea.cantidad,
-                                                                                unidad: '',
-                                                                                responsable,
-                                                                                correoResponsable,
-                                                                                notas,
-                                                                                numeroOrden,
-                                                        });
-                                    } catch (sheetErr) {
-                                                        console.warn('No se pudo guardar en Sheets:', sheetErr);
-                                    }
-                    }
-            
-            // Save to Firebase
+          // Guardar en Google Sheets via Apps Script
+          for (const linea of (lineasSeleccionadas || [])) {
+            try {
+              await appendPedido({
+                fecha: new Date().toISOString().split('T')[0],
+                sede: selectedSede || '',
+                proveedor: selectedProveedorSheet || '',
+                articulo: (linea as any).nombre || (linea as any).producto || '',
+                subArticulo: (linea as any).subArticulo || '',
+                cantidad: (linea as any).cantidad || 0,
+                unidad: (linea as any).unidad || '',
+                responsable: responsable || '',
+                correoResponsable: correoResponsable || '',
+                notas: notas || '',
+                numeroOrden: String(numeroOrden || '')
+              });
+            } catch (err) {
+              console.error('Error guardando en Sheets:', err);
+            }
+          }
+                    // Save to Firebase
           await (dbService as any).savePedido?.({
                     numeroOrden,
                     fecha: new Date().toISOString(),
@@ -351,8 +350,8 @@ export default function SheetsOrderForm() {
   if (loading) return (
         <div className="flex items-center justify-center min-h-64 gap-3 text-slate-500">
               <RefreshCw className="w-5 h-5 animate-spin" />
-              <span className="text-sm font-medium">Cargando datos desde Google Sheets...</span>span>
-        </div>div>
+              <span className="text-sm font-medium">Cargando datos desde Google Sheets...</span>
+        </div>
       );
   
     return (
@@ -363,19 +362,19 @@ export default function SheetsOrderForm() {
                     <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
                               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                               <div>
-                                          <p className="font-semibold text-sm">Error de conexión</p>p>
-                                          <p className="text-xs mt-0.5">{error}</p>p>
-                                          <button onClick={() => setError(null)} className="text-xs underline mt-1">Cerrar</button>button>
-                              </div>div>
-                    </div>div>
+                                          <p className="font-semibold text-sm">Error de conexión</p>
+                                          <p className="text-xs mt-0.5">{error}</p>
+                                          <button onClick={() => setError(null)} className="text-xs underline mt-1">Cerrar</button>
+                              </div>
+                    </div>
                 )}
           
             {/* Success banner */}
             {success && (
                     <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700">
                               <CheckCircle className="w-5 h-5" />
-                              <p className="text-sm font-semibold">¡Pedido guardado exitosamente! El PDF se está descargando.</p>p>
-                    </div>div>
+                              <p className="text-sm font-semibold">¡Pedido guardado exitosamente! El PDF se está descargando.</p>
+                    </div>
                 )}
           
             {/* Step 1: Sede + Responsable */}
@@ -383,28 +382,28 @@ export default function SheetsOrderForm() {
                         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                   <User className="w-4 h-4 text-brand-500" />
                                   1. Información del Pedido
-                        </h2>h2>
+                        </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                   <div>
-                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Sede *</label>label>
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Sede *</label>
                                               <select
                                                               value={selectedSede}
                                                               onChange={e => setSelectedSede(e.target.value)}
                                                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                             >
-                                                            <option value="">Seleccionar sede...</option>option>
-                                                {sedes.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>option>)}
-                                              </select>select>
-                                  </div>div>
+                                                            <option value="">Seleccionar sede...</option>
+                                                {sedes.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>)}
+                                              </select>
+                                  </div>
                           {sedeSeleccionada && (
                         <div className="col-span-1 bg-slate-50 rounded-lg p-3 text-xs space-y-0.5">
-                                      <p className="font-bold text-slate-600">📍 {sedeSeleccionada.direccion}</p>p>
-                          {sedeSeleccionada.telefono && <p className="text-slate-500">📞 {sedeSeleccionada.telefono}</p>p>}
-                          {sedeSeleccionada.horaEntrega && <p className="text-slate-500">🕐 {sedeSeleccionada.horaEntrega}</p>p>}
-                        </div>div>
+                                      <p className="font-bold text-slate-600">📍 {sedeSeleccionada.direccion}</p>
+                          {sedeSeleccionada.telefono && <p className="text-slate-500">📞 {sedeSeleccionada.telefono}</p>}
+                          {sedeSeleccionada.horaEntrega && <p className="text-slate-500">🕐 {sedeSeleccionada.horaEntrega}</p>}
+                        </div>
                                   )}
                                   <div>
-                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Responsable *</label>label>
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Responsable *</label>
                                               <input
                                                               type="text"
                                                               value={responsable}
@@ -412,9 +411,9 @@ export default function SheetsOrderForm() {
                                                               placeholder="Tu nombre completo"
                                                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                             />
-                                  </div>div>
+                                  </div>
                                   <div>
-                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Correo</label>label>
+                                              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Correo</label>
                                               <input
                                                               type="email"
                                                               value={correoResponsable}
@@ -422,53 +421,53 @@ export default function SheetsOrderForm() {
                                                               placeholder="correo@empresa.com"
                                                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                             />
-                                  </div>div>
-                        </div>div>
-                </div>div>
+                                  </div>
+                        </div>
+                </div>
           
             {/* Step 2: Proveedor */}
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                   <Truck className="w-4 h-4 text-brand-500" />
                                   2. Seleccionar Proveedor ({sheetNames.length} disponibles)
-                        </h2>h2>
+                        </h2>
                         <select
                                     value={selectedProveedorSheet}
                                     onChange={e => setSelectedProveedorSheet(e.target.value)}
                                     className="w-full md:w-96 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                   >
-                                  <option value="">Seleccionar proveedor...</option>option>
-                          {sheetNames.map(name => <option key={name} value={name}>{name}</option>option>)}
-                        </select>select>
+                                  <option value="">Seleccionar proveedor...</option>
+                          {sheetNames.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
                   {proveedorSeleccionado && (
                       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
                         {proveedorSeleccionado.telefono && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Teléfono</p>p>
-                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.telefono}</p>p>
-                                      </div>div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Teléfono</p>
+                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.telefono}</p>
+                                      </div>
                                   )}
                         {proveedorSeleccionado.correo && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Correo</p>p>
-                                                      <p className="text-slate-700 font-medium truncate">{proveedorSeleccionado.correo}</p>p>
-                                      </div>div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Correo</p>
+                                                      <p className="text-slate-700 font-medium truncate">{proveedorSeleccionado.correo}</p>
+                                      </div>
                                   )}
                         {proveedorSeleccionado.asesor && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Asesor</p>p>
-                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.asesor}</p>p>
-                                      </div>div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Asesor</p>
+                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.asesor}</p>
+                                      </div>
                                   )}
                         {proveedorSeleccionado.medioPago && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Medio de Pago</p>p>
-                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.medioPago}</p>p>
-                                      </div>div>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">Medio de Pago</p>
+                                                      <p className="text-slate-700 font-medium">{proveedorSeleccionado.medioPago}</p>
+                                      </div>
                                   )}
-                      </div>div>
+                      </div>
                         )}
-                </div>div>
+                </div>
           
             {/* Step 3: Products */}
             {selectedProveedorSheet && (
@@ -477,8 +476,8 @@ export default function SheetsOrderForm() {
                                           <ShoppingCart className="w-4 h-4 text-brand-500" />
                                           3. Productos — {selectedProveedorSheet}
                                 {loadingProductos && <RefreshCw className="w-3 h-3 animate-spin text-slate-400 ml-2" />}
-                                          <span className="ml-auto text-xs font-normal text-slate-400 normal-case">{lineasSeleccionadas.length} ítem(s) seleccionado(s)</span>span>
-                              </h2>h2>
+                                          <span className="ml-auto text-xs font-normal text-slate-400 normal-case">{lineasSeleccionadas.length} ítem(s) seleccionado(s)</span>
+                              </h2>
                     
                       {/* Search */}
                               <div className="relative mb-4">
@@ -490,24 +489,24 @@ export default function SheetsOrderForm() {
                                                           placeholder="Buscar artículo por nombre o código..."
                                                           className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                         />
-                              </div>div>
+                              </div>
                     
                       {loadingProductos ? (
                                   <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
                                                 <RefreshCw className="w-4 h-4 animate-spin" />
-                                                <span className="text-sm">Cargando productos...</span>span>
-                                  </div>div>
+                                                <span className="text-sm">Cargando productos...</span>
+                                  </div>
                                 ) : (
                                   <div className="overflow-x-auto rounded-xl border border-slate-200">
                                                 <table className="w-full text-sm">
                                                                 <thead>
                                                                                   <tr className="bg-slate-900 text-white">
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Código</th>th>
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Artículo</th>th>
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">SubArtículo</th>th>
-                                                                                                      <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-32">Cantidad</th>th>
-                                                                                    </tr>tr>
-                                                                </thead>thead>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Código</th>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Artículo</th>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">SubArtículo</th>
+                                                                                                      <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-32">Cantidad</th>
+                                                                                    </tr>
+                                                                </thead>
                                                                 <tbody>
                                                                   {productosFiltrados.map((p, idx) => {
                                                         const qty = cantidades[p.codigo] || 0;
@@ -516,15 +515,15 @@ export default function SheetsOrderForm() {
                                                                                                           key={p.codigo || idx}
                                                                                                           className={`border-b border-slate-100 transition-colors ${qty > 0 ? 'bg-emerald-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50'}`}
                                                                                                         >
-                                                                                                        <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>td>
-                                                                                                        <td className="py-2.5 px-4 font-medium text-slate-800">{p.articulo}</td>td>
-                                                                                                        <td className="py-2.5 px-4 text-slate-500 hidden md:table-cell text-xs">{p.subArticulo}</td>td>
+                                                                                                        <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
+                                                                                                        <td className="py-2.5 px-4 font-medium text-slate-800">{p.articulo}</td>
+                                                                                                        <td className="py-2.5 px-4 text-slate-500 hidden md:table-cell text-xs">{p.subArticulo}</td>
                                                                                                         <td className="py-2.5 px-4">
                                                                                                                                   <div className="flex items-center gap-1.5 justify-center">
                                                                                                                                                               <button
                                                                                                                                                                                               onClick={() => handleCantidad(p.codigo, qty - 1)}
                                                                                                                                                                                               className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold transition-colors flex items-center justify-center text-slate-600"
-                                                                                                                                                                                            >−</button>button>
+                                                                                                                                                                                            >−</button>
                                                                                                                                                               <input
                                                                                                                                                                                               type="number"
                                                                                                                                                                                               min={0}
@@ -536,20 +535,20 @@ export default function SheetsOrderForm() {
                                                                                                                                                               <button
                                                                                                                                                                                               onClick={() => handleCantidad(p.codigo, qty + 1)}
                                                                                                                                                                                               className="w-7 h-7 rounded-lg bg-brand-500 hover:bg-brand-600 font-bold text-white transition-colors flex items-center justify-center"
-                                                                                                                                                                                            >+</button>button>
-                                                                                                                                    </div>div>
-                                                                                                          </td>td>
-                                                                                  </tr>tr>
+                                                                                                                                                                                            >+</button>
+                                                                                                                                    </div>
+                                                                                                          </td>
+                                                                                  </tr>
                                                                               );
                                   })}
                                                                   {productosFiltrados.length === 0 && (
-                                                        <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">No se encontraron productos{searchTerm ? ` para "${searchTerm}"` : ''}.</td>td></tr>tr>
+                                                        <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">No se encontraron productos{searchTerm ? ` para "${searchTerm}"` : ''}.</td></tr>
                                                                                   )}
-                                                                </tbody>tbody>
-                                                </table>table>
-                                  </div>div>
+                                                                </tbody>
+                                                </table>
+                                  </div>
                               )}
-                    </div>div>
+                    </div>
                 )}
           
             {/* Step 4: Notes + Actions */}
@@ -557,7 +556,7 @@ export default function SheetsOrderForm() {
                         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                   <Building2 className="w-4 h-4 text-brand-500" />
                                   4. Observaciones y Registro
-                        </h2>h2>
+                        </h2>
                         <textarea
                                     value={notas}
                                     onChange={e => setNotas(e.target.value)}
@@ -569,16 +568,16 @@ export default function SheetsOrderForm() {
                   {/* Summary */}
                   {lineasSeleccionadas.length > 0 && (
                       <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                                  <p className="text-xs font-bold text-emerald-700 uppercase mb-1.5">Resumen del Pedido</p>p>
+                                  <p className="text-xs font-bold text-emerald-700 uppercase mb-1.5">Resumen del Pedido</p>
                                   <div className="space-y-0.5">
                                     {lineasSeleccionadas.map(l => (
                                         <div key={l.codigo} className="flex justify-between text-xs text-emerald-800">
-                                                          <span>{l.articulo}</span>span>
-                                                          <span className="font-bold">x{l.cantidad}</span>span>
-                                        </div>div>
+                                                          <span>{l.articulo}</span>
+                                                          <span className="font-bold">x{l.cantidad}</span>
+                                        </div>
                                       ))}
-                                  </div>div>
-                      </div>div>
+                                  </div>
+                      </div>
                         )}
                 
                         <div className="flex flex-wrap gap-3">
@@ -589,7 +588,7 @@ export default function SheetsOrderForm() {
                                               >
                                     {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                                     {saving ? 'Guardando...' : 'Guardar y Descargar PDF'}
-                                  </button>button>
+                                  </button>
                                   <button
                                                 onClick={handleDescargarPDF}
                                                 disabled={lineasSeleccionadas.length === 0}
@@ -597,10 +596,10 @@ export default function SheetsOrderForm() {
                                               >
                                               <Download className="w-4 h-4" />
                                               Solo Descargar PDF
-                                  </button>button>
-                        </div>div>
-                </div>div>
-          </div>div>
+                                  </button>
+                        </div>
+                </div>
+          </div>
         );
 }
 </div>
