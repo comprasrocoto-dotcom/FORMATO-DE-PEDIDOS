@@ -21,7 +21,7 @@ import { dbService } from '../services/db';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
-// âââ Types âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Types Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 interface LineItem {
     codigo: string;
     articulo: string;
@@ -29,7 +29,7 @@ interface LineItem {
     cantidad: number;
 }
 
-// âââ PDF Generator âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ PDF Generator Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 function generarPDF(params: {
     sede: SedeSheet | null;
     proveedor: ProveedorSheet | null;
@@ -105,7 +105,7 @@ function generarPDF(params: {
                                                                                               <div style="margin-top:8px;font-size:10px;color:#718096;">Generado: ${fecha} ${hora}</div>
                                                                                                   </div>
                                                                                                       <div class="order-badge">
-                                                                                                            <div class="label">NÂ° Orden</div>
+                                                                                                            <div class="label">NÃÂ° Orden</div>
                                                                                                                   <div class="number">OC-${numeroOrden}</div>
                                                                                                                         <div class="date">${fecha}</div>
                                                                                                                             </div>
@@ -119,10 +119,10 @@ function generarPDF(params: {
                                                                                                                                                                 </div>
                                                                                                                                                                       <div class="info-box-body">
                                                                                                                                                                               <div class="info-row"><span class="info-label">Empresa:</span><span class="info-value">${proveedor?.nombre || proveedorSheetName}</span></div>
-                                                                                                                                                                                      <div class="info-row"><span class="info-label">TelÃ©fono:</span><span class="info-value">${proveedor?.telefono || 'â'}</span></div>
-                                                                                                                                                                                              <div class="info-row"><span class="info-label">Correo:</span><span class="info-value">${proveedor?.correo || 'â'}</span></div>
-                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Asesor:</span><span class="info-value">${proveedor?.asesor || 'â'}</span></div>
-                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Pago:</span><span class="info-value">${proveedor?.medioPago || 'â'}</span></div>
+                                                                                                                                                                                      <div class="info-row"><span class="info-label">TelÃÂ©fono:</span><span class="info-value">${proveedor?.telefono || 'Ã¢ÂÂ'}</span></div>
+                                                                                                                                                                                              <div class="info-row"><span class="info-label">Correo:</span><span class="info-value">${proveedor?.correo || 'Ã¢ÂÂ'}</span></div>
+                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Asesor:</span><span class="info-value">${proveedor?.asesor || 'Ã¢ÂÂ'}</span></div>
+                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Pago:</span><span class="info-value">${proveedor?.medioPago || 'Ã¢ÂÂ'}</span></div>
                                                                                                                                                                                                                     </div>
                                                                                                                                                                                                                         </div>
                                                                                                                                                                                                                             <div class="info-box">
@@ -131,10 +131,10 @@ function generarPDF(params: {
                                                                                                                                                                                                                                                   Sede de Entrega
                                                                                                                                                                                                                                                         </div>
                                                                                                                                                                                                                                                               <div class="info-box-body">
-                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Sede:</span><span class="info-value">${sede?.nombre || 'â'}</span></div>
-                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">DirecciÃ³n:</span><span class="info-value">${sede?.direccion || 'â'}</span></div>
-                                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">TelÃ©fono:</span><span class="info-value">${sede?.telefono || 'â'}</span></div>
-                                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Horario:</span><span class="info-value">${sede?.horaEntrega || 'â'}</span></div>
+                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">Sede:</span><span class="info-value">${sede?.nombre || 'Ã¢ÂÂ'}</span></div>
+                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">DirecciÃÂ³n:</span><span class="info-value">${sede?.direccion || 'Ã¢ÂÂ'}</span></div>
+                                                                                                                                                                                                                                                                                      <div class="info-row"><span class="info-label">TelÃÂ©fono:</span><span class="info-value">${sede?.telefono || 'Ã¢ÂÂ'}</span></div>
+                                                                                                                                                                                                                                                                                              <div class="info-row"><span class="info-label">Horario:</span><span class="info-value">${sede?.horaEntrega || 'Ã¢ÂÂ'}</span></div>
                                                                                                                                                                                                                                                                                                       <div class="info-row"><span class="info-label">Responsable:</span><span class="info-value">${responsable}</span></div>
                                                                                                                                                                                                                                                                                                             </div>
                                                                                                                                                                                                                                                                                                                 </div>
@@ -143,10 +143,10 @@ function generarPDF(params: {
                                                                                                                                                                                                                                                                                                                     <table class="items-table">
                                                                                                                                                                                                                                                                                                                         <thead>
                                                                                                                                                                                                                                                                                                                               <tr>
-                                                                                                                                                                                                                                                                                                                                      <th style="width:12%;">CÃ³digo</th>
-                                                                                                                                                                                                                                                                                                                                              <th style="width:40%;">ArtÃ­culo</th>
-                                                                                                                                                                                                                                                                                                                                                      <th style="width:30%;">SubArtÃ­culo / PresentaciÃ³n</th>
-                                                                                                                                                                                                                                                                                                                                                              <th style="width:18%;text-align:center;">Cantidad<span class="count-badge">${lineas.filter(l => l.cantidad > 0).length} Ã­tem(s)</span></th>
+                                                                                                                                                                                                                                                                                                                                      <th style="width:12%;">CÃÂ³digo</th>
+                                                                                                                                                                                                                                                                                                                                              <th style="width:40%;">ArtÃÂ­culo</th>
+                                                                                                                                                                                                                                                                                                                                                      <th style="width:30%;">SubArtÃÂ­culo / PresentaciÃÂ³n</th>
+                                                                                                                                                                                                                                                                                                                                                              <th style="width:18%;text-align:center;">Cantidad<span class="count-badge">${lineas.filter(l => l.cantidad > 0).length} ÃÂ­tem(s)</span></th>
                                                                                                                                                                                                                                                                                                                                                                     </tr>
                                                                                                                                                                                                                                                                                                                                                                         </thead>
                                                                                                                                                                                                                                                                                                                                                                             <tbody>
@@ -163,7 +163,7 @@ function generarPDF(params: {
                                                                                                                                                                                                                                                                                                                                                                                                                         <div class="signature-box">
                                                                                                                                                                                                                                                                                                                                                                                                                               <div class="signature-line"></div>
                                                                                                                                                                                                                                                                                                                                                                                                                                     <div class="signature-name">${responsable}</div>
-                                                                                                                                                                                                                                                                                                                                                                                                                                          <div class="signature-role">ElaborÃ³ el Pedido</div>
+                                                                                                                                                                                                                                                                                                                                                                                                                                          <div class="signature-role">ElaborÃÂ³ el Pedido</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                 <div class="signature-email">${correoResponsable}</div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                     </div>
                                                                                                                                                                                                                                                                                                                                                                                                                                                       </div>
@@ -180,7 +180,7 @@ function generarPDF(params: {
   }).from(html).save();
 }
 
-// âââ Component âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ Component Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 export default function SheetsOrderForm() {
     // Data from Google Sheets
   const [proveedores, setProveedores] = useState<ProveedorSheet[]>([]);
@@ -363,7 +363,7 @@ export default function SheetsOrderForm() {
                     <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
                               <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                               <div>
-                                          <p className="font-semibold text-sm">Error de conexiÃ³n</p>
+                                          <p className="font-semibold text-sm">Error de conexiÃÂ³n</p>
                                           <p className="text-xs mt-0.5">{error}</p>
                                           <button onClick={() => setError(null)} className="text-xs underline mt-1">Cerrar</button>
                               </div>
@@ -374,7 +374,7 @@ export default function SheetsOrderForm() {
             {success && (
                     <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700">
                               <CheckCircle className="w-5 h-5" />
-                              <p className="text-sm font-semibold">Â¡Pedido guardado exitosamente! El PDF se estÃ¡ descargando.</p>
+                              <p className="text-sm font-semibold">ÃÂ¡Pedido guardado exitosamente! El PDF se estÃÂ¡ descargando.</p>
                     </div>
                 )}
           
@@ -382,7 +382,7 @@ export default function SheetsOrderForm() {
                 <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                         <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                   <User className="w-4 h-4 text-brand-500" />
-                                  1. InformaciÃ³n del Pedido
+                                  1. InformaciÃÂ³n del Pedido
                         </h2>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                   <div>
@@ -392,15 +392,15 @@ export default function SheetsOrderForm() {
                                                               onChange={e => setSelectedSede(e.target.value)}
                                                               className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                             >
-                                                            <option value="">Seleccionar sede...</option>option>
-                                                {sedes.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>option>)}
-                                              </select>select>
+                                                            <option value="">Seleccionar sede...</option>
+                                                {sedes.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>)}
+                                              </select>
                                   </div>
                           {sedeSeleccionada && (
                         <div className="col-span-1 bg-slate-50 rounded-lg p-3 text-xs space-y-0.5">
-                                      <p className="font-bold text-slate-600">ð {sedeSeleccionada.direccion}</p>
-                          {sedeSeleccionada.telefono && <p className="text-slate-500">ð {sedeSeleccionada.telefono}</p>}
-                          {sedeSeleccionada.horaEntrega && <p className="text-slate-500">ð {sedeSeleccionada.horaEntrega}</p>}
+                                      <p className="font-bold text-slate-600">Ã°ÂÂÂ {sedeSeleccionada.direccion}</p>
+                          {sedeSeleccionada.telefono && <p className="text-slate-500">Ã°ÂÂÂ {sedeSeleccionada.telefono}</p>}
+                          {sedeSeleccionada.horaEntrega && <p className="text-slate-500">Ã°ÂÂÂ {sedeSeleccionada.horaEntrega}</p>}
                         </div>
                                   )}
                                   <div>
@@ -437,14 +437,14 @@ export default function SheetsOrderForm() {
                                     onChange={e => setSelectedProveedorSheet(e.target.value)}
                                     className="w-full md:w-96 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                   >
-                                  <option value="">Seleccionar proveedor...</option>option>
-                          {sheetNames.map(name => <option key={name} value={name}>{name}</option>option>)}
-                        </select>select>
+                                  <option value="">Seleccionar proveedor...</option>
+                          {sheetNames.map(name => <option key={name} value={name}>{name}</option>)}
+                        </select>
                   {proveedorSeleccionado && (
                       <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
                         {proveedorSeleccionado.telefono && (
                                       <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">TelÃ©fono</p>
+                                                      <p className="text-slate-400 font-bold uppercase mb-0.5">TelÃÂ©fono</p>
                                                       <p className="text-slate-700 font-medium">{proveedorSeleccionado.telefono}</p>
                                       </div>
                                   )}
@@ -475,9 +475,9 @@ export default function SheetsOrderForm() {
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                               <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
                                           <ShoppingCart className="w-4 h-4 text-brand-500" />
-                                          3. Productos â {selectedProveedorSheet}
+                                          3. Productos Ã¢ÂÂ {selectedProveedorSheet}
                                 {loadingProductos && <RefreshCw className="w-3 h-3 animate-spin text-slate-400 ml-2" />}
-                                          <span className="ml-auto text-xs font-normal text-slate-400 normal-case">{lineasSeleccionadas.length} Ã­tem(s) seleccionado(s)</span>
+                                          <span className="ml-auto text-xs font-normal text-slate-400 normal-case">{lineasSeleccionadas.length} ÃÂ­tem(s) seleccionado(s)</span>
                               </h2>
                     
                       {/* Search */}
@@ -487,7 +487,7 @@ export default function SheetsOrderForm() {
                                                           type="text"
                                                           value={searchTerm}
                                                           onChange={e => setSearchTerm(e.target.value)}
-                                                          placeholder="Buscar artÃ­culo por nombre o cÃ³digo..."
+                                                          placeholder="Buscar artÃÂ­culo por nombre o cÃÂ³digo..."
                                                           className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
                                                         />
                               </div>
@@ -502,12 +502,12 @@ export default function SheetsOrderForm() {
                                                 <table className="w-full text-sm">
                                                                 <thead>
                                                                                   <tr className="bg-slate-900 text-white">
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">CÃ³digo</th>
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">ArtÃ­culo</th>
-                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">SubArtÃ­culo</th>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">CÃÂ³digo</th>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">ArtÃÂ­culo</th>
+                                                                                                      <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">SubArtÃÂ­culo</th>
                                                                                                       <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-32">Cantidad</th>
                                                                                     </tr>
-                                                                </thead>thead>
+                                                                </thead>
                                                                 <tbody>
                                                                   {productosFiltrados.map((p, idx) => {
                                                         const qty = cantidades[p.codigo] || 0;
@@ -524,7 +524,7 @@ export default function SheetsOrderForm() {
                                                                                                                                                               <button
                                                                                                                                                                                               onClick={() => handleCantidad(p.codigo, qty - 1)}
                                                                                                                                                                                               className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold transition-colors flex items-center justify-center text-slate-600"
-                                                                                                                                                                                            >â</button>
+                                                                                                                                                                                            >Ã¢ÂÂ</button>
                                                                                                                                                               <input
                                                                                                                                                                                               type="number"
                                                                                                                                                                                               min={0}
@@ -545,7 +545,7 @@ export default function SheetsOrderForm() {
                                                                   {productosFiltrados.length === 0 && (
                                                         <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">No se encontraron productos{searchTerm ? ` para "${searchTerm}"` : ''}.</td></tr>
                                                                                   )}
-                                                                </tbody>tbody>
+                                                                </tbody>
                                                 </table>
                                   </div>
                               )}
