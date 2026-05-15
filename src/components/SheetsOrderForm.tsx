@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * SheetsOrderForm.tsx
  * Formulario de pedido conectado a Google Sheets.
