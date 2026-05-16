@@ -73,6 +73,15 @@ export default function App() {
       }
     }).catch(err => { console.warn('Sheets proveedores fallback failed:', err); });
 
+    
+    return () => {
+      unsubInsumos();
+      unsubProveedores();
+      unsubSedes();
+    };
+  }, []);
+  // Separate useEffect to load insumos from Sheets
+  useEffect(() => {
     // SHEETS: Load all insumos (inline fetch to Apps Script)
     (async () => {
       try {
@@ -102,13 +111,8 @@ export default function App() {
         console.warn('Sheets insumos inline load failed:', err);
       }
     })();
-
-    return () => {
-      unsubInsumos();
-      unsubProveedores();
-      unsubSedes();
-    };
   }, []);
+
 
   const handleConfigChange = (field: 'sede' | 'direccion' | 'horario', value: string) => {
     if (field === 'sede') {
