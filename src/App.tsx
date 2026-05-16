@@ -424,171 +424,129 @@ export default function App() {
                       `).join('');
 
                       const total = active.reduce((acc, i) => acc + (i.precio * (quantities[i.id] || 0)), 0);
-                      const proveedorNameForPdf = selectedProveedorId
+                      const provN2 = selectedProveedorId
                 ? (proveedores.find(p => p.id === selectedProveedorId)?.nombre || 'Varios')
                 : 'Varios';
-              const proveedorObjForPdf = selectedProveedorId ? proveedores.find(p => p.id === selectedProveedorId) : null;
-              const fmt = (n) => new Intl.NumberFormat('es-CO', {style:'currency',currency:'COP',minimumFractionDigits:0}).format(n);
-              const subtotal = active.reduce((a,i) => a + (i.precio*(quantities[i.id]||0)),0);
+              const provObj2 = selectedProveedorId ? proveedores.find(p => p.id === selectedProveedorId) : null;
+              const fmt2 = (n) => '$' + Number(n || 0).toLocaleString('es-CO');
+              const subtotal2 = active.reduce((a,i) => a + (i.precio*(quantities[i.id]||0)),0);
+              const fechaStr = new Date().toLocaleDateString('es-CO',{year:'numeric',month:'long',day:'numeric'});
 
-              // Rows: fill up to 16 rows minimum
-              const itemRows = active.map((i,idx) => `
-                <tr>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${idx+1}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;">${i.nombre}${i.categoria ? ' - '+i.categoria : ''}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${quantities[i.id]||0} ${i.unidad}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:right;">${fmt(i.precio)}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:right;">${fmt((quantities[i.id]||0)*i.precio)}</td>
-                </tr>`).join('');
+              const itemRows2 = active.map((i,idx) => [
+                '<tr>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;text-align:center;font-size:10px;">' + (idx+1) + '</td>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">' + i.nombre + (i.categoria ? ' - ' + i.categoria : '') + '</td>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;text-align:center;font-size:10px;">' + (quantities[i.id]||0) + ' ' + i.unidad + '</td>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;text-align:right;font-size:10px;">' + fmt2(i.precio) + '</td>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;text-align:right;font-size:10px;">' + fmt2((quantities[i.id]||0)*i.precio) + '</td>',
+                '</tr>'
+              ].join('')).join('');
 
-              const emptyRows = Array(Math.max(0, 16 - active.length)).fill(0).map((_,idx) => `
-                <tr>
-                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${active.length+idx+1}</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
-                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
-                </tr>`).join('');
+              const emptyRows2 = Array(Math.max(0, 16 - active.length)).fill(0).map((_,idx) => [
+                '<tr>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;text-align:center;">' + (active.length+idx+1) + '</td>',
+                '<td style="border:1px solid #bbb;padding:14px 7px;font-size:10px;">&nbsp;</td>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">&nbsp;</td>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">&nbsp;</td>',
+                '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">&nbsp;</td>',
+                '</tr>'
+              ].join('')).join('');
 
-              const html = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8"/>
-<style>
-  body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 0; padding: 0; }
-  .page { padding: 32px 36px; }
-  .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
-  .title { font-size: 28px; font-weight: 900; color: #222; margin: 0; }
-  .company-info { text-align: right; font-size: 10px; line-height: 1.7; color: #444; }
-  .order-meta { display: flex; gap: 40px; margin-bottom: 16px; font-size: 11px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
-  .order-meta .field { display: flex; gap: 6px; align-items: baseline; }
-  .order-meta .label { font-weight: 700; white-space: nowrap; }
-  .parties { display: flex; gap: 16px; margin-bottom: 16px; }
-  .party-box { flex: 1; border: 1px solid #ccc; border-radius: 2px; overflow: hidden; }
-  .party-header { background: #2d3f6b; color: white; font-weight: 700; font-size: 11px; padding: 6px 10px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .party-body { padding: 8px 10px; line-height: 1.8; font-size: 10px; }
-  .party-body .row { display: flex; gap: 6px; }
-  .party-body .icon { color: #888; width: 14px; flex-shrink: 0; }
-  .products-section { margin-bottom: 14px; }
-  .products-header { background: #2d3f6b; color: white; padding: 7px 10px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0; }
-  .products-table { width: 100%; border-collapse: collapse; font-size: 10px; }
-  .products-table thead th { background: #e8ecf4; color: #2d3f6b; border: 1px solid #ccc; padding: 6px 8px; text-align: center; font-weight: 700; text-transform: uppercase; font-size: 9px; }
-  .products-table thead th.left { text-align: left; }
-  .products-table tbody td { vertical-align: middle; font-size: 10px; min-height: 22px; }
-  .totals-row { display: flex; justify-content: flex-end; margin-top: 0; }
-  .totals-table { border-collapse: collapse; width: 260px; font-size: 10px; }
-  .totals-table td { border: 1px solid #ccc; padding: 5px 10px; }
-  .totals-table .tlabel { text-align: right; font-weight: 700; text-transform: uppercase; background: #f5f5f5; }
-  .totals-table .tvalue { text-align: right; }
-  .totals-table .grand-row td { background: #2d3f6b; color: white; font-weight: 900; font-size: 12px; }
-  .comments-box { border: 1px solid #ccc; margin-top: 12px; border-radius: 2px; overflow: hidden; }
-  .comments-header { background: #2d3f6b; color: white; padding: 6px 10px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
-  .comments-body { padding: 10px; min-height: 50px; font-size: 10px; line-height: 1.5; }
-</style>
-</head>
-<body>
-<div class="page">
-
-  <!-- TOP HEADER -->
-  <div class="header-top">
-    <h1 class="title">Orden de compra</h1>
-    <div class="company-info">
-      <strong>Rocoto Restaurantes</strong><br/>
-      &#x1F4CD; ${sede||'Rocoto Laureles'}, Medellín<br/>
-      &#x260E; (604) 987 6543<br/>
-      &#x2709; comprasrocoto@gmail.com
-    </div>
-  </div>
-
-  <!-- ORDER META -->
-  <div class="order-meta">
-    <div class="field">
-      <span class="label">N.° de orden de compra:</span>
-      <span>OC-${nextNumber}</span>
-    </div>
-    <div class="field">
-      <span class="label">Fecha:</span>
-      <span>${new Date().toLocaleDateString('es-CO',{year:'numeric',month:'long',day:'numeric'})}</span>
-    </div>
-  </div>
-
-  <!-- VENDEDOR / CLIENTE -->
-  <div class="parties">
-    <div class="party-box">
-      <div class="party-header">Vendedor</div>
-      <div class="party-body">
-        <div style="font-weight:700;margin-bottom:4px;">${proveedorNameForPdf}</div>
-        <div class="row"><span class="icon">&#x1F4CD;</span><span>${proveedorObjForPdf?.contacto||'Ver datos del proveedor'}</span></div>
-        <div class="row"><span class="icon">&#x260E;</span><span>${proveedorObjForPdf?.telefono||'—'}</span></div>
-        <div class="row"><span class="icon">&#x2709;</span><span>${proveedorObjForPdf?.email||'—'}</span></div>
-      </div>
-    </div>
-    <div class="party-box">
-      <div class="party-header">Cliente</div>
-      <div class="party-body">
-        <div style="font-weight:700;margin-bottom:4px;">Rocoto Restaurantes</div>
-        <div class="row"><span class="icon">&#x1F4CD;</span><span>${direccionEntrega||'Calle 45 #22-18, Laureles, Medellín'}</span></div>
-        <div class="row"><span class="icon">&#x260E;</span><span>(604) 987 6543</span></div>
-        <div class="row"><span class="icon">&#x2709;</span><span>comprasrocoto@gmail.com</span></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- PRODUCTS TABLE -->
-  <div class="products-section">
-    <div class="products-header">Producto o Servicio</div>
-    <table class="products-table">
-      <thead>
-        <tr>
-          <th style="width:5%;">N.°</th>
-          <th class="left" style="width:50%;">Descripción</th>
-          <th style="width:15%;">Cantidad</th>
-          <th style="width:15%;">Precio unitario</th>
-          <th style="width:15%;">Total</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${itemRows}
-        ${emptyRows}
-      </tbody>
-    </table>
-  </div>
-
-  <!-- TOTALS -->
-  <div class="totals-row">
-    <table class="totals-table">
-      <tr><td class="tlabel">Subtotal</td><td class="tvalue">${fmt(subtotal)}</td></tr>
-      <tr><td class="tlabel">Impuesto</td><td class="tvalue">0 %</td></tr>
-      <tr><td class="tlabel">Envío</td><td class="tvalue">${fmt(0)}</td></tr>
-      <tr class="grand-row"><td class="tlabel" style="color:white;">Total</td><td class="tvalue">${fmt(subtotal)}</td></tr>
-    </table>
-  </div>
-
-  <!-- COMMENTS -->
-  <div class="comments-box">
-    <div class="comments-header">Comentarios o instrucciones especiales</div>
-    <div class="comments-body">
-      ${notas||'Comentarios o instrucciones especiales'}<br/>
-      <em>Solicitado por: ${responsable} &nbsp;|&nbsp; Sede destino: ${sede||'—'} &nbsp;|&nbsp; Horario recepción: ${horarioRecepcion||'—'}</em>
-    </div>
-  </div>
-
-</div>
-</body>
-</html>`;
+              const html = '<!DOCTYPE html><html><head><meta charset="utf-8"/><style>' +
+                'body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:0;padding:0;}' +
+                '.page{padding:28px 32px;}' +
+                '.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}' +
+                '.title{font-size:26px;font-weight:900;color:#111;margin:0;}' +
+                '.co-info{text-align:right;font-size:9.5px;line-height:1.8;color:#555;}' +
+                '.meta{display:flex;gap:36px;border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:14px;}' +
+                '.meta .lbl{font-weight:700;}' +
+                '.parties{display:flex;gap:12px;margin-bottom:14px;}' +
+                '.pbox{flex:1;border:1px solid #bbb;border-radius:1px;}' +
+                '.pbox-hdr{background:#2d3f6b;color:white;font-weight:700;font-size:10px;padding:5px 9px;text-transform:uppercase;letter-spacing:.5px;}' +
+                '.pbox-body{padding:7px 9px;line-height:1.9;font-size:9.5px;}' +
+                '.sec-hdr{background:#2d3f6b;color:white;padding:6px 9px;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.5px;}' +
+                'table.pt{width:100%;border-collapse:collapse;}' +
+                'table.pt th{background:#dde4f0;color:#2d3f6b;border:1px solid #bbb;padding:6px 7px;font-size:9.5px;font-weight:700;text-transform:uppercase;text-align:center;}' +
+                'table.pt th.tl{text-align:left;}' +
+                '.totrow{display:flex;justify-content:flex-end;margin-top:2px;}' +
+                'table.tt{border-collapse:collapse;width:240px;}' +
+                'table.tt td{border:1px solid #bbb;padding:4px 9px;font-size:10px;}' +
+                '.ttlbl{text-align:right;font-weight:700;text-transform:uppercase;background:#f0f0f0;}' +
+                '.tval{text-align:right;}' +
+                '.grand td{background:#2d3f6b;color:white;font-weight:900;font-size:12px;}' +
+                '.cmts{border:1px solid #bbb;margin-top:10px;}' +
+                '.cmts-hdr{background:#2d3f6b;color:white;padding:5px 9px;font-weight:700;font-size:10px;text-transform:uppercase;}' +
+                '.cmts-body{padding:9px;min-height:44px;font-size:9.5px;line-height:1.5;}' +
+                '</style></head><body><div class="page">' +
+                '<div class="hdr">' +
+                  '<h1 class="title">Orden de compra</h1>' +
+                  '<div class="co-info">' +
+                    '<strong>Rocoto Restaurantes</strong><br/>' +
+                    'Dir: ' + (sede||'Rocoto Laureles') + ', Medellin<br/>' +
+                    'Tel: (604) 987 6543<br/>' +
+                    'Email: comprasrocoto@gmail.com' +
+                  '</div>' +
+                '</div>' +
+                '<div class="meta">' +
+                  '<span><span class="lbl">N. de orden de compra: </span>OC-' + nextNumber + '</span>' +
+                  '<span><span class="lbl">Fecha: </span>' + fechaStr + '</span>' +
+                '</div>' +
+                '<div class="parties">' +
+                  '<div class="pbox">' +
+                    '<div class="pbox-hdr">Vendedor</div>' +
+                    '<div class="pbox-body">' +
+                      '<strong>' + provN2 + '</strong><br/>' +
+                      'Tel: ' + (provObj2 ? (provObj2.telefono||'—') : '—') + '<br/>' +
+                      'Email: ' + (provObj2 ? (provObj2.email||'—') : '—') +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="pbox">' +
+                    '<div class="pbox-hdr">Cliente</div>' +
+                    '<div class="pbox-body">' +
+                      '<strong>Rocoto Restaurantes</strong><br/>' +
+                      'Dir: ' + (direccionEntrega||'Calle 45 No22-18, Laureles, Medellin') + '<br/>' +
+                      'Tel: (604) 987 6543<br/>' +
+                      'Email: comprasrocoto@gmail.com' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="sec-hdr">Producto o Servicio</div>' +
+                '<table class="pt"><thead><tr>' +
+                  '<th style="width:5%;">N.</th>' +
+                  '<th class="tl" style="width:50%;">Descripcion</th>' +
+                  '<th style="width:15%;">Cantidad</th>' +
+                  '<th style="width:15%;">Precio unitario</th>' +
+                  '<th style="width:15%;">Total</th>' +
+                '</tr></thead><tbody>' +
+                itemRows2 + emptyRows2 +
+                '</tbody></table>' +
+                '<div class="totrow"><table class="tt">' +
+                  '<tr><td class="ttlbl">Subtotal</td><td class="tval">' + fmt2(subtotal2) + '</td></tr>' +
+                  '<tr><td class="ttlbl">Impuesto</td><td class="tval">0 %</td></tr>' +
+                  '<tr><td class="ttlbl">Envio</td><td class="tval">' + fmt2(0) + '</td></tr>' +
+                  '<tr class="grand"><td class="ttlbl" style="color:white;">Total</td><td class="tval">' + fmt2(subtotal2) + '</td></tr>' +
+                '</table></div>' +
+                '<div class="cmts">' +
+                  '<div class="cmts-hdr">Comentarios o instrucciones especiales</div>' +
+                  '<div class="cmts-body">' + (notas||'Sin comentarios.') + '<br/>' +
+                    'Solicitado por: ' + responsable + ' | Sede: ' + (sede||'—') + ' | Horario: ' + (horarioRecepcion||'—') +
+                  '</div>' +
+                '</div>' +
+                '</div></body></html>';
 
               const opt = {
-                margin: [10, 10, 10, 10],
-                filename: `OrdenCompra_OC${nextNumber}_${new Date().toISOString().split('T')[0]}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
+                margin: [8, 8, 8, 8],
+                filename: 'OrdenCompra_OC' + nextNumber + '_' + fechaHoy + '.pdf',
+                image: { type: 'jpeg', quality: 0.95 },
                 html2canvas: {
                   scale: 2,
                   useCORS: true,
+                  logging: false,
                   onclone: (clonedDoc) => {
                     const styles = clonedDoc.getElementsByTagName('style');
-                    for (let i = 0; i < styles.length; i++) {
-                      if (styles[i].innerHTML.includes('oklch')) {
-                        styles[i].innerHTML = styles[i].innerHTML.replace(/oklch\([^)]+\)/g, '#ccc');
+                    for (let s = 0; s < styles.length; s++) {
+                      if (styles[s].innerHTML.includes('oklch')) {
+                        styles[s].innerHTML = styles[s].innerHTML.replace(/oklch\([^)]+\)/g, '#ccc');
                       }
                     }
                   }
@@ -596,27 +554,25 @@ export default function App() {
                 jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
               };
 
-              // Send email notification via Apps Script
+              // Send email notification
               try {
-                const appsUrl = import.meta.env.VITE_APPS_SCRIPT_URL || '';
-                if (appsUrl) {
-                  const emailHtml = `<h2>Nueva Orden de Compra OC-${nextNumber}</h2>
-                    <p><strong>Fecha:</strong> ${fechaHoy}</p>
-                    <p><strong>Sede:</strong> ${sede||'—'}</p>
-                    <p><strong>Proveedor:</strong> ${proveedorNameForPdf}</p>
-                    <p><strong>Solicitado por:</strong> ${responsable}</p>
-                    <p><strong>Items:</strong> ${active.length} productos</p>
-                    <p><strong>Total:</strong> ${fmt(subtotal)}</p>
-                    <p>El pedido ha sido guardado en Google Sheets (BASE DE PEDIDOS).</p>`;
-                  await fetch(appsUrl, {
+                const appsUrl2 = import.meta.env.VITE_APPS_SCRIPT_URL || '';
+                if (appsUrl2) {
+                  const eHtml = '<h2>Nueva Orden OC-' + nextNumber + '</h2>' +
+                    '<p><b>Fecha:</b> ' + fechaHoy + '</p>' +
+                    '<p><b>Sede:</b> ' + (sede||'—') + '</p>' +
+                    '<p><b>Proveedor:</b> ' + provN2 + '</p>' +
+                    '<p><b>Solicitado por:</b> ' + responsable + '</p>' +
+                    '<p><b>Total items:</b> ' + active.length + '</p>' +
+                    '<p>Pedido guardado en Google Sheets (BASE DE PEDIDOS).</p>';
+                  fetch(appsUrl2, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
-                    body: JSON.stringify({ action: 'sendEmail', nOrden: 'OC-'+nextNumber, subject: 'Nueva Orden de Compra OC-'+nextNumber+' - '+proveedorNameForPdf, htmlBody: emailHtml }),
+                    body: JSON.stringify({ action: 'sendEmail', nOrden: 'OC-'+nextNumber, subject: 'Orden OC-'+nextNumber+' - '+provN2, htmlBody: eHtml }),
                     redirect: 'follow',
-                  });
-                  console.log('[Email] Notificación enviada');
+                  }).catch(eE => console.warn('[Email] Error:', eE));
                 }
-              } catch(eE) { console.warn('[Email] Error:', eE); }
+              } catch(eE2) { console.warn('[Email]', eE2); }
 
               html2pdf().set(opt).from(html).save();
                     }}
