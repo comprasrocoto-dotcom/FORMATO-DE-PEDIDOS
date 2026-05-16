@@ -11,7 +11,7 @@ import ProveedorCard from './components/ProveedorCard';
 import SheetsOrderForm from './components/SheetsOrderForm';
 import { cn } from './lib/utils';
 import { dbService, Sede } from './services/db';
-import { getSedes as getSheetsSedesRaw, getProveedores as getSheetsProveedores } from './services/googleSheets';
+import { getSedes as getSheetsSedesRaw, getProveedores as getSheetsProveedores, appendPedido } from './services/googleSheets';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -397,8 +397,18 @@ export default function App() {
                         return;
                       }
 
-                      // Get and increment consecutive number from Firebase
-                      const nextNumber = await dbService.getNextGlobalConsecutive();
+              // Get consecutive number (fallback if Firebase fails)
+              let nextNumber = Math.floor(Date.now() / 1000);
+              try { nextNumber = await dbService.getNextGlobalConsecutive(); } catch(eN) { console.warn("Firebase error:", eN); }
+              // Save to Drive
+              const fechaHoy = new Date().toISOString().split("T")[0];
+              try {
+                for (const itm of active) {
+                  const pvN = proveedores.find(pp=>pp.id===itm.proveedorId)?.nombre || "Varios";
+                  await appendPedido({fecha:fechaHoy,sede:sede||"",proveedor:pvN,articulo:itm.nombre,subArticulo:itm.categoria,cantidad:quantities[itm.id]||0,unidad:itm.unidad,responsable,correoResponsable:"",notas:notas||"",numeroOrden:nextNumber});
+                }
+                console.log("[Drive] Pedido guardado:", active.length, "items");
+              } catch(eP) { console.warn("[Drive] Error al guardar:", eP); }
 
                       const proveedorName = selectedProveedorId 
                         ? proveedores.find(p => p.id === selectedProveedorId)?.nombre 
