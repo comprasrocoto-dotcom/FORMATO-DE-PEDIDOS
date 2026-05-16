@@ -137,6 +137,13 @@ export async function getProveedorSheetNames(): Promise<string[]> {
   return Object.keys(datos.articulosPorProveedor || {});
 }
 
+
+// ─── Obtener todos los datos de una vez ─────────────────────────────────────
+
+export async function getAllDatos(): Promise<any> {
+  return fetchAllDatos();
+}
+
 // ─── Escribir Pedido en Google Sheets (via Apps Script) ──────────────────────
 
 export async function appendPedido(pedido: PedidoRow): Promise<void> {
