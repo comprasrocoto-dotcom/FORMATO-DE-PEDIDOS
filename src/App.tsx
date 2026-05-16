@@ -10,7 +10,7 @@ import ProveedorCard from './components/ProveedorCard';
 import SheetsOrderForm from './components/SheetsOrderForm';
 import { cn } from './lib/utils';
 import { dbService, Sede } from './services/db';
-import { getSedes as getSheetsSedesRaw, getProveedores as getSheetsProveedores } from './services/googleSheets';
+import { getSedes as getSheetsSedesRaw, getProveedores as getSheetsProveedores, getProveedorSheetNames, getProductosByProveedor } from './services/googleSheets';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -61,7 +61,7 @@ export default function App() {
     getSheetsProveedores().then(sheetProvs => {
       if (sheetProvs && sheetProvs.length > 0) {
         setProveedores(sheetProvs.map((p) => ({
-          id: p.id,
+          id: 'sheets-prov-' + p.nombre,
           nombre: p.nombre,
           contacto: p.asesor || '',
           email: p.correo || '',
@@ -71,6 +71,27 @@ export default function App() {
         })));
       }
     }).catch(err => { console.warn('Sheets proveedores fallback failed:', err); });
+
+    // SHEETS: Load all insumos from all proveedor sheets
+    getProveedorSheetNames().then(async (sheetNames) => {
+      const today = new Date().toISOString();
+      const allInsumos = [];
+      for (const sheetName of sheetNames) {
+        const productos = await getProductosByProveedor(sheetName);
+        productos.forEach((p, idx) => {
+          allInsumos.push({
+            id: sheetName + '-' + idx,
+            nombre: p.articulo,
+            categoria: p.subArticulo || sheetName,
+            unidad: 'UND',
+            precio: 0,
+            proveedorId: 'sheets-prov-' + sheetName,
+            actualizadoAt: today,
+          });
+        });
+      }
+      if (allInsumos.length > 0) setInsumos(allInsumos);
+    }).catch(err => { console.warn('Sheets insumos load failed:', err); });
 
     return () => {
       unsubInsumos();
