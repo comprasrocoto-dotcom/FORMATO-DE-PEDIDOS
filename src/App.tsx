@@ -85,9 +85,9 @@ export default function App() {
     // SHEETS: Load all insumos (inline fetch to Apps Script)
     (async () => {
       try {
-        const appsUrl = import.meta.env.VITE_APPS_SCRIPT_URL || '';
-        if (!appsUrl) return;
-        const url = appsUrl + (appsUrl.includes('?') ? '&' : '?') + 'action=getDatos';
+        const scriptEndpoint = import.meta.env.VITE_APPS_SCRIPT_URL || '';
+        if (!scriptEndpoint) return; console.log("[Sheets] Loading insumos v2");
+        const url = scriptEndpoint + (appsUrl.includes('?') ? '&' : '?') + 'action=getDatos';
         const res = await fetch(url, { redirect: 'follow' });
         const datos = await res.json();
         const artPorProv = datos.articulosPorProveedor || {};
