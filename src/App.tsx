@@ -424,191 +424,201 @@ export default function App() {
                       `).join('');
 
                       const total = active.reduce((acc, i) => acc + (i.precio * (quantities[i.id] || 0)), 0);
-                      const html = `
-<!DOCTYPE html>
+                      const proveedorNameForPdf = selectedProveedorId
+                ? (proveedores.find(p => p.id === selectedProveedorId)?.nombre || 'Varios')
+                : 'Varios';
+              const proveedorObjForPdf = selectedProveedorId ? proveedores.find(p => p.id === selectedProveedorId) : null;
+              const fmt = (n) => new Intl.NumberFormat('es-CO', {style:'currency',currency:'COP',minimumFractionDigits:0}).format(n);
+              const subtotal = active.reduce((a,i) => a + (i.precio*(quantities[i.id]||0)),0);
+
+              // Rows: fill up to 16 rows minimum
+              const itemRows = active.map((i,idx) => `
+                <tr>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${idx+1}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;">${i.nombre}${i.categoria ? ' - '+i.categoria : ''}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${quantities[i.id]||0} ${i.unidad}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:right;">${fmt(i.precio)}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:right;">${fmt((quantities[i.id]||0)*i.precio)}</td>
+                </tr>`).join('');
+
+              const emptyRows = Array(Math.max(0, 16 - active.length)).fill(0).map((_,idx) => `
+                <tr>
+                  <td style="border:1px solid #ccc;padding:5px 8px;text-align:center;">${active.length+idx+1}</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
+                  <td style="border:1px solid #ccc;padding:5px 8px;">&nbsp;</td>
+                </tr>`).join('');
+
+              const html = `<!DOCTYPE html>
 <html>
 <head>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700;900&display=swap');
-    body { font-family: 'Roboto', sans-serif; color: #000; padding: 0; margin: 0; font-size: 11px; }
-    .page { padding: 60px; }
-    
-    .title-centered { text-align: center; color: #002060; font-size: 32px; font-weight: 900; margin-bottom: 40px; letter-spacing: 1px; }
-    
-    .flex { display: flex; }
-    .justify-between { justify-content: space-between; }
-    .items-center { align-items: center; }
-    .gap-20 { gap: 20px; }
-    
-    .section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #002060; padding-bottom: 5px; }
-    .section-icon { width: 32px; height: 32px; background: #002060; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; }
-    .section-title { font-weight: 700; color: #002060; font-size: 13px; text-transform: uppercase; }
-    
-    .data-table { border: none; width: 100%; border-collapse: collapse; }
-    .data-table td { padding: 4px 0; vertical-align: top; border: none; }
-    .data-label { font-weight: 700; width: 110px; color: #000; padding-right: 15px; }
-    .data-value { color: #333; }
-    
-    .order-info-row { display: flex; align-items: flex-end; gap: 40px; margin: 25px 0; padding: 10px 0; border-top: 1px solid #eee; border-bottom: 1px solid #eee; }
-    .order-info-group { display: flex; align-items: baseline; gap: 8px; }
-    .order-info-label { font-weight: 700; font-size: 11px; text-transform: uppercase; color: #002060; }
-    .order-info-value { font-weight: 900; font-size: 16px; color: #000; }
-    .order-info-value.date { font-weight: 400; font-size: 14px; }
-    
-    .logistics-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; border: 1px solid #ccc; }
-    .logistics-table th { background-color: #002060; color: white; padding: 8px; font-size: 11px; font-weight: 700; text-align: center; border: 1px solid #002060; }
-    .logistics-table td { border: 1px solid #ccc; padding: 15px 10px; text-align: center; width: 33.33%; vertical-align: middle; min-height: 50px; }
-    
-    .items-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; border: 1px solid #ccc; }
-    .items-table th { background-color: #002060; color: white; padding: 10px; font-size: 11px; font-weight: 700; border: 1px solid #002060; text-transform: uppercase; text-align: center; }
-    .items-table td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-    .items-table .text-center { text-align: center; }
-    .items-table .text-right { text-align: right; }
-    
-    .footer-flex { display: flex; justify-content: space-between; gap: 20px; align-items: flex-start; }
-    .comments-wrap { width: 55%; border: 1px solid #ccc; border-radius: 0; overflow: hidden; }
-    .comments-header { background: white; padding: 8px 12px; border-bottom: 1px solid #ccc; font-weight: 700; text-transform: uppercase; font-size: 11px; color: #002060; }
-    .comments-body { padding: 12px; min-height: 80px; line-height: 1.4; color: #333; }
-    
-    .totals-wrap { width: 42%; }
-    .totals-table { width: 100%; border-collapse: collapse; border: 1px solid #ccc; }
-    .totals-table td { border: 1px solid #ccc; padding: 8px 12px; font-size: 11px; }
-    .totals-table .label { background: white; font-weight: 700; text-transform: uppercase; width: 50%; color: #000; }
-    .totals-table .value { text-align: right; font-weight: 500; color: #000; }
-    .totals-table .total-row td { background: #002060; color: white; font-weight: 900; border: 1px solid #002060; }
-    
-    .signature-area { margin-top: 60px; }
-    .signature-label { font-weight: 700; color: #002060; text-transform: uppercase; font-size: 11px; margin-bottom: 30px; }
-    .signature-line { width: 400px; border-bottom: 2px solid #000; margin-bottom: 5px; }
-    .signature-name { text-align: center; width: 400px; font-weight: 600; font-size: 13px; text-transform: lowercase; }
-    
-    .final-phrase { text-align: center; margin-top: 80px; color: #2e5a9e; font-style: italic; font-size: 16px; border-top: 1px solid #e2e8f0; padding-top: 30px; }
-  </style>
+<meta charset="utf-8"/>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 11px; color: #222; margin: 0; padding: 0; }
+  .page { padding: 32px 36px; }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
+  .title { font-size: 28px; font-weight: 900; color: #222; margin: 0; }
+  .company-info { text-align: right; font-size: 10px; line-height: 1.7; color: #444; }
+  .order-meta { display: flex; gap: 40px; margin-bottom: 16px; font-size: 11px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+  .order-meta .field { display: flex; gap: 6px; align-items: baseline; }
+  .order-meta .label { font-weight: 700; white-space: nowrap; }
+  .parties { display: flex; gap: 16px; margin-bottom: 16px; }
+  .party-box { flex: 1; border: 1px solid #ccc; border-radius: 2px; overflow: hidden; }
+  .party-header { background: #2d3f6b; color: white; font-weight: 700; font-size: 11px; padding: 6px 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .party-body { padding: 8px 10px; line-height: 1.8; font-size: 10px; }
+  .party-body .row { display: flex; gap: 6px; }
+  .party-body .icon { color: #888; width: 14px; flex-shrink: 0; }
+  .products-section { margin-bottom: 14px; }
+  .products-header { background: #2d3f6b; color: white; padding: 7px 10px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0; }
+  .products-table { width: 100%; border-collapse: collapse; font-size: 10px; }
+  .products-table thead th { background: #e8ecf4; color: #2d3f6b; border: 1px solid #ccc; padding: 6px 8px; text-align: center; font-weight: 700; text-transform: uppercase; font-size: 9px; }
+  .products-table thead th.left { text-align: left; }
+  .products-table tbody td { vertical-align: middle; font-size: 10px; min-height: 22px; }
+  .totals-row { display: flex; justify-content: flex-end; margin-top: 0; }
+  .totals-table { border-collapse: collapse; width: 260px; font-size: 10px; }
+  .totals-table td { border: 1px solid #ccc; padding: 5px 10px; }
+  .totals-table .tlabel { text-align: right; font-weight: 700; text-transform: uppercase; background: #f5f5f5; }
+  .totals-table .tvalue { text-align: right; }
+  .totals-table .grand-row td { background: #2d3f6b; color: white; font-weight: 900; font-size: 12px; }
+  .comments-box { border: 1px solid #ccc; margin-top: 12px; border-radius: 2px; overflow: hidden; }
+  .comments-header { background: #2d3f6b; color: white; padding: 6px 10px; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .comments-body { padding: 10px; min-height: 50px; font-size: 10px; line-height: 1.5; }
+</style>
 </head>
 <body>
-  <div class="page">
-    <h1 class="title-centered">ORDEN DE COMPRA</h1>
+<div class="page">
 
-    <div class="flex justify-between" style="margin-bottom: 30px;">
-      <div style="width: 48%;">
-        <div class="section-header">
-          <div class="section-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><path d="M9 22v-4h6v4"></path><path d="M8 6h.01"></path><path d="M16 6h.01"></path><path d="M12 6h.01"></path><path d="M12 10h.01"></path><path d="M12 14h.01"></path><path d="M16 10h.01"></path><path d="M16 14h.01"></path><path d="M8 10h.01"></path><path d="M8 14h.01"></path></svg>
-          </div>
-          <span class="section-title">Datos del Proveedor</span>
-        </div>
-        <table class="data-table">
-          <tr><td class="data-label">Proveedor:</td><td class="data-value">${proveedorName}</td></tr>
-          <tr><td class="data-label">Contacto:</td><td class="data-value">${selectedProveedorId ? proveedores.find(p => p.id === selectedProveedorId)?.contacto || 'Varios' : 'Varios'}</td></tr>
-          <tr><td class="data-label">Teléfono:</td><td class="data-value">(604) 123 4567</td></tr>
-          <tr><td class="data-label">Email:</td><td class="data-value">${selectedProveedorId ? proveedores.find(p => p.id === selectedProveedorId)?.email || 'N/A' : 'Varios'}</td></tr>
-          <tr><td class="data-label">Dirección:</td><td class="data-value">Cra 43A # 1-50, Medellín</td></tr>
-        </table>
-      </div>
-      
-      <div style="width: 48%;">
-        <div class="section-header">
-          <div class="section-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
-          </div>
-          <span class="section-title">Datos de quien realiza el pedido</span>
-        </div>
-        <table class="data-table">
-          <tr><td class="data-label">Solicitado por:</td><td class="data-value">${responsable}</td></tr>
-          <tr><td class="data-label">ENVIAR A:</td><td class="data-value">${sede || 'Rocoto Laureles'}</td></tr>
-          <tr><td class="data-label">Dirección:</td><td class="data-value"> Calle 45 #22-18, Laureles</td></tr>
-          <tr><td class="data-label">Teléfono:</td><td class="data-value">(604) 987 6543</td></tr>
-          <tr><td class="data-label">Email:</td><td class="data-value">comprasrocoto@gmail.com</td></tr>
-        </table>
+  <!-- TOP HEADER -->
+  <div class="header-top">
+    <h1 class="title">Orden de compra</h1>
+    <div class="company-info">
+      <strong>Rocoto Restaurantes</strong><br/>
+      &#x1F4CD; ${sede||'Rocoto Laureles'}, Medellín<br/>
+      &#x260E; (604) 987 6543<br/>
+      &#x2709; comprasrocoto@gmail.com
+    </div>
+  </div>
+
+  <!-- ORDER META -->
+  <div class="order-meta">
+    <div class="field">
+      <span class="label">N.° de orden de compra:</span>
+      <span>OC-${nextNumber}</span>
+    </div>
+    <div class="field">
+      <span class="label">Fecha:</span>
+      <span>${new Date().toLocaleDateString('es-CO',{year:'numeric',month:'long',day:'numeric'})}</span>
+    </div>
+  </div>
+
+  <!-- VENDEDOR / CLIENTE -->
+  <div class="parties">
+    <div class="party-box">
+      <div class="party-header">Vendedor</div>
+      <div class="party-body">
+        <div style="font-weight:700;margin-bottom:4px;">${proveedorNameForPdf}</div>
+        <div class="row"><span class="icon">&#x1F4CD;</span><span>${proveedorObjForPdf?.contacto||'Ver datos del proveedor'}</span></div>
+        <div class="row"><span class="icon">&#x260E;</span><span>${proveedorObjForPdf?.telefono||'—'}</span></div>
+        <div class="row"><span class="icon">&#x2709;</span><span>${proveedorObjForPdf?.email||'—'}</span></div>
       </div>
     </div>
-
-    <div class="order-info-row">
-      <div class="order-info-group">
-        <span class="order-info-label">N° ORDEN:</span>
-        <span class="order-info-value">OC-${nextNumber}</span>
-      </div>
-      <div class="order-info-group">
-        <span class="order-info-label">Fecha:</span>
-        <span class="order-info-value date">${new Date().toLocaleDateString()}</span>
+    <div class="party-box">
+      <div class="party-header">Cliente</div>
+      <div class="party-body">
+        <div style="font-weight:700;margin-bottom:4px;">Rocoto Restaurantes</div>
+        <div class="row"><span class="icon">&#x1F4CD;</span><span>${direccionEntrega||'Calle 45 #22-18, Laureles, Medellín'}</span></div>
+        <div class="row"><span class="icon">&#x260E;</span><span>(604) 987 6543</span></div>
+        <div class="row"><span class="icon">&#x2709;</span><span>comprasrocoto@gmail.com</span></div>
       </div>
     </div>
+  </div>
 
-    <table class="items-table">
+  <!-- PRODUCTS TABLE -->
+  <div class="products-section">
+    <div class="products-header">Producto o Servicio</div>
+    <table class="products-table">
       <thead>
         <tr>
-          <th style="width: 10%;">CANT</th>
-          <th style="width: 45%;">DESCRIPCIÓN</th>
-          <th style="width: 15%;">IMPUESTO</th>
-          <th style="width: 15%;">PRECIO UNITARIO</th>
-          <th style="width: 15%;">TOTAL</th>
+          <th style="width:5%;">N.°</th>
+          <th class="left" style="width:50%;">Descripción</th>
+          <th style="width:15%;">Cantidad</th>
+          <th style="width:15%;">Precio unitario</th>
+          <th style="width:15%;">Total</th>
         </tr>
       </thead>
       <tbody>
-        ${active.map((i) => `
-          <tr>
-            <td class="text-center">${quantities[i.id] || 0}</td>
-            <td>${i.nombre} (${i.categoria})</td>
-            <td class="text-center">0%</td>
-            <td class="text-right">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(i.precio)}</td>
-            <td class="text-right">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format((quantities[i.id] || 0) * i.precio)}</td>
-          </tr>
-        `).join('')}
-        ${Array(Math.max(0, 3 - active.length)).fill(0).map(() => `
-          <tr><td>&nbsp;</td><td></td><td></td><td></td><td></td></tr>
-        `).join('')}
+        ${itemRows}
+        ${emptyRows}
       </tbody>
     </table>
-
-    <div class="footer-flex">
-      <div class="comments-wrap">
-        <div class="comments-header">Otros Comentarios o Instrucciones Especiales</div>
-        <div class="comments-body">${notas || 'Sin comentarios.'}</div>
-      </div>
-      
-      <div class="totals-wrap">
-        <table class="totals-table">
-          <tr><td class="label">SUBTOTAL</td><td class="value">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(total)}</td></tr>
-          <tr><td class="label">IMPONIBLE</td><td class="value">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(total)}</td></tr>
-          <tr><td class="label">IVA 0%</td><td class="value">$0.00</td></tr>
-          <tr><td class="label">IMPUESTOS</td><td class="value">$0.00</td></tr>
-          <tr class="total-row">
-            <td class="label" style="background:transparent;color:white;font-size:14px;padding-top:12px;padding-bottom:12px;">TOTAL</td>
-            <td class="value" style="font-size:20px;padding-top:12px;padding-bottom:12px;">${new Intl.NumberFormat('es-MX', {style: 'currency', currency: 'MXN'}).format(total).replace('$', '$ ')}</td>
-          </tr>
-        </table>
-      </div>
-    </div>
-
   </div>
+
+  <!-- TOTALS -->
+  <div class="totals-row">
+    <table class="totals-table">
+      <tr><td class="tlabel">Subtotal</td><td class="tvalue">${fmt(subtotal)}</td></tr>
+      <tr><td class="tlabel">Impuesto</td><td class="tvalue">0 %</td></tr>
+      <tr><td class="tlabel">Envío</td><td class="tvalue">${fmt(0)}</td></tr>
+      <tr class="grand-row"><td class="tlabel" style="color:white;">Total</td><td class="tvalue">${fmt(subtotal)}</td></tr>
+    </table>
+  </div>
+
+  <!-- COMMENTS -->
+  <div class="comments-box">
+    <div class="comments-header">Comentarios o instrucciones especiales</div>
+    <div class="comments-body">
+      ${notas||'Comentarios o instrucciones especiales'}<br/>
+      <em>Solicitado por: ${responsable} &nbsp;|&nbsp; Sede destino: ${sede||'—'} &nbsp;|&nbsp; Horario recepción: ${horarioRecepcion||'—'}</em>
+    </div>
+  </div>
+
+</div>
 </body>
-</html>
-                       `;
+</html>`;
 
+              const opt = {
+                margin: [10, 10, 10, 10],
+                filename: `OrdenCompra_OC${nextNumber}_${new Date().toISOString().split('T')[0]}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: {
+                  scale: 2,
+                  useCORS: true,
+                  onclone: (clonedDoc) => {
+                    const styles = clonedDoc.getElementsByTagName('style');
+                    for (let i = 0; i < styles.length; i++) {
+                      if (styles[i].innerHTML.includes('oklch')) {
+                        styles[i].innerHTML = styles[i].innerHTML.replace(/oklch\([^)]+\)/g, '#ccc');
+                      }
+                    }
+                  }
+                },
+                jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
+              };
 
-                      const opt = {
-                        margin: 30,
-                        filename: `OrdenMaestra_${Date.now()}.pdf`,
-                        image: { type: 'jpeg' as const, quality: 0.98 },
-                        html2canvas: { 
-                          scale: 3, 
-                          useCORS: true,
-                          onclone: (clonedDoc: Document) => {
-                            // Fix for oklch error in html2canvas (Tailwind 4)
-                            // Remove stylesheets that might contain oklch
-                            const styles = clonedDoc.getElementsByTagName('style');
-                            for (let i = 0; i < styles.length; i++) {
-                              const style = styles[i];
-                              if (style.innerHTML.includes('oklch')) {
-                                style.innerHTML = style.innerHTML.replace(/oklch\([^)]+\)/g, '#ccc');
-                              }
-                            }
-                          }
-                        },
-                        jsPDF: { unit: 'mm' as const, format: 'letter' as const, orientation: 'landscape' as const }
-                      };
+              // Send email notification via Apps Script
+              try {
+                const appsUrl = import.meta.env.VITE_APPS_SCRIPT_URL || '';
+                if (appsUrl) {
+                  const emailHtml = `<h2>Nueva Orden de Compra OC-${nextNumber}</h2>
+                    <p><strong>Fecha:</strong> ${fechaHoy}</p>
+                    <p><strong>Sede:</strong> ${sede||'—'}</p>
+                    <p><strong>Proveedor:</strong> ${proveedorNameForPdf}</p>
+                    <p><strong>Solicitado por:</strong> ${responsable}</p>
+                    <p><strong>Items:</strong> ${active.length} productos</p>
+                    <p><strong>Total:</strong> ${fmt(subtotal)}</p>
+                    <p>El pedido ha sido guardado en Google Sheets (BASE DE PEDIDOS).</p>`;
+                  await fetch(appsUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain' },
+                    body: JSON.stringify({ action: 'sendEmail', nOrden: 'OC-'+nextNumber, subject: 'Nueva Orden de Compra OC-'+nextNumber+' - '+proveedorNameForPdf, htmlBody: emailHtml }),
+                    redirect: 'follow',
+                  });
+                  console.log('[Email] Notificación enviada');
+                }
+              } catch(eE) { console.warn('[Email] Error:', eE); }
 
-                      html2pdf().set(opt).from(html).save();
+              html2pdf().set(opt).from(html).save();
                     }}
                     className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors"
                   >
