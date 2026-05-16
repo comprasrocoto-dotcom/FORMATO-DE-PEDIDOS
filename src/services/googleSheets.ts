@@ -1,4 +1,5 @@
 // @ts-nocheck
+// rebuild: 1778892686255
 /**
  * googleSheets.ts
  * Servicio para leer datos de Google Sheets (proveedores, productos, sedes)
