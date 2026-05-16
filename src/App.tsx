@@ -87,7 +87,7 @@ export default function App() {
       try {
         const scriptEndpoint = import.meta.env.VITE_APPS_SCRIPT_URL || '';
         if (!scriptEndpoint) return; console.log("[Sheets] Loading insumos v2");
-        const url = scriptEndpoint + (appsUrl.includes('?') ? '&' : '?') + 'action=getDatos';
+        const url = scriptEndpoint + (scriptEndpoint.includes('?') ? '&' : '?') + 'action=getDatos';
         const res = await fetch(url, { redirect: 'follow' });
         const datos = await res.json();
         const artPorProv = datos.articulosPorProveedor || {};
