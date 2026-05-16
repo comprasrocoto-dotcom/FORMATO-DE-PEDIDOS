@@ -76,7 +76,7 @@ export default function Filters({
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
               >
-                <option value="">📦 Categorías</option>
+                <option value="">📦 Artículo</option>
                 {categories.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
