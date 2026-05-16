@@ -11,7 +11,7 @@ import ProveedorCard from './components/ProveedorCard';
 import SheetsOrderForm from './components/SheetsOrderForm';
 import { cn } from './lib/utils';
 import { dbService, Sede } from './services/db';
-import { getSedes as getSheetsSedesRaw, getProveedores as getSheetsProveedores, getAllDatos as getSheetsAllDatos } from './services/googleSheets';
+import { getSedes as getSheetsSedesRaw, getProveedores as getSheetsProveedores } from './services/googleSheets';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
@@ -73,27 +73,35 @@ export default function App() {
       }
     }).catch(err => { console.warn('Sheets proveedores fallback failed:', err); });
 
-    // SHEETS: Load all insumos from Sheets (single API call via cache)
-    getSheetsAllDatos().then((datos) => {
-      const today = new Date().toISOString();
-      const allInsumos = [];
-      const artPorProv = datos.articulosPorProveedor || {};
-      Object.keys(artPorProv).forEach(sheetName => {
-        const arts = artPorProv[sheetName] || [];
-        arts.forEach((p, idx) => {
-          allInsumos.push({
-            id: sheetName + '-' + idx,
-            nombre: p.articulo || '',
-            categoria: p.subArticulo || sheetName,
-            unidad: 'UND',
-            precio: 0,
-            proveedorId: 'sheets-prov-' + sheetName,
-            actualizadoAt: today,
+    // SHEETS: Load all insumos (inline fetch to Apps Script)
+    (async () => {
+      try {
+        const appsUrl = import.meta.env.VITE_APPS_SCRIPT_URL || '';
+        if (!appsUrl) return;
+        const url = appsUrl + (appsUrl.includes('?') ? '&' : '?') + 'action=getDatos';
+        const res = await fetch(url, { redirect: 'follow' });
+        const datos = await res.json();
+        const artPorProv = datos.articulosPorProveedor || {};
+        const today = new Date().toISOString();
+        const allInsumos = [];
+        Object.keys(artPorProv).forEach(sheetName => {
+          (artPorProv[sheetName] || []).forEach((p, idx) => {
+            allInsumos.push({
+              id: sheetName + '-' + idx,
+              nombre: p.articulo || '',
+              categoria: p.subArticulo || sheetName,
+              unidad: 'UND',
+              precio: 0,
+              proveedorId: 'sheets-prov-' + sheetName,
+              actualizadoAt: today,
+            });
           });
         });
-      });
-      if (allInsumos.length > 0) setInsumos(allInsumos);
-    }).catch(err => { console.warn('Sheets insumos load failed:', err); });
+        if (allInsumos.length > 0) setInsumos(allInsumos);
+      } catch (err) {
+        console.warn('Sheets insumos inline load failed:', err);
+      }
+    })();
 
     return () => {
       unsubInsumos();
