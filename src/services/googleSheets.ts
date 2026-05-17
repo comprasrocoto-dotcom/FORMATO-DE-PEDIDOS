@@ -1,19 +1,15 @@
 // @ts-nocheck
-// rebuild: 1779026447310
+// rebuild: 1779027882423
 /**
  * googleSheets.ts
  * Servicio para leer datos de Google Sheets y escribir pedidos via Apps Script.
- * VITE_APPS_SCRIPT_URL — URL del Web App de Google Apps Script
  */
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
 
-// Cache en memoria para evitar multiples peticiones al cargar datos
 let cachedDatos: any = null;
 let cacheTimestamp = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
-
-// ─── Tipos ───────────────────────────────────────────────────────────────────
+const CACHE_TTL = 5 * 60 * 1000;
 
 export interface ProveedorSheet {
   id: string;
@@ -43,6 +39,7 @@ export interface PedidoRow {
   fecha: string;
   sede: string;
   proveedor: string;
+  codigo: string;
   articulo: string;
   subArticulo: string;
   cantidad: number | string;
@@ -53,27 +50,19 @@ export interface PedidoRow {
   numeroOrden: number | string;
 }
 
-// ─── Obtener todos los datos desde Apps Script ────────────────────────────────
-
 async function fetchAllDatos(): Promise<any> {
   const now = Date.now();
-  if (cachedDatos && (now - cacheTimestamp) < CACHE_TTL) {
-    return cachedDatos;
-  }
-  if (!APPS_SCRIPT_URL) {
-    throw new Error('VITE_APPS_SCRIPT_URL no configurada');
-  }
+  if (cachedDatos && (now - cacheTimestamp) < CACHE_TTL) return cachedDatos;
+  if (!APPS_SCRIPT_URL) throw new Error('VITE_APPS_SCRIPT_URL no configurada');
   const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getDatos';
   const res = await fetch(url, { redirect: 'follow' });
   if (!res.ok) throw new Error('Apps Script error [' + res.status + ']');
   const data = await res.json();
-  if (!data.ok) throw new Error(data.error || 'Error al obtener datos de Sheets');
+  if (!data.ok) throw new Error(data.error || 'Error al obtener datos');
   cachedDatos = data;
   cacheTimestamp = now;
   return data;
 }
-
-// ─── Proveedores ─────────────────────────────────────────────────────────────
 
 export async function getProveedores(): Promise<ProveedorSheet[]> {
   const datos = await fetchAllDatos();
@@ -87,8 +76,6 @@ export async function getProveedores(): Promise<ProveedorSheet[]> {
   }));
 }
 
-// ─── Productos por Proveedor ──────────────────────────────────────────────────
-
 export async function getProductosByProveedor(sheetName: string): Promise<ProductoSheet[]> {
   try {
     const datos = await fetchAllDatos();
@@ -100,51 +87,40 @@ export async function getProductosByProveedor(sheetName: string): Promise<Produc
       proveedorNombre: sheetName,
       pedido: '',
     }));
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
-
-// ─── Sedes ────────────────────────────────────────────────────────────────────
 
 export async function getSedes(): Promise<SedeSheet[]> {
   const datos = await fetchAllDatos();
   return (datos.sedes || []).map((s: string) => ({
-    nombre: s,
-    direccion: '',
-    horaEntrega: '',
-    telefono: '',
+    nombre: s, direccion: '', horaEntrega: '', telefono: '',
   }));
 }
-
-// ─── Lista de hojas de proveedor ─────────────────────────────────────────────
 
 export async function getProveedorSheetNames(): Promise<string[]> {
   const datos = await fetchAllDatos();
   return Object.keys(datos.articulosPorProveedor || {});
 }
 
-// ─── Obtener todos los datos de una vez ─────────────────────────────────────
-
 export async function getAllDatos(): Promise<any> {
   return fetchAllDatos();
 }
 
-// ─── Escribir Pedido en Google Sheets (via Apps Script doPost) ───────────────
-// Envia action:'appendPedido' + datos del pedido al Apps Script
-// El Apps Script guarda la fila en la hoja BASE DE PEDIDOS
-
+// Envia action:'appendPedido' al Apps Script para guardar en BASE DE PEDIDOS
+// Columnas en Drive: N° Orden | Fecha | Sede | Proveedor | Cod. Barras | Articulo | SubArticulo | Cantidad | Unidad | Responsable | Correo | Observaciones | Timestamp
 export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; error?: string }> {
   if (!APPS_SCRIPT_URL) {
-    console.warn('[appendPedido] VITE_APPS_SCRIPT_URL no configurada. Pedido no guardado.');
+    console.warn('[appendPedido] URL no configurada.');
     return { ok: false, error: 'URL no configurada' };
   }
 
   const payload = {
     action: 'appendPedido',
+    nOrden: pedido.numeroOrden || '',
     fecha: pedido.fecha || '',
     sede: pedido.sede || '',
     proveedor: pedido.proveedor || '',
+    codigo: pedido.codigo || '',
     insumo: pedido.articulo || '',
     subArticulo: pedido.subArticulo || '',
     cantidad: pedido.cantidad ?? 0,
@@ -152,10 +128,9 @@ export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; er
     responsable: pedido.responsable || '',
     correo: pedido.correoResponsable || '',
     observaciones: pedido.notas || '',
-    nOrden: pedido.numeroOrden || '',
   };
 
-  console.log('[appendPedido] Enviando a Drive:', payload);
+  console.log('[appendPedido] Enviando:', payload.nOrden, payload.insumo, 'cod:', payload.codigo);
 
   try {
     const res = await fetch(APPS_SCRIPT_URL, {
@@ -164,29 +139,16 @@ export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; er
       body: JSON.stringify(payload),
       redirect: 'follow',
     });
-
     const text = await res.text().catch(() => '');
-    console.log('[appendPedido] Respuesta Apps Script:', res.status, text.substring(0, 200));
-
-    if (!res.ok) {
-      console.error('[appendPedido] Error HTTP:', res.status, text);
-      return { ok: false, error: 'HTTP ' + res.status + ': ' + text };
-    }
-
+    console.log('[appendPedido] Respuesta:', res.status, text.substring(0, 150));
+    if (!res.ok) return { ok: false, error: 'HTTP ' + res.status };
     try {
       const json = JSON.parse(text);
-      if (json.ok === false) {
-        console.error('[appendPedido] Error del script:', json.error);
-        return { ok: false, error: json.error };
-      }
-    } catch (_) {
-      // respuesta no-JSON, igual se considera OK si HTTP fue 200
-    }
-
-    console.log('[appendPedido] Guardado OK en Drive');
+      if (json.ok === false) return { ok: false, error: json.error };
+    } catch (_) {}
     return { ok: true };
   } catch (err: any) {
-    console.error('[appendPedido] Excepcion:', err.message);
+    console.error('[appendPedido] Error:', err.message);
     return { ok: false, error: err.message };
   }
 }
