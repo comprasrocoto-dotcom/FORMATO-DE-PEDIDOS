@@ -304,6 +304,7 @@ export default function SheetsOrderForm() {
             fecha: fechaHoy,
             sede: selectedSede || '',
             proveedor: selectedProveedorSheet || '',
+            codigo: linea.codigo || '',
             articulo: linea.articulo || '',
             subArticulo: linea.subArticulo || '',
             cantidad: linea.cantidad || 0,
