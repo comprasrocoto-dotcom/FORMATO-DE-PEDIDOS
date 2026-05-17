@@ -335,8 +335,13 @@ export default function SheetsOrderForm() {
         console.warn('[Firebase] savePedido failed (non-critical):', eFb);
       }
 
-      // Generate PDF
-      generarPDF({
+      setSuccess(true);
+      setCantidades({});
+      setNotas('');
+      setTimeout(() => setSuccess(false), 5000);
+
+      // Generate PDF after React finishes state updates (avoids DOM conflict)
+      const pdfParams = {
         sede: sedeSeleccionada,
         proveedor: proveedorSeleccionado,
         proveedorSheetName: selectedProveedorSheet,
@@ -345,12 +350,8 @@ export default function SheetsOrderForm() {
         responsable,
         correoResponsable,
         numeroOrden,
-      });
-
-      setSuccess(true);
-      setCantidades({});
-      setNotas('');
-      setTimeout(() => setSuccess(false), 5000);
+      };
+      setTimeout(() => { generarPDF(pdfParams); }, 400);
     } catch (e: any) {
       console.error('[handleGuardar] error:', e);
       setError('Error al guardar pedido: ' + e.message);
