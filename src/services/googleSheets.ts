@@ -1,21 +1,14 @@
 // @ts-nocheck
-// rebuild: 1778892686255
+// rebuild: 1779026447310
 /**
  * googleSheets.ts
- * Servicio para leer datos de Google Sheets (proveedores, productos, sedes)
- * y escribir pedidos via Google Apps Script Web App.
- *
- * NUEVO: Usa Apps Script doGet(?action=getDatos) para leer datos.
- * Ya no requiere VITE_SHEETS_API_KEY.
- *
- * Variables de entorno requeridas:
- *   VITE_APPS_SCRIPT_URL — URL del Web App de Google Apps Script
- *   VITE_SHEETS_ID       — ID del Google Spreadsheet (fallback)
+ * Servicio para leer datos de Google Sheets y escribir pedidos via Apps Script.
+ * VITE_APPS_SCRIPT_URL — URL del Web App de Google Apps Script
  */
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
 
-// Cache en memoria para evitar multiples peticiones
+// Cache en memoria para evitar multiples peticiones al cargar datos
 let cachedDatos: any = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
@@ -67,21 +60,14 @@ async function fetchAllDatos(): Promise<any> {
   if (cachedDatos && (now - cacheTimestamp) < CACHE_TTL) {
     return cachedDatos;
   }
-
   if (!APPS_SCRIPT_URL) {
     throw new Error('VITE_APPS_SCRIPT_URL no configurada');
   }
-
   const url = APPS_SCRIPT_URL + (APPS_SCRIPT_URL.includes('?') ? '&' : '?') + 'action=getDatos';
   const res = await fetch(url, { redirect: 'follow' });
-  if (!res.ok) {
-    throw new Error(`Apps Script error [${res.status}]`);
-  }
+  if (!res.ok) throw new Error('Apps Script error [' + res.status + ']');
   const data = await res.json();
-  if (!data.ok) {
-    throw new Error(data.error || 'Error al obtener datos de Sheets');
-  }
-
+  if (!data.ok) throw new Error(data.error || 'Error al obtener datos de Sheets');
   cachedDatos = data;
   cacheTimestamp = now;
   return data;
@@ -92,7 +78,7 @@ async function fetchAllDatos(): Promise<any> {
 export async function getProveedores(): Promise<ProveedorSheet[]> {
   const datos = await fetchAllDatos();
   return (datos.proveedores || []).map((p: any, idx: number) => ({
-    id: `prov-${idx}`,
+    id: 'prov-' + idx,
     nombre: p.nombre || '',
     telefono: p.telefono || '',
     correo: p.correo || '',
@@ -138,40 +124,69 @@ export async function getProveedorSheetNames(): Promise<string[]> {
   return Object.keys(datos.articulosPorProveedor || {});
 }
 
-
 // ─── Obtener todos los datos de una vez ─────────────────────────────────────
 
 export async function getAllDatos(): Promise<any> {
   return fetchAllDatos();
 }
 
-// ─── Escribir Pedido en Google Sheets (via Apps Script) ──────────────────────
+// ─── Escribir Pedido en Google Sheets (via Apps Script doPost) ───────────────
+// Envia action:'appendPedido' + datos del pedido al Apps Script
+// El Apps Script guarda la fila en la hoja BASE DE PEDIDOS
 
-export async function appendPedido(pedido: PedidoRow): Promise<void> {
+export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; error?: string }> {
   if (!APPS_SCRIPT_URL) {
-    console.warn('VITE_APPS_SCRIPT_URL no configurada. Pedido no guardado en Sheets.');
-    return;
+    console.warn('[appendPedido] VITE_APPS_SCRIPT_URL no configurada. Pedido no guardado.');
+    return { ok: false, error: 'URL no configurada' };
   }
-  const res = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({
-      fecha: pedido.fecha,
-      sede: pedido.sede,
-      proveedor: pedido.proveedor,
-      insumo: pedido.articulo,
-      subArticulo: pedido.subArticulo,
-      cantidad: pedido.cantidad,
-      unidad: pedido.unidad,
-      responsable: pedido.responsable,
-      correo: pedido.correoResponsable,
-      observaciones: pedido.notas,
-      nOrden: pedido.numeroOrden,
-    }),
-    redirect: 'follow',
-  });
-  if (!res.ok) {
+
+  const payload = {
+    action: 'appendPedido',
+    fecha: pedido.fecha || '',
+    sede: pedido.sede || '',
+    proveedor: pedido.proveedor || '',
+    insumo: pedido.articulo || '',
+    subArticulo: pedido.subArticulo || '',
+    cantidad: pedido.cantidad ?? 0,
+    unidad: pedido.unidad || '',
+    responsable: pedido.responsable || '',
+    correo: pedido.correoResponsable || '',
+    observaciones: pedido.notas || '',
+    nOrden: pedido.numeroOrden || '',
+  };
+
+  console.log('[appendPedido] Enviando a Drive:', payload);
+
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+    });
+
     const text = await res.text().catch(() => '');
-    throw new Error(`Apps Script error [${res.status}]: ${text}`);
+    console.log('[appendPedido] Respuesta Apps Script:', res.status, text.substring(0, 200));
+
+    if (!res.ok) {
+      console.error('[appendPedido] Error HTTP:', res.status, text);
+      return { ok: false, error: 'HTTP ' + res.status + ': ' + text };
+    }
+
+    try {
+      const json = JSON.parse(text);
+      if (json.ok === false) {
+        console.error('[appendPedido] Error del script:', json.error);
+        return { ok: false, error: json.error };
+      }
+    } catch (_) {
+      // respuesta no-JSON, igual se considera OK si HTTP fue 200
+    }
+
+    console.log('[appendPedido] Guardado OK en Drive');
+    return { ok: true };
+  } catch (err: any) {
+    console.error('[appendPedido] Excepcion:', err.message);
+    return { ok: false, error: err.message };
   }
 }
