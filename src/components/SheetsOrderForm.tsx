@@ -3,10 +3,11 @@
  * SheetsOrderForm.tsx
  * Formulario de pedido conectado a Google Sheets.
  * PDF usando string concatenation (sin template literals) para evitar crash de html2canvas.
+ * v2 - PDF profesional + Buscador de pedidos integrado
  */
 
 import { useState, useEffect } from 'react';
-import { ShoppingCart, Building2, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search } from 'lucide-react';
+import { ShoppingCart, Building2, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, X, FileSpreadsheet } from 'lucide-react';
 import {
   getProveedores,
   getSedes,
@@ -21,6 +22,8 @@ import { dbService } from '../services/db';
 // @ts-ignore
 import html2pdf from 'html2pdf.js';
 
+const APPS_SCRIPT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+
 // Types
 interface LineItem {
   codigo: string;
@@ -29,7 +32,9 @@ interface LineItem {
   cantidad: number;
 }
 
-// PDF Generator - uses string concatenation to avoid html2canvas crash with template literals
+// ─────────────────────────────────────────────
+// PDF Generator v2 - Diseño corporativo profesional
+// ─────────────────────────────────────────────
 function generarPDF(params: {
   sede: SedeSheet | null;
   proveedor: ProveedorSheet | null;
@@ -43,141 +48,198 @@ function generarPDF(params: {
   const { sede, proveedor, proveedorSheetName, lineas, notas, responsable, correoResponsable, numeroOrden } = params;
   const fecha = new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' });
   const fechaHoy = new Date().toISOString().slice(0, 10);
-  const fmt = function(n) { return '$' + Number(n || 0).toLocaleString('es-CO'); };
 
   const activeLineas = lineas.filter(function(l) { return l.cantidad > 0; });
 
-  // Build item rows using array join (no template literals)
+  var provName = proveedor ? (proveedor.nombre || proveedorSheetName) : proveedorSheetName;
+  var provTel  = proveedor ? (proveedor.telefono || '—') : '—';
+  var provEmail= proveedor ? (proveedor.correo   || '—') : '—';
+  var provAsesor=proveedor ? (proveedor.asesor   || '—') : '—';
+  var sedeName = sede ? (sede.nombre      || '—') : '—';
+  var sedeDir  = sede ? (sede.direccion   || '—') : '—';
+  var sedeTel  = sede ? (sede.telefono    || '—') : '—';
+  var sedeHora = sede ? (sede.horaEntrega || '—') : '—';
+
+  // Build striped product rows
   var itemRowsArr = activeLineas.map(function(l, idx) {
-    return '<tr>' +
-      '<td style="border:1px solid #bbb;padding:5px 7px;text-align:center;font-size:10px;">' + (idx + 1) + '</td>' +
-      '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">' + (l.articulo || '') + (l.subArticulo ? ' - ' + l.subArticulo : '') + '</td>' +
-      '<td style="border:1px solid #bbb;padding:5px 7px;text-align:center;font-size:10px;">' + (l.cantidad || 0) + '</td>' +
-      '<td style="border:1px solid #bbb;padding:5px 7px;text-align:right;font-size:10px;">$0.00</td>' +
-      '<td style="border:1px solid #bbb;padding:5px 7px;text-align:right;font-size:10px;">$0.00</td>' +
-    '</tr>';
+    var bg = idx % 2 === 0 ? '#ffffff' : '#f5f7fb';
+    return '<tr style="background:' + bg + ';">' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:center;font-size:10px;color:#555;">' + (idx + 1) + '</td>' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;font-size:10px;color:#1a1a2e;">' + (l.articulo || '') + (l.subArticulo ? '<br/><span style=\'color:#888;font-size:9px;\'>' + l.subArticulo + '</span>' : '') + '</td>' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:center;font-size:10px;font-weight:bold;color:#1a3c6e;">' + (l.cantidad || 0) + '</td>' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:right;font-size:10px;color:#555;">—</td>' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:right;font-size:10px;color:#555;">—</td>' +
+      '</tr>';
   });
 
-  // Empty rows to fill up to 16
-  var emptyCount = Math.max(0, 16 - activeLineas.length);
+  // Empty rows to fill to 12 min
+  var emptyCount = Math.max(0, 12 - activeLineas.length);
   var emptyRowsArr = [];
   for (var ei = 0; ei < emptyCount; ei++) {
+    var bg2 = (activeLineas.length + ei) % 2 === 0 ? '#ffffff' : '#f5f7fb';
     emptyRowsArr.push(
-      '<tr>' +
-        '<td style="border:1px solid #bbb;padding:5px 7px;text-align:center;font-size:10px;">' + (activeLineas.length + ei + 1) + '</td>' +
-        '<td style="border:1px solid #bbb;padding:14px 7px;font-size:10px;">&nbsp;</td>' +
-        '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">&nbsp;</td>' +
-        '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">&nbsp;</td>' +
-        '<td style="border:1px solid #bbb;padding:5px 7px;font-size:10px;">&nbsp;</td>' +
+      '<tr style="background:' + bg2 + ';">' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:center;font-size:10px;color:#ccc;">' + (activeLineas.length + ei + 1) + '</td>' +
+      '<td style="border:1px solid #d0d7e3;padding:13px 8px;font-size:10px;">&nbsp;</td>' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;"></td>' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;"></td>' +
+      '<td style="border:1px solid #d0d7e3;padding:6px 8px;"></td>' +
       '</tr>'
     );
   }
 
-  var provName = proveedor ? (proveedor.nombre || proveedorSheetName) : proveedorSheetName;
-  var provTel = proveedor ? (proveedor.telefono || '—') : '—';
-  var provEmail = proveedor ? (proveedor.correo || '—') : '—';
-  var provAsesor = proveedor ? (proveedor.asesor || '—') : '—';
-  var sedeName = sede ? (sede.nombre || '—') : '—';
-  var sedeDir = sede ? (sede.direccion || '—') : '—';
-  var sedeTel = sede ? (sede.telefono || '—') : '—';
-  var sedeHora = sede ? (sede.horaEntrega || '—') : '—';
-
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"/><style>' +
-    'body{font-family:Arial,sans-serif;font-size:11px;color:#222;margin:0;padding:0;}' +
-    '.page{padding:28px 32px;}' +
-    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;}' +
-    '.title{font-size:26px;font-weight:900;color:#111;margin:0;}' +
-    '.co-info{text-align:right;font-size:9.5px;line-height:1.8;color:#555;}' +
-    '.meta{display:flex;gap:36px;border-bottom:1px solid #ddd;padding-bottom:10px;margin-bottom:14px;}' +
-    '.meta .lbl{font-weight:700;}' +
-    '.parties{display:flex;gap:12px;margin-bottom:14px;}' +
-    '.pbox{flex:1;border:1px solid #bbb;border-radius:1px;}' +
-    '.pbox-hdr{background:#2d3f6b;color:white;font-weight:700;font-size:10px;padding:5px 9px;text-transform:uppercase;letter-spacing:.5px;}' +
-    '.pbox-body{padding:7px 9px;line-height:1.9;font-size:9.5px;}' +
-    '.sec-hdr{background:#2d3f6b;color:white;padding:6px 9px;font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.5px;}' +
-    'table.pt{width:100%;border-collapse:collapse;}' +
-    'table.pt th{background:#dde4f0;color:#2d3f6b;border:1px solid #bbb;padding:6px 7px;font-size:9.5px;font-weight:700;text-transform:uppercase;text-align:center;}' +
-    'table.pt th.tl{text-align:left;}' +
-    '.totrow{display:flex;justify-content:flex-end;margin-top:2px;}' +
-    'table.tt{border-collapse:collapse;width:240px;}' +
-    'table.tt td{border:1px solid #bbb;padding:4px 9px;font-size:10px;}' +
-    '.ttlbl{text-align:right;font-weight:700;text-transform:uppercase;background:#f0f0f0;}' +
-    '.tval{text-align:right;}' +
-    '.grand td{background:#2d3f6b;color:white;font-weight:900;font-size:12px;}' +
-    '.cmts{border:1px solid #bbb;margin-top:10px;}' +
-    '.cmts-hdr{background:#2d3f6b;color:white;padding:5px 9px;font-weight:700;font-size:10px;text-transform:uppercase;}' +
-    '.cmts-body{padding:9px;min-height:44px;font-size:9.5px;line-height:1.5;}' +
+    '@import url(\'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap\');' +
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;margin:0;padding:0;background:#fff;}' +
+    '.page{padding:24px 28px;}' +
+    /* Header band */
+    '.top-band{background:#1a3c6e;height:6px;margin:-24px -28px 20px -28px;}' +
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #e8ecf4;}' +
+    '.brand{display:flex;align-items:center;gap:12px;}' +
+    '.logo-box{width:44px;height:44px;background:#1a3c6e;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:18px;font-weight:900;letter-spacing:-1px;}' +
+    '.brand-name{font-size:18px;font-weight:900;color:#1a3c6e;letter-spacing:-0.5px;}' +
+    '.brand-sub{font-size:9px;color:#7b8db0;text-transform:uppercase;letter-spacing:1px;margin-top:1px;}' +
+    '.oc-badge{background:#1a3c6e;color:white;border-radius:8px;padding:10px 16px;text-align:right;}' +
+    '.oc-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#a8c0e8;font-weight:600;}' +
+    '.oc-num{font-size:20px;font-weight:900;letter-spacing:-0.5px;}' +
+    '.oc-date{font-size:9px;color:#a8c0e8;margin-top:2px;}' +
+    /* Status band */
+    '.status-band{background:#eef2fa;border:1px solid #c8d5ed;border-radius:6px;padding:8px 14px;display:flex;gap:32px;margin-bottom:14px;}' +
+    '.status-item{display:flex;flex-direction:column;}' +
+    '.status-lbl{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#7b8db0;font-weight:600;}' +
+    '.status-val{font-size:10px;font-weight:700;color:#1a3c6e;margin-top:1px;}' +
+    /* Party boxes */
+    '.parties{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}' +
+    '.pbox{border:1px solid #d0d7e3;border-radius:6px;overflow:hidden;}' +
+    '.pbox-hdr{background:#1a3c6e;color:white;font-weight:700;font-size:9px;padding:6px 10px;text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px;}' +
+    '.pbox-body{padding:8px 10px;line-height:1.8;font-size:9.5px;background:#fafbfd;}' +
+    '.pbox-name{font-weight:700;font-size:10.5px;color:#1a3c6e;}' +
+    /* Products table */
+    '.sec-hdr{background:#1a3c6e;color:white;padding:7px 10px;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1px;border-radius:4px 4px 0 0;margin-bottom:0;}' +
+    'table.pt{width:100%;border-collapse:collapse;border:1px solid #d0d7e3;}' +
+    'table.pt th{background:#dde4f5;color:#1a3c6e;border:1px solid #d0d7e3;padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}' +
+    /* Totals */
+    '.totals-row{display:flex;justify-content:flex-end;margin-top:10px;}' +
+    'table.tt{border-collapse:collapse;width:220px;border:1px solid #d0d7e3;border-radius:4px;overflow:hidden;}' +
+    'table.tt td{border:1px solid #d0d7e3;padding:5px 10px;font-size:10px;}' +
+    '.ttlbl{text-align:right;font-weight:600;background:#f0f3fa;color:#444;text-transform:uppercase;font-size:9px;}' +
+    '.tval{text-align:right;color:#1a1a2e;}' +
+    '.grand td{background:#1a3c6e!important;color:white!important;font-weight:900;font-size:11px;}' +
+    /* Signatures */
+    '.sigs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:18px;}' +
+    '.sig-box{border-top:2px solid #1a3c6e;padding-top:6px;text-align:center;}' +
+    '.sig-lbl{font-size:9px;font-weight:700;color:#1a3c6e;text-transform:uppercase;letter-spacing:.5px;}' +
+    '.sig-sub{font-size:8.5px;color:#888;margin-top:1px;}' +
+    /* Comments */
+    '.cmts{border:1px solid #d0d7e3;margin-top:14px;border-radius:4px;overflow:hidden;}' +
+    '.cmts-hdr{background:#f0f3fa;color:#1a3c6e;padding:6px 10px;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #d0d7e3;}' +
+    '.cmts-body{padding:9px 10px;min-height:36px;font-size:9.5px;line-height:1.6;color:#444;}' +
+    /* Footer */
+    '.footer{margin-top:16px;padding-top:10px;border-top:1px solid #e8ecf4;display:flex;justify-content:space-between;align-items:center;}' +
+    '.footer-left{font-size:8.5px;color:#aaa;}' +
+    '.footer-right{font-size:8.5px;color:#aaa;text-align:right;}' +
+    '.accent{color:#1a3c6e;font-weight:700;}' +
     '</style></head><body><div class="page">' +
 
+    '<div class="top-band"></div>' +
+
+    /* Header */
     '<div class="hdr">' +
-    '<h1 class="title">Orden de compra</h1>' +
-    '<div class="co-info">' +
-    '<strong>Rocoto Restaurantes</strong><br/>' +
-    'Dir: ' + sedeDir + '<br/>' +
-    'Tel: (604) 987 6543<br/>' +
-    'Email: comprasrocoto@gmail.com' +
+    '<div class="brand">' +
+    '<div class="logo-box">R</div>' +
+    '<div>' +
+    '<div class="brand-name">Rocoto Restaurantes</div>' +
+    '<div class="brand-sub">Sistema de Compras &bull; ' + sedeDir + '</div>' +
+    '</div>' +
+    '</div>' +
+    '<div class="oc-badge">' +
+    '<div class="oc-title">Orden de Compra</div>' +
+    '<div class="oc-num">OC-' + numeroOrden + '</div>' +
+    '<div class="oc-date">' + fecha + '</div>' +
     '</div>' +
     '</div>' +
 
-    '<div class="meta">' +
-    '<span><span class="lbl">N. de orden de compra: </span>OC-' + numeroOrden + '</span>' +
-    '<span><span class="lbl">Fecha: </span>' + fecha + '</span>' +
+    /* Status band */
+    '<div class="status-band">' +
+    '<div class="status-item"><span class="status-lbl">N&deg; Orden</span><span class="status-val">OC-' + numeroOrden + '</span></div>' +
+    '<div class="status-item"><span class="status-lbl">Sede</span><span class="status-val">' + sedeName + '</span></div>' +
+    '<div class="status-item"><span class="status-lbl">Horario entrega</span><span class="status-val">' + sedeHora + '</span></div>' +
+    '<div class="status-item"><span class="status-lbl">Responsable</span><span class="status-val">' + responsable + '</span></div>' +
+    '<div class="status-item"><span class="status-lbl">Total items</span><span class="status-val">' + activeLineas.length + ' art&iacute;culo(s)</span></div>' +
     '</div>' +
 
+    /* Parties */
     '<div class="parties">' +
     '<div class="pbox">' +
-    '<div class="pbox-hdr">Vendedor</div>' +
+    '<div class="pbox-hdr">&#128666; Proveedor / Vendedor</div>' +
     '<div class="pbox-body">' +
-    '<strong>' + provName + '</strong><br/>' +
+    '<div class="pbox-name">' + provName + '</div>' +
     'Asesor: ' + provAsesor + '<br/>' +
     'Tel: ' + provTel + '<br/>' +
     'Email: ' + provEmail +
     '</div>' +
     '</div>' +
     '<div class="pbox">' +
-    '<div class="pbox-hdr">Cliente</div>' +
+    '<div class="pbox-hdr">&#127968; Cliente / Comprador</div>' +
     '<div class="pbox-body">' +
-    '<strong>Rocoto Restaurantes</strong><br/>' +
+    '<div class="pbox-name">Rocoto Restaurantes</div>' +
     'Sede: ' + sedeName + '<br/>' +
     'Dir: ' + sedeDir + '<br/>' +
     'Horario: ' + sedeHora + '<br/>' +
-    'Responsable: ' + responsable +
+    'Resp: ' + responsable +
     '</div>' +
     '</div>' +
     '</div>' +
 
-    '<div class="sec-hdr">Producto o Servicio</div>' +
+    /* Products */
+    '<div class="sec-hdr">&#128230; Productos / Servicios Solicitados</div>' +
     '<table class="pt"><thead><tr>' +
-    '<th style="width:5%;">N.</th>' +
-    '<th class="tl" style="width:50%;">Descripcion</th>' +
-    '<th style="width:15%;">Cantidad</th>' +
-    '<th style="width:15%;">Precio unitario</th>' +
-    '<th style="width:15%;">Total</th>' +
+    '<th style="width:5%;text-align:center;">N.</th>' +
+    '<th style="width:52%;text-align:left;">Descripci&oacute;n del Art&iacute;culo</th>' +
+    '<th style="width:13%;text-align:center;">Cantidad</th>' +
+    '<th style="width:15%;text-align:right;">Precio Unit.</th>' +
+    '<th style="width:15%;text-align:right;">Total</th>' +
     '</tr></thead><tbody>' +
     itemRowsArr.join('') +
     emptyRowsArr.join('') +
     '</tbody></table>' +
 
-    '<div class="totrow"><table class="tt">' +
-    '<tr><td class="ttlbl">Subtotal</td><td class="tval">$0.00</td></tr>' +
-    '<tr><td class="ttlbl">Impuesto</td><td class="tval">0 %</td></tr>' +
-    '<tr><td class="ttlbl">Envio</td><td class="tval">$0.00</td></tr>' +
-    '<tr class="grand"><td class="ttlbl" style="color:white;">Total</td><td class="tval">$0.00</td></tr>' +
+    /* Totals */
+    '<div class="totals-row"><table class="tt">' +
+    '<tr><td class="ttlbl">Subtotal</td><td class="tval">A convenir</td></tr>' +
+    '<tr><td class="ttlbl">IVA</td><td class="tval">Incluido</td></tr>' +
+    '<tr><td class="ttlbl">Env&iacute;o</td><td class="tval">Incluido</td></tr>' +
+    '<tr class="grand"><td class="ttlbl">TOTAL</td><td class="tval">Seg&uacute;n factura</td></tr>' +
     '</table></div>' +
 
+    /* Comments */
     '<div class="cmts">' +
-    '<div class="cmts-hdr">Comentarios o instrucciones especiales</div>' +
-    '<div class="cmts-body">' + (notas || 'Sin comentarios.') + '<br/>' +
-    'Solicitado por: ' + responsable + ' | Sede: ' + sedeName + ' | Horario: ' + sedeHora +
+    '<div class="cmts-hdr">&#128221; Comentarios e Instrucciones Especiales</div>' +
+    '<div class="cmts-body">' + (notas || 'Sin comentarios adicionales.') + '<br/>' +
+    '<span style="color:#888;font-size:9px;">Solicitado por: <strong>' + responsable + '</strong> &bull; Sede: <strong>' + sedeName + '</strong> &bull; Horario recepci&oacute;n: <strong>' + sedeHora + '</strong></span>' +
     '</div>' +
+    '</div>' +
+
+    /* Signatures */
+    '<div class="sigs">' +
+    '<div class="sig-box"><div class="sig-lbl">Elaborado por</div><div class="sig-sub">' + responsable + '</div></div>' +
+    '<div class="sig-box"><div class="sig-lbl">Aprobado por</div><div class="sig-sub">Gerencia</div></div>' +
+    '<div class="sig-box"><div class="sig-lbl">Recibido por</div><div class="sig-sub">Proveedor</div></div>' +
+    '</div>' +
+
+    /* Footer */
+    '<div class="footer">' +
+    '<div class="footer-left">Rocoto Restaurantes &bull; comprasrocoto@gmail.com &bull; Tel: (604) 987 6543</div>' +
+    '<div class="footer-right"><span class="accent">OC-' + numeroOrden + '</span> &bull; Generado el ' + fecha + ' &bull; P&aacute;g. 1</div>' +
     '</div>' +
 
     '</div></body></html>';
 
+  var provSlug = provName.replace(/[^A-Za-z0-9]/g, '_').substring(0, 20);
   var opt = {
-    margin: [8, 8, 8, 8],
-    filename: 'OC-' + numeroOrden + '_' + provName.substring(0, 20) + '_' + fechaHoy + '.pdf',
-    image: { type: 'jpeg', quality: 0.95 },
+    margin: [6, 6, 6, 6],
+    filename: 'OC-' + numeroOrden + '_' + provSlug + '_' + fechaHoy + '.pdf',
+    image: { type: 'jpeg', quality: 0.97 },
     html2canvas: {
       scale: 2,
       useCORS: true,
@@ -185,7 +247,7 @@ function generarPDF(params: {
       onclone: function(clonedDoc) {
         var styles = clonedDoc.getElementsByTagName('style');
         for (var s = 0; s < styles.length; s++) {
-          if (styles[s].innerHTML.includes('oklch')) {
+          if (styles[s].innerHTML.indexOf('oklch') !== -1) {
             styles[s].innerHTML = styles[s].innerHTML.replace(/oklch\([^)]+\)/g, '#ccc');
           }
         }
@@ -197,7 +259,223 @@ function generarPDF(params: {
   html2pdf().set(opt).from(html).save();
 }
 
-// Component
+// ─────────────────────────────────────────────
+// BuscadorPedidos - Panel de búsqueda integrado
+// ─────────────────────────────────────────────
+interface ArticuloBuscado {
+  articulo: string;
+  subArticulo: string;
+  cantidad: string;
+  codigo: string;
+  unidad: string;
+}
+interface PedidoEncontrado {
+  nOrden: string;
+  fecha: string;
+  sede: string;
+  proveedor: string;
+  responsable: string;
+  articulos: ArticuloBuscado[];
+}
+
+function BuscadorPedidos() {
+  const [busquedaId, setBusquedaId] = useState('');
+  const [buscando, setBuscando] = useState(false);
+  const [pedido, setPedido] = useState<PedidoEncontrado | null>(null);
+  const [errorBusq, setErrorBusq] = useState<string | null>(null);
+  const [exportando, setExportando] = useState(false);
+
+  const buscarPedido = async () => {
+    if (!busquedaId.trim()) { alert('Ingresa el ID del pedido.'); return; }
+    setBuscando(true);
+    setErrorBusq(null);
+    setPedido(null);
+    try {
+      const url = APPS_SCRIPT_ENDPOINT + '?action=getPedidoByOrden&nOrden=' + encodeURIComponent(busquedaId.trim());
+      const res = await fetch(url, { redirect: 'follow' });
+      const data = await res.json();
+      if (!data.ok) { setErrorBusq(data.error || 'Pedido no encontrado.'); return; }
+      const rows: any[] = data.rows || [];
+      if (rows.length === 0) { setErrorBusq('No se encontraron registros para ese ID.'); return; }
+      const first = rows[0];
+      const pedidoData: PedidoEncontrado = {
+        nOrden:      String(first[0] || busquedaId),
+        fecha:       String(first[1] || '—'),
+        sede:        String(first[2] || '—'),
+        proveedor:   String(first[3] || '—'),
+        responsable: String(first[9] || '—'),
+        articulos:   rows.map((r: any[]) => ({
+          codigo:     String(r[4] || ''),
+          articulo:   String(r[5] || ''),
+          subArticulo:String(r[6] || ''),
+          cantidad:   String(r[7] || ''),
+          unidad:     String(r[8] || ''),
+        })),
+      };
+      setPedido(pedidoData);
+    } catch(e: any) {
+      setErrorBusq('Error de red: ' + e.message);
+    } finally {
+      setBuscando(false);
+    }
+  };
+
+  const exportarExcel = async () => {
+    if (!pedido) return;
+    setExportando(true);
+    try {
+      // Load XLSX if not present
+      if (typeof (window as any).XLSX === 'undefined') {
+        await new Promise<void>((resolve, reject) => {
+          const s = document.createElement('script');
+          s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
+          s.onload = () => resolve();
+          s.onerror = () => reject(new Error('No se pudo cargar XLSX'));
+          document.head.appendChild(s);
+        });
+      }
+      const XLSX = (window as any).XLSX;
+      const wsData = [
+        ['N° Orden', 'Fecha', 'Sede', 'Proveedor', 'Responsable'],
+        [pedido.nOrden, pedido.fecha, pedido.sede, pedido.proveedor, pedido.responsable],
+        [],
+        ['Código', 'Artículo', 'Sub-Artículo', 'Cantidad', 'Unidad'],
+        ...pedido.articulos.map(a => [a.codigo, a.articulo, a.subArticulo, a.cantidad, a.unidad]),
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws['!cols'] = [{ wch: 14 }, { wch: 35 }, { wch: 28 }, { wch: 12 }, { wch: 12 }];
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Pedido OC-' + pedido.nOrden);
+      XLSX.writeFile(wb, 'Pedido_OC-' + pedido.nOrden + '_' + pedido.proveedor.substring(0,15) + '.xlsx');
+    } catch(e: any) {
+      alert('Error exportando Excel: ' + e.message);
+    } finally {
+      setExportando(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      {/* Header */}
+      <div style={{background:'#1a3c6e', padding:'14px 20px', display:'flex', alignItems:'center', gap:'10px'}}>
+        <Search className="w-5 h-5" style={{color:'#a8c0e8'}} />
+        <div>
+          <div style={{color:'white', fontWeight:700, fontSize:'14px'}}>Buscador de Pedidos</div>
+          <div style={{color:'#a8c0e8', fontSize:'11px'}}>Consulta cualquier orden de compra registrada</div>
+        </div>
+      </div>
+
+      <div className="p-5">
+        {/* Search input */}
+        <div className="flex gap-2 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            <input
+              type="text"
+              value={busquedaId}
+              onChange={e => setBusquedaId(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') buscarPedido(); }}
+              placeholder="Ingresa el ID del pedido (ej: 1779218515)"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+            />
+          </div>
+          <button
+            onClick={buscarPedido}
+            disabled={buscando}
+            style={{background:'#1a3c6e', color:'white', border:'none', borderRadius:'12px', padding:'0 20px', fontWeight:600, fontSize:'14px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', minWidth:'110px', justifyContent:'center'}}
+          >
+            {buscando ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            {buscando ? 'Buscando...' : 'Buscar'}
+          </button>
+        </div>
+
+        {/* Error */}
+        {errorBusq && (
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm mb-4">
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            {errorBusq}
+          </div>
+        )}
+
+        {/* Results */}
+        {pedido && (
+          <div>
+            {/* Order metadata */}
+            <div style={{background:'#eef2fa', border:'1px solid #c8d5ed', borderRadius:'10px', padding:'14px 16px', marginBottom:'14px'}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'10px'}}>
+                <div>
+                  <div style={{fontSize:'11px', color:'#7b8db0', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px'}}>Orden encontrada</div>
+                  <div style={{fontSize:'20px', fontWeight:900, color:'#1a3c6e', letterSpacing:'-0.5px'}}>OC-{pedido.nOrden}</div>
+                </div>
+                <button
+                  onClick={exportarExcel}
+                  disabled={exportando}
+                  style={{background:'#1a7c3c', color:'white', border:'none', borderRadius:'10px', padding:'8px 16px', fontWeight:600, fontSize:'12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px'}}
+                >
+                  {exportando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                  {exportando ? 'Exportando...' : 'Descargar Excel'}
+                </button>
+              </div>
+              <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px'}}>
+                {[
+                  {lbl:'Fecha', val: pedido.fecha},
+                  {lbl:'Sede', val: pedido.sede},
+                  {lbl:'Proveedor', val: pedido.proveedor},
+                  {lbl:'Responsable', val: pedido.responsable},
+                ].map(item => (
+                  <div key={item.lbl}>
+                    <div style={{fontSize:'9px', color:'#7b8db0', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px'}}>{item.lbl}</div>
+                    <div style={{fontSize:'12px', fontWeight:700, color:'#1a3c6e', marginTop:'2px'}}>{item.val}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Articles table */}
+            <div style={{fontSize:'11px', fontWeight:700, color:'#1a3c6e', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'8px'}}>
+              {pedido.articulos.length} Artículo(s) en este pedido
+            </div>
+            <div style={{border:'1px solid #d0d7e3', borderRadius:'8px', overflow:'hidden'}}>
+              <table style={{width:'100%', borderCollapse:'collapse', fontSize:'12px'}}>
+                <thead>
+                  <tr style={{background:'#1a3c6e', color:'white'}}>
+                    <th style={{padding:'8px 10px', textAlign:'left', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', width:'12%'}}>Código</th>
+                    <th style={{padding:'8px 10px', textAlign:'left', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px'}}>Artículo</th>
+                    <th style={{padding:'8px 10px', textAlign:'left', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px'}}>Sub-Artículo</th>
+                    <th style={{padding:'8px 10px', textAlign:'center', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', width:'12%'}}>Cantidad</th>
+                    <th style={{padding:'8px 10px', textAlign:'center', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', width:'12%'}}>Unidad</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pedido.articulos.map((a, idx) => (
+                    <tr key={idx} style={{background: idx % 2 === 0 ? '#ffffff' : '#f5f7fb', borderBottom:'1px solid #e8ecf4'}}>
+                      <td style={{padding:'8px 10px', fontFamily:'monospace', fontSize:'11px', color:'#555'}}>{a.codigo}</td>
+                      <td style={{padding:'8px 10px', fontWeight:600, color:'#1a1a2e'}}>{a.articulo}</td>
+                      <td style={{padding:'8px 10px', color:'#888', fontSize:'11px'}}>{a.subArticulo}</td>
+                      <td style={{padding:'8px 10px', textAlign:'center', fontWeight:700, color:'#1a3c6e', fontSize:'13px'}}>{a.cantidad}</td>
+                      <td style={{padding:'8px 10px', textAlign:'center', color:'#555', fontSize:'11px'}}>{a.unidad}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {!pedido && !errorBusq && !buscando && (
+          <div style={{textAlign:'center', padding:'24px 0', color:'#aaa', fontSize:'13px'}}>
+            <Search style={{width:'32px', height:'32px', margin:'0 auto 8px', color:'#d0d7e3'}} />
+            <div>Ingresa un ID de pedido para consultar su información</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// SheetsOrderForm - Componente principal
+// ─────────────────────────────────────────────
 export default function SheetsOrderForm() {
   const [proveedores, setProveedores] = useState<ProveedorSheet[]>([]);
   const [sedes, setSedes] = useState<SedeSheet[]>([]);
@@ -287,7 +565,6 @@ export default function SheetsOrderForm() {
       localStorage.setItem('pedido_responsable', responsable);
       localStorage.setItem('pedido_correo', correoResponsable);
 
-      // Get order number with Firebase fallback
       var numeroOrden = Math.floor(Date.now() / 1000);
       try {
         var n2 = await dbService.getNextGlobalConsecutive();
@@ -296,7 +573,6 @@ export default function SheetsOrderForm() {
         console.warn('[Firebase] getNextGlobalConsecutive failed, using timestamp:', eN);
       }
 
-      // Save to Google Sheets
       const fechaHoy = new Date().toISOString().split('T')[0];
       for (const linea of lineasSeleccionadas) {
         try {
@@ -320,7 +596,6 @@ export default function SheetsOrderForm() {
       }
       console.log('[Drive] Pedido guardado:', lineasSeleccionadas.length, 'items');
 
-      // Firebase save (optional, may fail)
       try {
         await (dbService as any).savePedido?.({
           numeroOrden,
@@ -341,7 +616,6 @@ export default function SheetsOrderForm() {
       setNotas('');
       setTimeout(() => setSuccess(false), 5000);
 
-      // Generate PDF after React finishes state updates (avoids DOM conflict)
       const pdfParams = {
         sede: sedeSeleccionada,
         proveedor: proveedorSeleccionado,
@@ -626,6 +900,16 @@ export default function SheetsOrderForm() {
           </button>
         </div>
       </div>
+
+      {/* Step 5: Buscador de Pedidos */}
+      <div>
+        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3 flex items-center gap-2">
+          <Search className="w-4 h-4 text-brand-500" />
+          5. Consultar Pedido Existente
+        </h2>
+        <BuscadorPedidos />
+      </div>
+
     </div>
   );
 }
