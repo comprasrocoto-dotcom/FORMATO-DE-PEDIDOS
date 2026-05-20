@@ -295,25 +295,47 @@ function BuscadorPedidos() {
       const res = await fetch(url, { redirect: 'follow' });
       const data = await res.json();
       if (!data.ok) { setErrorBusq(data.error || 'Pedido no encontrado.'); return; }
-      const rows = data.rows || [];
-      if (rows.length === 0) { setErrorBusq('No se encontraron registros para ese ID.'); return; }
-      const first = rows[0];
-      setPedido({
-        nOrden:      String(first[0] || busquedaId),
-        fecha:       String(first[1] || '—'),
-        sede:        String(first[2] || '—'),
-        proveedor:   String(first[3] || '—'),
-        responsable: String(first[9] || '—'),
-        articulos:   rows.map(function(r) {
-          return {
-            codigo:     String(r[4] || ''),
-            articulo:   String(r[5] || ''),
-            subArticulo:String(r[6] || ''),
-            cantidad:   String(r[7] || ''),
-            unidad:     String(r[8] || ''),
-          };
-        }),
-      });
+      var p = data.pedido;
+      if (p && p.lineas) {
+        if (p.lineas.length === 0) { setErrorBusq('Pedido encontrado pero sin articulos.'); return; }
+        var fechaStr = String(p.fecha || '').split('GMT')[0].trim() || '—';
+        setPedido({
+          nOrden:      String(p.nOrden || busquedaId),
+          fecha:       fechaStr,
+          sede:        String(p.sede || '—'),
+          proveedor:   String(p.proveedor || '—'),
+          responsable: String(p.responsable || '—'),
+          articulos:   p.lineas.map(function(l) {
+            return {
+              codigo:     String(l.codigo || ''),
+              articulo:   String(l.insumo || l.articulo || ''),
+              subArticulo:String(l.subArticulo || ''),
+              cantidad:   String(l.cantidad || ''),
+              unidad:     String(l.unidad || ''),
+            };
+          }),
+        });
+      } else {
+        var rows2 = data.rows || [];
+        if (rows2.length === 0) { setErrorBusq('No se encontraron registros para ese ID.'); return; }
+        var first2 = rows2[0];
+        setPedido({
+          nOrden:      String(first2[0] || busquedaId),
+          fecha:       String(first2[1] || '—'),
+          sede:        String(first2[2] || '—'),
+          proveedor:   String(first2[3] || '—'),
+          responsable: String(first2[9] || '—'),
+          articulos:   rows2.map(function(r2) {
+            return {
+              codigo:     String(r2[4] || ''),
+              articulo:   String(r2[5] || ''),
+              subArticulo:String(r2[6] || ''),
+              cantidad:   String(r2[7] || ''),
+              unidad:     String(r2[8] || ''),
+            };
+          }),
+        });
+      }
     } catch(e) {
       setErrorBusq('Error de red: ' + e.message);
     } finally {
