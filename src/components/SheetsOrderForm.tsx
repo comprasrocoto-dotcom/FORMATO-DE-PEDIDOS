@@ -2,11 +2,10 @@
 /**
  * SheetsOrderForm.tsx
  * Formulario de pedido conectado a Google Sheets.
- * PDF usando string concatenation (sin template literals) para evitar crash de html2canvas.
- * v2 - PDF profesional + Buscador de pedidos integrado
+ * v3 - PDF elegante + Buscador + Sin blank page + Caching + UI mejorada
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, Building2, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, X, FileSpreadsheet } from 'lucide-react';
 import {
   getProveedores,
@@ -24,7 +23,7 @@ import html2pdf from 'html2pdf.js';
 
 const APPS_SCRIPT_ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// Types
+// ─── Types ────────────────────────────────────
 interface LineItem {
   codigo: string;
   articulo: string;
@@ -32,9 +31,10 @@ interface LineItem {
   cantidad: number;
 }
 
-// ─────────────────────────────────────────────
-// PDF Generator v2 - Diseño corporativo profesional
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// PDF Generator v3 - Diseño elegante, limpio, alineado
+// Sin sección de cliente/comprador, sin firmas, solo proveedor + observaciones
+// ─────────────────────────────────────────────────────────────────────────────
 function generarPDF(params: {
   sede: SedeSheet | null;
   proveedor: ProveedorSheet | null;
@@ -51,193 +51,156 @@ function generarPDF(params: {
 
   const activeLineas = lineas.filter(function(l) { return l.cantidad > 0; });
 
-  var provName = proveedor ? (proveedor.nombre || proveedorSheetName) : proveedorSheetName;
-  var provTel  = proveedor ? (proveedor.telefono || '—') : '—';
-  var provEmail= proveedor ? (proveedor.correo   || '—') : '—';
-  var provAsesor=proveedor ? (proveedor.asesor   || '—') : '—';
-  var sedeName = sede ? (sede.nombre      || '—') : '—';
-  var sedeDir  = sede ? (sede.direccion   || '—') : '—';
-  var sedeTel  = sede ? (sede.telefono    || '—') : '—';
-  var sedeHora = sede ? (sede.horaEntrega || '—') : '—';
+  var provName   = proveedor ? (proveedor.nombre || proveedorSheetName) : proveedorSheetName;
+  var provTel    = proveedor ? (proveedor.telefono || '—') : '—';
+  var sedeName   = sede ? (sede.nombre || '—') : '—';
+  var sedeDir    = sede ? (sede.direccion || '—') : '—';
+  var sedeHora   = sede ? (sede.horaEntrega || '—') : '—';
 
-  // Build striped product rows
+  // Product rows - striped, more spaced
   var itemRowsArr = activeLineas.map(function(l, idx) {
-    var bg = idx % 2 === 0 ? '#ffffff' : '#f5f7fb';
+    var bg = idx % 2 === 0 ? '#ffffff' : '#f4f7fc';
     return '<tr style="background:' + bg + ';">' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:center;font-size:10px;color:#555;">' + (idx + 1) + '</td>' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;font-size:10px;color:#1a1a2e;">' + (l.articulo || '') + (l.subArticulo ? '<br/><span style=\'color:#888;font-size:9px;\'>' + l.subArticulo + '</span>' : '') + '</td>' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:center;font-size:10px;font-weight:bold;color:#1a3c6e;">' + (l.cantidad || 0) + '</td>' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:right;font-size:10px;color:#555;">—</td>' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:right;font-size:10px;color:#555;">—</td>' +
-      '</tr>';
+      '<td style="border:1px solid #dde3ee;padding:10px 10px;text-align:center;font-size:11px;color:#888;">' + (idx + 1) + '</td>' +
+      '<td style="border:1px solid #dde3ee;padding:10px 14px;font-size:11px;color:#1a1a2e;font-weight:600;">' + (l.articulo || '') + (l.subArticulo ? '<div style="color:#999;font-size:9.5px;margin-top:2px;">' + l.subArticulo + '</div>' : '') + '</td>' +
+      '<td style="border:1px solid #dde3ee;padding:10px 10px;text-align:center;font-size:12px;font-weight:800;color:#1a3c6e;">' + (l.cantidad || 0) + '</td>' +
+      '<td style="border:1px solid #dde3ee;padding:10px 10px;text-align:right;font-size:11px;color:#aaa;">—</td>' +
+      '<td style="border:1px solid #dde3ee;padding:10px 10px;text-align:right;font-size:11px;color:#aaa;">—</td>' +
+    '</tr>';
   });
 
-  // Empty rows to fill to 12 min
-  var emptyCount = Math.max(0, 12 - activeLineas.length);
+  // Empty rows
+  var emptyCount = Math.max(0, 10 - activeLineas.length);
   var emptyRowsArr = [];
   for (var ei = 0; ei < emptyCount; ei++) {
-    var bg2 = (activeLineas.length + ei) % 2 === 0 ? '#ffffff' : '#f5f7fb';
+    var bg2 = (activeLineas.length + ei) % 2 === 0 ? '#ffffff' : '#f4f7fc';
     emptyRowsArr.push(
       '<tr style="background:' + bg2 + ';">' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;text-align:center;font-size:10px;color:#ccc;">' + (activeLineas.length + ei + 1) + '</td>' +
-      '<td style="border:1px solid #d0d7e3;padding:13px 8px;font-size:10px;">&nbsp;</td>' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;"></td>' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;"></td>' +
-      '<td style="border:1px solid #d0d7e3;padding:6px 8px;"></td>' +
+      '<td style="border:1px solid #dde3ee;padding:14px 10px;text-align:center;font-size:11px;color:#ddd;">' + (activeLineas.length + ei + 1) + '</td>' +
+      '<td style="border:1px solid #dde3ee;padding:14px 10px;">&nbsp;</td>' +
+      '<td style="border:1px solid #dde3ee;padding:14px 10px;"></td>' +
+      '<td style="border:1px solid #dde3ee;padding:14px 10px;"></td>' +
+      '<td style="border:1px solid #dde3ee;padding:14px 10px;"></td>' +
       '</tr>'
     );
   }
 
   var html = '<!DOCTYPE html><html><head><meta charset="utf-8"/><style>' +
-    '@import url(\'https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap\');' +
-    'body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#1a1a2e;margin:0;padding:0;background:#fff;}' +
-    '.page{padding:24px 28px;}' +
-    /* Header band */
-    '.top-band{background:#1a3c6e;height:6px;margin:-24px -28px 20px -28px;}' +
-    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:18px;padding-bottom:14px;border-bottom:2px solid #e8ecf4;}' +
-    '.brand{display:flex;align-items:center;gap:12px;}' +
-    '.logo-box{width:44px;height:44px;background:#1a3c6e;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-size:18px;font-weight:900;letter-spacing:-1px;}' +
-    '.brand-name{font-size:18px;font-weight:900;color:#1a3c6e;letter-spacing:-0.5px;}' +
-    '.brand-sub{font-size:9px;color:#7b8db0;text-transform:uppercase;letter-spacing:1px;margin-top:1px;}' +
-    '.oc-badge{background:#1a3c6e;color:white;border-radius:8px;padding:10px 16px;text-align:right;}' +
-    '.oc-title{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#a8c0e8;font-weight:600;}' +
-    '.oc-num{font-size:20px;font-weight:900;letter-spacing:-0.5px;}' +
-    '.oc-date{font-size:9px;color:#a8c0e8;margin-top:2px;}' +
-    /* Status band */
-    '.status-band{background:#eef2fa;border:1px solid #c8d5ed;border-radius:6px;padding:8px 14px;display:flex;gap:32px;margin-bottom:14px;}' +
-    '.status-item{display:flex;flex-direction:column;}' +
-    '.status-lbl{font-size:8px;text-transform:uppercase;letter-spacing:1px;color:#7b8db0;font-weight:600;}' +
-    '.status-val{font-size:10px;font-weight:700;color:#1a3c6e;margin-top:1px;}' +
-    /* Party boxes */
-    '.parties{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}' +
-    '.pbox{border:1px solid #d0d7e3;border-radius:6px;overflow:hidden;}' +
-    '.pbox-hdr{background:#1a3c6e;color:white;font-weight:700;font-size:9px;padding:6px 10px;text-transform:uppercase;letter-spacing:1px;display:flex;align-items:center;gap:6px;}' +
-    '.pbox-body{padding:8px 10px;line-height:1.8;font-size:9.5px;background:#fafbfd;}' +
-    '.pbox-name{font-weight:700;font-size:10.5px;color:#1a3c6e;}' +
-    /* Products table */
-    '.sec-hdr{background:#1a3c6e;color:white;padding:7px 10px;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1px;border-radius:4px 4px 0 0;margin-bottom:0;}' +
-    'table.pt{width:100%;border-collapse:collapse;border:1px solid #d0d7e3;}' +
-    'table.pt th{background:#dde4f5;color:#1a3c6e;border:1px solid #d0d7e3;padding:7px 8px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;}' +
-    /* Totals */
-    '.totals-row{display:flex;justify-content:flex-end;margin-top:10px;}' +
-    'table.tt{border-collapse:collapse;width:220px;border:1px solid #d0d7e3;border-radius:4px;overflow:hidden;}' +
-    'table.tt td{border:1px solid #d0d7e3;padding:5px 10px;font-size:10px;}' +
-    '.ttlbl{text-align:right;font-weight:600;background:#f0f3fa;color:#444;text-transform:uppercase;font-size:9px;}' +
-    '.tval{text-align:right;color:#1a1a2e;}' +
-    '.grand td{background:#1a3c6e!important;color:white!important;font-weight:900;font-size:11px;}' +
-    /* Signatures */
-    '.sigs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:18px;}' +
-    '.sig-box{border-top:2px solid #1a3c6e;padding-top:6px;text-align:center;}' +
-    '.sig-lbl{font-size:9px;font-weight:700;color:#1a3c6e;text-transform:uppercase;letter-spacing:.5px;}' +
-    '.sig-sub{font-size:8.5px;color:#888;margin-top:1px;}' +
-    /* Comments */
-    '.cmts{border:1px solid #d0d7e3;margin-top:14px;border-radius:4px;overflow:hidden;}' +
-    '.cmts-hdr{background:#f0f3fa;color:#1a3c6e;padding:6px 10px;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #d0d7e3;}' +
-    '.cmts-body{padding:9px 10px;min-height:36px;font-size:9.5px;line-height:1.6;color:#444;}' +
+    'body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#1a1a2e;margin:0;padding:0;background:#fff;}' +
+    '.page{padding:30px 36px;}' +
+    '.top-band{background:#1a3c6e;height:7px;margin:-30px -36px 26px -36px;}' +
+    /* Header */
+    '.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:18px;border-bottom:2px solid #e8ecf4;}' +
+    '.logo-box{width:52px;height:52px;background:#1a3c6e;border-radius:10px;display:flex;align-items:center;justify-content:center;color:white;font-size:22px;font-weight:900;letter-spacing:-1px;float:left;margin-right:14px;}' +
+    '.brand-name{font-size:22px;font-weight:900;color:#1a3c6e;letter-spacing:-0.5px;line-height:1.2;}' +
+    '.brand-sub{font-size:9px;color:#9baac5;text-transform:uppercase;letter-spacing:1.5px;margin-top:3px;}' +
+    '.oc-badge{background:#1a3c6e;color:white;border-radius:10px;padding:12px 20px;text-align:right;min-width:180px;}' +
+    '.oc-title{font-size:8.5px;text-transform:uppercase;letter-spacing:2px;color:#a8c0e8;font-weight:700;}' +
+    '.oc-num{font-size:22px;font-weight:900;letter-spacing:-0.5px;margin-top:2px;}' +
+    '.oc-date{font-size:9px;color:#a8c0e8;margin-top:3px;}' +
+    /* Info band */
+    '.info-band{background:#f0f4fb;border:1px solid #ccd6ed;border-radius:8px;padding:10px 18px;display:flex;gap:36px;margin-bottom:18px;}' +
+    '.info-item{display:flex;flex-direction:column;gap:2px;}' +
+    '.info-lbl{font-size:8px;text-transform:uppercase;letter-spacing:1.2px;color:#8899bb;font-weight:700;}' +
+    '.info-val{font-size:11px;font-weight:800;color:#1a3c6e;}' +
+    /* Proveedor box */
+    '.prov-box{border:1px solid #ccd6ed;border-radius:8px;overflow:hidden;margin-bottom:18px;max-width:420px;}' +
+    '.prov-hdr{background:#1a3c6e;color:white;font-weight:700;font-size:9px;padding:7px 14px;text-transform:uppercase;letter-spacing:1.2px;}' +
+    '.prov-body{padding:12px 14px;background:#fafbfd;}' +
+    '.prov-name{font-weight:800;font-size:13px;color:#1a3c6e;margin-bottom:4px;}' +
+    '.prov-tel{font-size:10.5px;color:#555;}' +
+    /* Products */
+    '.prod-hdr{background:#1a3c6e;color:white;padding:9px 14px;font-weight:700;font-size:9px;text-transform:uppercase;letter-spacing:1.2px;border-radius:6px 6px 0 0;}' +
+    'table.pt{width:100%;border-collapse:collapse;border:1px solid #dde3ee;}' +
+    'table.pt th{background:#e6ebf5;color:#1a3c6e;border:1px solid #dde3ee;padding:9px 10px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;}' +
+    /* Totals - aligned right */
+    '.totals-wrap{display:flex;justify-content:flex-end;margin-top:12px;}' +
+    'table.tt{border-collapse:collapse;width:230px;border:1px solid #dde3ee;border-radius:6px;overflow:hidden;}' +
+    'table.tt td{border:1px solid #dde3ee;padding:7px 14px;font-size:11px;}' +
+    '.ttlbl{text-align:right;font-weight:700;background:#f0f4fb;color:#555;text-transform:uppercase;font-size:9px;letter-spacing:.5px;}' +
+    '.tval{text-align:right;color:#1a1a2e;font-weight:600;}' +
+    '.grand td{background:#1a3c6e!important;color:white!important;font-weight:900;font-size:12px;}' +
+    /* Observaciones - only section at bottom */
+    '.obs-box{border:1px solid #dde3ee;margin-top:18px;border-radius:6px;overflow:hidden;}' +
+    '.obs-hdr{background:#f0f4fb;color:#1a3c6e;padding:7px 14px;font-weight:800;font-size:9px;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #dde3ee;}' +
+    '.obs-body{padding:14px;min-height:50px;font-size:11px;line-height:1.7;color:#444;}' +
     /* Footer */
-    '.footer{margin-top:16px;padding-top:10px;border-top:1px solid #e8ecf4;display:flex;justify-content:space-between;align-items:center;}' +
-    '.footer-left{font-size:8.5px;color:#aaa;}' +
-    '.footer-right{font-size:8.5px;color:#aaa;text-align:right;}' +
-    '.accent{color:#1a3c6e;font-weight:700;}' +
+    '.footer{margin-top:18px;padding-top:10px;border-top:1px solid #e8ecf4;display:flex;justify-content:space-between;align-items:center;}' +
+    '.footer-l{font-size:8.5px;color:#bbb;}' +
+    '.footer-r{font-size:8.5px;color:#bbb;text-align:right;}' +
     '</style></head><body><div class="page">' +
 
     '<div class="top-band"></div>' +
 
     /* Header */
     '<div class="hdr">' +
-    '<div class="brand">' +
-    '<div class="logo-box">R</div>' +
-    '<div>' +
-    '<div class="brand-name">Rocoto Restaurantes</div>' +
-    '<div class="brand-sub">Sistema de Compras &bull; ' + sedeDir + '</div>' +
-    '</div>' +
-    '</div>' +
-    '<div class="oc-badge">' +
-    '<div class="oc-title">Orden de Compra</div>' +
-    '<div class="oc-num">OC-' + numeroOrden + '</div>' +
-    '<div class="oc-date">' + fecha + '</div>' +
-    '</div>' +
-    '</div>' +
-
-    /* Status band */
-    '<div class="status-band">' +
-    '<div class="status-item"><span class="status-lbl">N&deg; Orden</span><span class="status-val">OC-' + numeroOrden + '</span></div>' +
-    '<div class="status-item"><span class="status-lbl">Sede</span><span class="status-val">' + sedeName + '</span></div>' +
-    '<div class="status-item"><span class="status-lbl">Horario entrega</span><span class="status-val">' + sedeHora + '</span></div>' +
-    '<div class="status-item"><span class="status-lbl">Responsable</span><span class="status-val">' + responsable + '</span></div>' +
-    '<div class="status-item"><span class="status-lbl">Total items</span><span class="status-val">' + activeLineas.length + ' art&iacute;culo(s)</span></div>' +
+      '<div style="display:flex;align-items:center;">' +
+        '<div class="logo-box">R</div>' +
+        '<div>' +
+          '<div class="brand-name">Rocoto Restaurantes</div>' +
+          '<div class="brand-sub">Sistema de Compras</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="oc-badge">' +
+        '<div class="oc-title">Orden de Compra</div>' +
+        '<div class="oc-num">OC-' + numeroOrden + '</div>' +
+        '<div class="oc-date">' + fecha + '</div>' +
+      '</div>' +
     '</div>' +
 
-    /* Parties */
-    '<div class="parties">' +
-    '<div class="pbox">' +
-    '<div class="pbox-hdr">&#128666; Proveedor / Vendedor</div>' +
-    '<div class="pbox-body">' +
-    '<div class="pbox-name">' + provName + '</div>' +
-    'Asesor: ' + provAsesor + '<br/>' +
-    'Tel: ' + provTel + '<br/>' +
-    'Email: ' + provEmail +
+    /* Info band: N° Orden, Sede, Dirección, Horario */
+    '<div class="info-band">' +
+      '<div class="info-item"><span class="info-lbl">N&deg; Orden</span><span class="info-val">OC-' + numeroOrden + '</span></div>' +
+      '<div class="info-item"><span class="info-lbl">Sede</span><span class="info-val">' + sedeName + '</span></div>' +
+      '<div class="info-item"><span class="info-lbl">Direcci&oacute;n</span><span class="info-val">' + sedeDir + '</span></div>' +
+      '<div class="info-item"><span class="info-lbl">Horario de entrega</span><span class="info-val">' + sedeHora + '</span></div>' +
     '</div>' +
-    '</div>' +
-    '<div class="pbox">' +
-    '<div class="pbox-hdr">&#127968; Cliente / Comprador</div>' +
-    '<div class="pbox-body">' +
-    '<div class="pbox-name">Rocoto Restaurantes</div>' +
-    'Sede: ' + sedeName + '<br/>' +
-    'Dir: ' + sedeDir + '<br/>' +
-    'Horario: ' + sedeHora + '<br/>' +
-    'Resp: ' + responsable +
-    '</div>' +
-    '</div>' +
+
+    /* Proveedor box - only name and phone */
+    '<div class="prov-box">' +
+      '<div class="prov-hdr">&#128666; Proveedor</div>' +
+      '<div class="prov-body">' +
+        '<div class="prov-name">' + provName + '</div>' +
+        '<div class="prov-tel">Tel: ' + provTel + '</div>' +
+      '</div>' +
     '</div>' +
 
     /* Products */
-    '<div class="sec-hdr">&#128230; Productos / Servicios Solicitados</div>' +
+    '<div class="prod-hdr">&#128230; Art&iacute;culos Solicitados</div>' +
     '<table class="pt"><thead><tr>' +
-    '<th style="width:5%;text-align:center;">N.</th>' +
-    '<th style="width:52%;text-align:left;">Descripci&oacute;n del Art&iacute;culo</th>' +
-    '<th style="width:13%;text-align:center;">Cantidad</th>' +
-    '<th style="width:15%;text-align:right;">Precio Unit.</th>' +
-    '<th style="width:15%;text-align:right;">Total</th>' +
+      '<th style="width:5%;text-align:center;">N.</th>' +
+      '<th style="width:55%;text-align:left;">Descripci&oacute;n</th>' +
+      '<th style="width:12%;text-align:center;">Cantidad</th>' +
+      '<th style="width:14%;text-align:right;">Precio Unit.</th>' +
+      '<th style="width:14%;text-align:right;">Total</th>' +
     '</tr></thead><tbody>' +
     itemRowsArr.join('') +
     emptyRowsArr.join('') +
     '</tbody></table>' +
 
-    /* Totals */
-    '<div class="totals-row"><table class="tt">' +
-    '<tr><td class="ttlbl">Subtotal</td><td class="tval">A convenir</td></tr>' +
-    '<tr><td class="ttlbl">IVA</td><td class="tval">Incluido</td></tr>' +
-    '<tr><td class="ttlbl">Env&iacute;o</td><td class="tval">Incluido</td></tr>' +
-    '<tr class="grand"><td class="ttlbl">TOTAL</td><td class="tval">Seg&uacute;n factura</td></tr>' +
+    /* Totals - right aligned */
+    '<div class="totals-wrap"><table class="tt">' +
+      '<tr><td class="ttlbl">Subtotal</td><td class="tval">A convenir</td></tr>' +
+      '<tr><td class="ttlbl">Total factura</td><td class="tval">Seg&uacute;n factura</td></tr>' +
     '</table></div>' +
 
-    /* Comments */
-    '<div class="cmts">' +
-    '<div class="cmts-hdr">&#128221; Comentarios e Instrucciones Especiales</div>' +
-    '<div class="cmts-body">' + (notas || 'Sin comentarios adicionales.') + '<br/>' +
-    '<span style="color:#888;font-size:9px;">Solicitado por: <strong>' + responsable + '</strong> &bull; Sede: <strong>' + sedeName + '</strong> &bull; Horario recepci&oacute;n: <strong>' + sedeHora + '</strong></span>' +
-    '</div>' +
-    '</div>' +
-
-    /* Signatures */
-    '<div class="sigs">' +
-    '<div class="sig-box"><div class="sig-lbl">Elaborado por</div><div class="sig-sub">' + responsable + '</div></div>' +
-    '<div class="sig-box"><div class="sig-lbl">Aprobado por</div><div class="sig-sub">Gerencia</div></div>' +
-    '<div class="sig-box"><div class="sig-lbl">Recibido por</div><div class="sig-sub">Proveedor</div></div>' +
+    /* Observaciones - única sección inferior */
+    '<div class="obs-box">' +
+      '<div class="obs-hdr">&#128221; Observaciones</div>' +
+      '<div class="obs-body">' + (notas || '&nbsp;') + '</div>' +
     '</div>' +
 
     /* Footer */
     '<div class="footer">' +
-    '<div class="footer-left">Rocoto Restaurantes &bull; comprasrocoto@gmail.com &bull; Tel: (604) 987 6543</div>' +
-    '<div class="footer-right"><span class="accent">OC-' + numeroOrden + '</span> &bull; Generado el ' + fecha + ' &bull; P&aacute;g. 1</div>' +
+      '<div class="footer-l">Rocoto Restaurantes &bull; comprasrocoto@gmail.com</div>' +
+      '<div class="footer-r">OC-' + numeroOrden + ' &bull; P&aacute;g. 1</div>' +
     '</div>' +
 
     '</div></body></html>';
 
   var provSlug = provName.replace(/[^A-Za-z0-9]/g, '_').substring(0, 20);
   var opt = {
-    margin: [6, 6, 6, 6],
+    margin: [8, 8, 8, 8],
     filename: 'OC-' + numeroOrden + '_' + provSlug + '_' + fechaHoy + '.pdf',
     image: { type: 'jpeg', quality: 0.97 },
     html2canvas: {
@@ -256,12 +219,19 @@ function generarPDF(params: {
     jsPDF: { unit: 'mm', format: 'letter', orientation: 'portrait' }
   };
 
-  html2pdf().set(opt).from(html).save();
+  // Generate in a hidden off-screen element to avoid blank page crash
+  var container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:816px;z-index:-1;pointer-events:none;';
+  container.innerHTML = html;
+  document.body.appendChild(container);
+  html2pdf().set(opt).from(container).save().finally(function() {
+    document.body.removeChild(container);
+  });
 }
 
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 // BuscadorPedidos - Panel de búsqueda integrado
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 interface ArticuloBuscado {
   articulo: string;
   subArticulo: string;
@@ -300,18 +270,18 @@ function BuscadorPedidos() {
         if (p.lineas.length === 0) { setErrorBusq('Pedido encontrado pero sin articulos.'); return; }
         var fechaStr = String(p.fecha || '').split('GMT')[0].trim() || '—';
         setPedido({
-          nOrden:      String(p.nOrden || busquedaId),
-          fecha:       fechaStr,
-          sede:        String(p.sede || '—'),
-          proveedor:   String(p.proveedor || '—'),
+          nOrden: String(p.nOrden || busquedaId),
+          fecha: fechaStr,
+          sede: String(p.sede || '—'),
+          proveedor: String(p.proveedor || '—'),
           responsable: String(p.responsable || '—'),
-          articulos:   p.lineas.map(function(l) {
+          articulos: p.lineas.map(function(l) {
             return {
-              codigo:     String(l.codigo || ''),
-              articulo:   String(l.insumo || l.articulo || ''),
-              subArticulo:String(l.subArticulo || ''),
-              cantidad:   String(l.cantidad || ''),
-              unidad:     String(l.unidad || ''),
+              codigo: String(l.codigo || ''),
+              articulo: String(l.insumo || l.articulo || ''),
+              subArticulo: String(l.subArticulo || ''),
+              cantidad: String(l.cantidad || ''),
+              unidad: String(l.unidad || ''),
             };
           }),
         });
@@ -320,18 +290,18 @@ function BuscadorPedidos() {
         if (rows2.length === 0) { setErrorBusq('No se encontraron registros para ese ID.'); return; }
         var first2 = rows2[0];
         setPedido({
-          nOrden:      String(first2[0] || busquedaId),
-          fecha:       String(first2[1] || '—'),
-          sede:        String(first2[2] || '—'),
-          proveedor:   String(first2[3] || '—'),
+          nOrden: String(first2[0] || busquedaId),
+          fecha: String(first2[1] || '—'),
+          sede: String(first2[2] || '—'),
+          proveedor: String(first2[3] || '—'),
           responsable: String(first2[9] || '—'),
-          articulos:   rows2.map(function(r2) {
+          articulos: rows2.map(function(r2) {
             return {
-              codigo:     String(r2[4] || ''),
-              articulo:   String(r2[5] || ''),
-              subArticulo:String(r2[6] || ''),
-              cantidad:   String(r2[7] || ''),
-              unidad:     String(r2[8] || ''),
+              codigo: String(r2[4] || ''),
+              articulo: String(r2[5] || ''),
+              subArticulo: String(r2[6] || ''),
+              cantidad: String(r2[7] || ''),
+              unidad: String(r2[8] || ''),
             };
           }),
         });
@@ -452,7 +422,6 @@ function BuscadorPedidos() {
                 })}
               </div>
             </div>
-
             <div className="text-xs font-bold uppercase tracking-wider" style={{color:'#1a3c6e'}}>
               {pedido.articulos.length} Artículo(s) en este pedido
             </div>
@@ -495,18 +464,19 @@ function BuscadorPedidos() {
     </div>
   );
 }
-// ─────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
 // SheetsOrderForm - Componente principal
-// ─────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
 export default function SheetsOrderForm() {
-  const [proveedores, setProveedores] = useState<ProveedorSheet[]>([]);
-  const [sedes, setSedes] = useState<SedeSheet[]>([]);
-  const [sheetNames, setSheetNames] = useState<string[]>([]);
-  const [productos, setProductos] = useState<ProductoSheet[]>([]);
+  const [proveedores, setProveedores] = useState([]);
+  const [sedes, setSedes] = useState([]);
+  const [sheetNames, setSheetNames] = useState([]);
+  const [productos, setProductos] = useState([]);
 
   const [loading, setLoading] = useState(true);
   const [loadingProductos, setLoadingProductos] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -516,9 +486,11 @@ export default function SheetsOrderForm() {
   const [responsable, setResponsable] = useState(() => localStorage.getItem('pedido_responsable') || '');
   const [correoResponsable, setCorreoResponsable] = useState(() => localStorage.getItem('pedido_correo') || '');
   const [notas, setNotas] = useState('');
-  const [cantidades, setCantidades] = useState<Record<string, number>>({});
+  const [cantidades, setCantidades] = useState({});
 
+  // ── Carga inicial con caché en módulo (fetchAllDatos ya cachea 5 min) ──
   useEffect(() => {
+    let cancelled = false;
     async function load() {
       try {
         setLoading(true);
@@ -527,49 +499,62 @@ export default function SheetsOrderForm() {
           getSedes(),
           getProveedorSheetNames(),
         ]);
+        if (cancelled) return;
         setProveedores(provs);
         setSedes(sds);
         setSheetNames(names);
         setError(null);
-      } catch (e: any) {
-        setError('No se pudo conectar con Google Sheets. ' + e.message);
+      } catch (e) {
+        if (!cancelled) setError('No se pudo conectar con Google Sheets. ' + e.message);
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
     load();
+    return () => { cancelled = true; };
   }, []);
 
+  // ── Carga productos del proveedor seleccionado ──
   useEffect(() => {
-    if (!selectedProveedorSheet) {
-      setProductos([]);
-      setCantidades({});
-      return;
-    }
+    if (!selectedProveedorSheet) { setProductos([]); setCantidades({}); return; }
+    let cancelled = false;
     setLoadingProductos(true);
     getProductosByProveedor(selectedProveedorSheet)
       .then(prods => {
-        setProductos(prods);
+        if (cancelled) return;
+        // Filtrar filas que no son artículos reales (cabeceras, totales)
+        var filtered = prods.filter(function(p) {
+          var art = (p.articulo || '').toLowerCase().trim();
+          var cod = (p.codigo || '').toLowerCase().trim();
+          if (!art && !cod) return false;
+          if (art === 'articulo' || art === 'artículo') return false;
+          if (art === 'proveedor') return false;
+          if (art === 'general total' || art === 'total' || art === 'totales') return false;
+          if (cod === 'cód. barras' || cod === 'codigo' || cod === 'cod. barras') return false;
+          return true;
+        });
+        setProductos(filtered);
         setCantidades({});
         setSearchTerm('');
       })
       .catch(e => setError('Error al cargar productos: ' + e.message))
-      .finally(() => setLoadingProductos(false));
+      .finally(() => { if (!cancelled) setLoadingProductos(false); });
+    return () => { cancelled = true; };
   }, [selectedProveedorSheet]);
 
-  const handleCantidad = (codigo: string, val: number) => {
+  const handleCantidad = (codigo, val) => {
     setCantidades(prev => ({ ...prev, [codigo]: Math.max(0, val) }));
   };
 
-  const lineasSeleccionadas: LineItem[] = productos
+  const lineasSeleccionadas = productos
     .filter(p => (cantidades[p.codigo] || 0) > 0)
     .map(p => ({ codigo: p.codigo, articulo: p.articulo, subArticulo: p.subArticulo, cantidad: cantidades[p.codigo] }));
 
   const productosFiltrados = productos.filter(p =>
     !searchTerm ||
-    p.articulo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.codigo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.subArticulo.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.articulo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.codigo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (p.subArticulo || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const sedeSeleccionada = sedes.find(s => s.nombre === selectedSede) || null;
@@ -583,6 +568,13 @@ export default function SheetsOrderForm() {
 
     setSaving(true);
     setError(null);
+    setSuccess(false);
+    // Snapshot de datos antes de limpiar
+    var lineasSnap = lineasSeleccionadas.slice();
+    var notasSnap = notas;
+    var sedeSeleccionadaSnap = sedeSeleccionada;
+    var proveedorSeleccionadoSnap = proveedorSeleccionado;
+
     try {
       localStorage.setItem('pedido_responsable', responsable);
       localStorage.setItem('pedido_correo', correoResponsable);
@@ -596,7 +588,7 @@ export default function SheetsOrderForm() {
       }
 
       const fechaHoy = new Date().toISOString().split('T')[0];
-      for (const linea of lineasSeleccionadas) {
+      for (const linea of lineasSnap) {
         try {
           await appendPedido({
             fecha: fechaHoy,
@@ -609,23 +601,22 @@ export default function SheetsOrderForm() {
             unidad: '',
             responsable: responsable || '',
             correoResponsable: correoResponsable || '',
-            notas: notas || '',
+            notas: notasSnap || '',
             numeroOrden: String(numeroOrden),
           });
         } catch (errLinea) {
           console.error('[Sheets] Error guardando linea:', errLinea);
         }
       }
-      console.log('[Drive] Pedido guardado:', lineasSeleccionadas.length, 'items');
 
       try {
-        await (dbService as any).savePedido?.({
+        await (dbService).savePedido?.({
           numeroOrden,
           fecha: new Date().toISOString(),
           sede: selectedSede,
           proveedor: selectedProveedorSheet,
-          productos: lineasSeleccionadas,
-          notas,
+          productos: lineasSnap,
+          notas: notasSnap,
           responsable,
           correoResponsable,
         });
@@ -633,23 +624,26 @@ export default function SheetsOrderForm() {
         console.warn('[Firebase] savePedido failed (non-critical):', eFb);
       }
 
+      // Mostrar éxito SIN recargar ni navegar - solo limpiar cantidades y notas
       setSuccess(true);
       setCantidades({});
       setNotas('');
-      setTimeout(() => setSuccess(false), 5000);
+      setTimeout(() => setSuccess(false), 6000);
 
+      // Generar PDF después de actualizar estado (fuera del ciclo de render)
       const pdfParams = {
-        sede: sedeSeleccionada,
-        proveedor: proveedorSeleccionado,
+        sede: sedeSeleccionadaSnap,
+        proveedor: proveedorSeleccionadoSnap,
         proveedorSheetName: selectedProveedorSheet,
-        lineas: lineasSeleccionadas,
-        notas,
+        lineas: lineasSnap,
+        notas: notasSnap,
         responsable,
         correoResponsable,
         numeroOrden,
       };
-      setTimeout(() => { generarPDF(pdfParams); }, 400);
-    } catch (e: any) {
+      setTimeout(() => { generarPDF(pdfParams); }, 500);
+
+    } catch (e) {
       console.error('[handleGuardar] error:', e);
       setError('Error al guardar pedido: ' + e.message);
     } finally {
@@ -682,13 +676,13 @@ export default function SheetsOrderForm() {
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
       {error && (
         <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-sm">Error de conexion</p>
+            <p className="font-semibold text-sm">Error de conexión</p>
             <p className="text-xs mt-0.5">{error}</p>
             <button onClick={() => setError(null)} className="text-xs underline mt-1">Cerrar</button>
           </div>
@@ -697,36 +691,38 @@ export default function SheetsOrderForm() {
 
       {success && (
         <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700">
-          <CheckCircle className="w-5 h-5" />
-          <p className="text-sm font-semibold">Pedido guardado exitosamente. El PDF se esta descargando.</p>
+          <CheckCircle className="w-5 h-5 flex-shrink-0" />
+          <div>
+            <p className="font-semibold text-sm">¡Pedido guardado exitosamente!</p>
+            <p className="text-xs mt-0.5">El PDF se está descargando. Puedes continuar creando otro pedido.</p>
+          </div>
         </div>
       )}
 
-      {/* Step 1 */}
+      {/* Step 1: Información del pedido */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <User className="w-4 h-4 text-brand-500" />
-          1. Informacion del Pedido
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <User className="w-4 h-4 text-cyan-500" />
+          1. Información del Pedido
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Sede *</label>
             <select
               value={selectedSede}
               onChange={e => setSelectedSede(e.target.value)}
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 transition-all"
             >
               <option value="">Seleccionar sede...</option>
               {sedes.map(s => <option key={s.nombre} value={s.nombre}>{s.nombre}</option>)}
             </select>
+            {sedeSeleccionada && (sedeSeleccionada.direccion || sedeSeleccionada.horaEntrega) && (
+              <div className="mt-2 text-xs text-slate-500 space-y-0.5 pl-1">
+                {sedeSeleccionada.direccion && <p>{sedeSeleccionada.direccion}</p>}
+                {sedeSeleccionada.horaEntrega && <p className="text-cyan-600 font-medium">Horario: {sedeSeleccionada.horaEntrega}</p>}
+              </div>
+            )}
           </div>
-          {sedeSeleccionada && (
-            <div className="col-span-1 bg-slate-50 rounded-lg p-3 text-xs space-y-0.5">
-              <p className="font-bold text-slate-600">{sedeSeleccionada.direccion}</p>
-              {sedeSeleccionada.telefono && <p className="text-slate-500">Tel: {sedeSeleccionada.telefono}</p>}
-              {sedeSeleccionada.horaEntrega && <p className="text-slate-500">Horario: {sedeSeleccionada.horaEntrega}</p>}
-            </div>
-          )}
           <div>
             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">Responsable *</label>
             <input
@@ -734,7 +730,7 @@ export default function SheetsOrderForm() {
               value={responsable}
               onChange={e => setResponsable(e.target.value)}
               placeholder="Tu nombre completo"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 transition-all"
             />
           </div>
           <div>
@@ -744,49 +740,49 @@ export default function SheetsOrderForm() {
               value={correoResponsable}
               onChange={e => setCorreoResponsable(e.target.value)}
               placeholder="correo@empresa.com"
-              className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 transition-all"
             />
           </div>
         </div>
       </div>
 
-      {/* Step 2 */}
+      {/* Step 2: Proveedor */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Truck className="w-4 h-4 text-brand-500" />
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Truck className="w-4 h-4 text-cyan-500" />
           2. Seleccionar Proveedor ({sheetNames.length} disponibles)
         </h2>
         <select
           value={selectedProveedorSheet}
           onChange={e => setSelectedProveedorSheet(e.target.value)}
-          className="w-full md:w-96 px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+          className="w-full md:w-80 px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 transition-all"
         >
           <option value="">Seleccionar proveedor...</option>
           {sheetNames.map(name => <option key={name} value={name}>{name}</option>)}
         </select>
         {proveedorSeleccionado && (
-          <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="mt-3 flex flex-wrap gap-3">
             {proveedorSeleccionado.telefono && (
-              <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                <p className="text-slate-400 font-bold uppercase mb-0.5">Telefono</p>
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs border border-slate-100">
+                <p className="text-slate-400 font-bold uppercase text-[9px] mb-0.5">Teléfono</p>
                 <p className="text-slate-700 font-medium">{proveedorSeleccionado.telefono}</p>
               </div>
             )}
             {proveedorSeleccionado.correo && (
-              <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                <p className="text-slate-400 font-bold uppercase mb-0.5">Correo</p>
-                <p className="text-slate-700 font-medium truncate">{proveedorSeleccionado.correo}</p>
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs border border-slate-100">
+                <p className="text-slate-400 font-bold uppercase text-[9px] mb-0.5">Correo</p>
+                <p className="text-slate-700 font-medium truncate max-w-48">{proveedorSeleccionado.correo}</p>
               </div>
             )}
             {proveedorSeleccionado.asesor && (
-              <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                <p className="text-slate-400 font-bold uppercase mb-0.5">Asesor</p>
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs border border-slate-100">
+                <p className="text-slate-400 font-bold uppercase text-[9px] mb-0.5">Asesor</p>
                 <p className="text-slate-700 font-medium">{proveedorSeleccionado.asesor}</p>
               </div>
             )}
             {proveedorSeleccionado.medioPago && (
-              <div className="bg-slate-50 rounded-lg p-3 text-xs">
-                <p className="text-slate-400 font-bold uppercase mb-0.5">Medio de Pago</p>
+              <div className="bg-slate-50 rounded-lg px-3 py-2 text-xs border border-slate-100">
+                <p className="text-slate-400 font-bold uppercase text-[9px] mb-0.5">Medio de Pago</p>
                 <p className="text-slate-700 font-medium">{proveedorSeleccionado.medioPago}</p>
               </div>
             )}
@@ -794,15 +790,21 @@ export default function SheetsOrderForm() {
         )}
       </div>
 
-      {/* Step 3: Products */}
+      {/* Step 3: Productos - solo artículos, sin nombre proveedor ni total en la tabla */}
       {selectedProveedorSheet && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-            <ShoppingCart className="w-4 h-4 text-brand-500" />
-            3. Productos - {selectedProveedorSheet}
-            {loadingProductos && <RefreshCw className="w-3 h-3 animate-spin text-slate-400 ml-2" />}
-            <span className="ml-auto text-xs font-normal text-slate-400 normal-case">{lineasSeleccionadas.length} item(s) seleccionado(s)</span>
-          </h2>
+          <div className="flex items-center gap-2 mb-4">
+            <ShoppingCart className="w-4 h-4 text-cyan-500" />
+            <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex-1">
+              3. Productos
+              {loadingProductos && <RefreshCw className="w-3 h-3 animate-spin text-slate-400 inline ml-2" />}
+            </h2>
+            {lineasSeleccionadas.length > 0 && (
+              <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
+                {lineasSeleccionadas.length} seleccionado(s)
+              </span>
+            )}
+          </div>
 
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
@@ -810,8 +812,8 @@ export default function SheetsOrderForm() {
               type="text"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Buscar articulo por nombre o codigo..."
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              placeholder="Buscar artículo por nombre o código..."
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 transition-all"
             />
           </div>
 
@@ -825,10 +827,10 @@ export default function SheetsOrderForm() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-900 text-white">
-                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Codigo</th>
-                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Articulo</th>
-                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">SubArticulo</th>
-                    <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-32">Cantidad</th>
+                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Código</th>
+                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Artículo</th>
+                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold hidden md:table-cell">Sub-Artículo</th>
+                    <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-36">Cantidad</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -839,14 +841,14 @@ export default function SheetsOrderForm() {
                         key={p.codigo || idx}
                         className={'border-b border-slate-100 transition-colors ' + (qty > 0 ? 'bg-emerald-50' : idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/50')}
                       >
-                        <td className="py-2.5 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
-                        <td className="py-2.5 px-4 font-medium text-slate-800">{p.articulo}</td>
-                        <td className="py-2.5 px-4 text-slate-500 hidden md:table-cell text-xs">{p.subArticulo}</td>
-                        <td className="py-2.5 px-4">
+                        <td className="py-3 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
+                        <td className="py-3 px-4 font-medium text-slate-800">{p.articulo}</td>
+                        <td className="py-3 px-4 text-slate-500 hidden md:table-cell text-xs">{p.subArticulo}</td>
+                        <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
                             <button
                               onClick={() => handleCantidad(p.codigo, qty - 1)}
-                              className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold transition-colors flex items-center justify-center text-slate-600"
+                              className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold transition-colors flex items-center justify-center text-slate-600 text-base"
                             >-</button>
                             <input
                               type="number"
@@ -854,11 +856,11 @@ export default function SheetsOrderForm() {
                               value={qty || ''}
                               onChange={e => handleCantidad(p.codigo, parseInt(e.target.value) || 0)}
                               placeholder="0"
-                              className="w-14 text-center py-1 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-brand-500 transition-all"
+                              className="w-14 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500 transition-all"
                             />
                             <button
                               onClick={() => handleCantidad(p.codigo, qty + 1)}
-                              className="w-7 h-7 rounded-lg bg-brand-500 hover:bg-brand-600 font-bold text-white transition-colors flex items-center justify-center"
+                              className="w-7 h-7 rounded-lg bg-cyan-500 hover:bg-cyan-600 font-bold text-white transition-colors flex items-center justify-center text-base"
                             >+</button>
                           </div>
                         </td>
@@ -866,19 +868,42 @@ export default function SheetsOrderForm() {
                     );
                   })}
                   {productosFiltrados.length === 0 && (
-                    <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">No se encontraron productos{searchTerm ? ' para "' + searchTerm + '"' : ''}.</td></tr>
+                    <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">
+                      No se encontraron productos{searchTerm ? ' para "' + searchTerm + '"' : ''}.
+                    </td></tr>
                   )}
                 </tbody>
               </table>
             </div>
           )}
+
+          {/* Total del pedido - fuera de la tabla, bien alineado */}
+          {lineasSeleccionadas.length > 0 && (
+            <div className="mt-4 flex justify-end">
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 min-w-52">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Resumen del Pedido</p>
+                <div className="space-y-1 mb-3">
+                  {lineasSeleccionadas.map(l => (
+                    <div key={l.codigo} className="flex justify-between text-xs text-slate-700">
+                      <span className="truncate max-w-36">{l.articulo}</span>
+                      <span className="font-bold ml-2 text-cyan-700">× {l.cantidad}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-slate-200 pt-2 flex justify-between text-xs font-bold text-slate-800">
+                  <span>Total artículos</span>
+                  <span className="text-cyan-600">{lineasSeleccionadas.reduce((s, l) => s + l.cantidad, 0)}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Step 4: Notes + Actions */}
+      {/* Step 4: Observaciones y botones */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <Building2 className="w-4 h-4 text-brand-500" />
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-cyan-500" />
           4. Observaciones y Registro
         </h2>
         <textarea
@@ -886,23 +911,8 @@ export default function SheetsOrderForm() {
           onChange={e => setNotas(e.target.value)}
           placeholder="Instrucciones especiales, horario de entrega, observaciones..."
           rows={3}
-          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all resize-none mb-4"
+          className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/20 focus:border-cyan-500 transition-all resize-none mb-4"
         />
-
-        {lineasSeleccionadas.length > 0 && (
-          <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-            <p className="text-xs font-bold text-emerald-700 uppercase mb-1.5">Resumen del Pedido</p>
-            <div className="space-y-0.5">
-              {lineasSeleccionadas.map(l => (
-                <div key={l.codigo} className="flex justify-between text-xs text-emerald-800">
-                  <span>{l.articulo}</span>
-                  <span className="font-bold">x{l.cantidad}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         <div className="flex flex-wrap gap-3">
           <button
             onClick={handleGuardar}
@@ -915,7 +925,7 @@ export default function SheetsOrderForm() {
           <button
             onClick={handleDescargarPDF}
             disabled={lineasSeleccionadas.length === 0}
-            className="flex items-center gap-2 px-6 py-2.5 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
+            className="flex items-center gap-2 px-6 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
           >
             <Download className="w-4 h-4" />
             Solo Descargar PDF
@@ -923,10 +933,10 @@ export default function SheetsOrderForm() {
         </div>
       </div>
 
-      {/* Step 5: Buscador de Pedidos */}
+      {/* Step 5: Buscador de pedidos */}
       <div>
-        <h2 className="text-sm font-bold text-slate-700 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <Search className="w-4 h-4 text-brand-500" />
+        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
+          <Search className="w-4 h-4 text-cyan-500" />
           5. Consultar Pedido Existente
         </h2>
         <BuscadorPedidos />
