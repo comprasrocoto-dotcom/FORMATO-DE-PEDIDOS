@@ -384,7 +384,8 @@ function BuscadorPedidos() {
             className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
             style={{background:'#1a3c6e', border:'none', cursor:'pointer', minWidth:'110px', justifyContent:'center'}}
           >
-            {buscando ? 'Buscando...' : (<><Search className="w-4 h-4" /> Buscar</>)}
+            <Search className="w-4 h-4" />
+            {buscando ? 'Buscando...' : 'Buscar'}
           </button>
         </div>
 
