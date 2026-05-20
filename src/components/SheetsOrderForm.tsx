@@ -522,15 +522,19 @@ export default function SheetsOrderForm() {
     getProductosByProveedor(selectedProveedorSheet)
       .then(prods => {
         if (cancelled) return;
-        // Filtrar filas que no son artículos reales (cabeceras, totales)
+        // Filtrar filas que no son artículos reales (cabeceras, totales, proveedor)
         var filtered = prods.filter(function(p) {
           var art = (p.articulo || '').toLowerCase().trim();
           var cod = (p.codigo || '').toLowerCase().trim();
           if (!art && !cod) return false;
+          // Eliminar fila "Proveedor" (cabecera de hoja de Sheets)
+          if (cod === 'proveedor') return false;
+          // Eliminar fila "Cód. Barras" / "Cod. Barras" (segunda cabecera)
+          if (cod.indexOf('barras') !== -1 || cod.indexOf('cód') !== -1 || cod === 'codigo') return false;
+          // Eliminar filas de Total (al final de la hoja)
+          if (cod.indexOf('total') !== -1 || art.indexOf('total') !== -1) return false;
+          // Eliminar si el artículo dice "Artículo" (encabezado de columna)
           if (art === 'articulo' || art === 'artículo') return false;
-          if (art === 'proveedor') return false;
-          if (art === 'general total' || art === 'total' || art === 'totales') return false;
-          if (cod === 'cód. barras' || cod === 'codigo' || cod === 'cod. barras') return false;
           return true;
         });
         setProductos(filtered);
