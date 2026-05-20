@@ -281,8 +281,8 @@ interface PedidoEncontrado {
 function BuscadorPedidos() {
   const [busquedaId, setBusquedaId] = useState('');
   const [buscando, setBuscando] = useState(false);
-  const [pedido, setPedido] = useState<PedidoEncontrado | null>(null);
-  const [errorBusq, setErrorBusq] = useState<string | null>(null);
+  const [pedido, setPedido] = useState(null);
+  const [errorBusq, setErrorBusq] = useState(null);
   const [exportando, setExportando] = useState(false);
 
   const buscarPedido = async () => {
@@ -295,25 +295,26 @@ function BuscadorPedidos() {
       const res = await fetch(url, { redirect: 'follow' });
       const data = await res.json();
       if (!data.ok) { setErrorBusq(data.error || 'Pedido no encontrado.'); return; }
-      const rows: any[] = data.rows || [];
+      const rows = data.rows || [];
       if (rows.length === 0) { setErrorBusq('No se encontraron registros para ese ID.'); return; }
       const first = rows[0];
-      const pedidoData: PedidoEncontrado = {
+      setPedido({
         nOrden:      String(first[0] || busquedaId),
         fecha:       String(first[1] || '—'),
         sede:        String(first[2] || '—'),
         proveedor:   String(first[3] || '—'),
         responsable: String(first[9] || '—'),
-        articulos:   rows.map((r: any[]) => ({
-          codigo:     String(r[4] || ''),
-          articulo:   String(r[5] || ''),
-          subArticulo:String(r[6] || ''),
-          cantidad:   String(r[7] || ''),
-          unidad:     String(r[8] || ''),
-        })),
-      };
-      setPedido(pedidoData);
-    } catch(e: any) {
+        articulos:   rows.map(function(r) {
+          return {
+            codigo:     String(r[4] || ''),
+            articulo:   String(r[5] || ''),
+            subArticulo:String(r[6] || ''),
+            cantidad:   String(r[7] || ''),
+            unidad:     String(r[8] || ''),
+          };
+        }),
+      });
+    } catch(e) {
       setErrorBusq('Error de red: ' + e.message);
     } finally {
       setBuscando(false);
@@ -324,30 +325,30 @@ function BuscadorPedidos() {
     if (!pedido) return;
     setExportando(true);
     try {
-      // Load XLSX if not present
-      if (typeof (window as any).XLSX === 'undefined') {
-        await new Promise<void>((resolve, reject) => {
-          const s = document.createElement('script');
+      if (typeof window.XLSX === 'undefined') {
+        await new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
           s.src = 'https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js';
-          s.onload = () => resolve();
-          s.onerror = () => reject(new Error('No se pudo cargar XLSX'));
+          s.onload = resolve;
+          s.onerror = function() { reject(new Error('No se pudo cargar XLSX')); };
           document.head.appendChild(s);
         });
       }
-      const XLSX = (window as any).XLSX;
-      const wsData = [
+      var XLSX = window.XLSX;
+      var wsData = [
         ['N° Orden', 'Fecha', 'Sede', 'Proveedor', 'Responsable'],
         [pedido.nOrden, pedido.fecha, pedido.sede, pedido.proveedor, pedido.responsable],
         [],
         ['Código', 'Artículo', 'Sub-Artículo', 'Cantidad', 'Unidad'],
-        ...pedido.articulos.map(a => [a.codigo, a.articulo, a.subArticulo, a.cantidad, a.unidad]),
-      ];
-      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ].concat(pedido.articulos.map(function(a) {
+        return [a.codigo, a.articulo, a.subArticulo, a.cantidad, a.unidad];
+      }));
+      var ws = XLSX.utils.aoa_to_sheet(wsData);
       ws['!cols'] = [{ wch: 14 }, { wch: 35 }, { wch: 28 }, { wch: 12 }, { wch: 12 }];
-      const wb = XLSX.utils.book_new();
+      var wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Pedido OC-' + pedido.nOrden);
-      XLSX.writeFile(wb, 'Pedido_OC-' + pedido.nOrden + '_' + pedido.proveedor.substring(0,15) + '.xlsx');
-    } catch(e: any) {
+      XLSX.writeFile(wb, 'Pedido_OC-' + pedido.nOrden + '.xlsx');
+    } catch(e) {
       alert('Error exportando Excel: ' + e.message);
     } finally {
       setExportando(false);
@@ -356,25 +357,23 @@ function BuscadorPedidos() {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      {/* Header */}
-      <div style={{background:'#1a3c6e', padding:'14px 20px', display:'flex', alignItems:'center', gap:'10px'}}>
-        <Search className="w-5 h-5" style={{color:'#a8c0e8'}} />
+      <div className="flex items-center gap-3 px-5 py-4" style={{background:'#1a3c6e'}}>
+        <Search className="w-5 h-5 text-blue-300" />
         <div>
-          <div style={{color:'white', fontWeight:700, fontSize:'14px'}}>Buscador de Pedidos</div>
-          <div style={{color:'#a8c0e8', fontSize:'11px'}}>Consulta cualquier orden de compra registrada</div>
+          <div className="text-white font-bold text-sm">Buscador de Pedidos</div>
+          <div className="text-blue-300 text-xs">Consulta cualquier orden de compra registrada</div>
         </div>
       </div>
 
-      <div className="p-5">
-        {/* Search input */}
-        <div className="flex gap-2 mb-4">
+      <div className="p-5 space-y-4">
+        <div className="flex gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             <input
               type="text"
               value={busquedaId}
-              onChange={e => setBusquedaId(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') buscarPedido(); }}
+              onChange={function(e) { setBusquedaId(e.target.value); }}
+              onKeyDown={function(e) { if (e.key === 'Enter') buscarPedido(); }}
               placeholder="Ingresa el ID del pedido (ej: 1779218515)"
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
             />
@@ -382,80 +381,81 @@ function BuscadorPedidos() {
           <button
             onClick={buscarPedido}
             disabled={buscando}
-            style={{background:'#1a3c6e', color:'white', border:'none', borderRadius:'12px', padding:'0 20px', fontWeight:600, fontSize:'14px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px', minWidth:'110px', justifyContent:'center'}}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+            style={{background:'#1a3c6e', border:'none', cursor:'pointer', minWidth:'110px', justifyContent:'center'}}
           >
-            {buscando ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
-            {buscando ? 'Buscando...' : 'Buscar'}
+            {buscando ? 'Buscando...' : (<><Search className="w-4 h-4" /> Buscar</>)}
           </button>
         </div>
 
-        {/* Error */}
         {errorBusq && (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm mb-4">
+          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             {errorBusq}
           </div>
         )}
 
-        {/* Results */}
         {pedido && (
-          <div>
-            {/* Order metadata */}
-            <div style={{background:'#eef2fa', border:'1px solid #c8d5ed', borderRadius:'10px', padding:'14px 16px', marginBottom:'14px'}}>
-              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:'10px'}}>
+          <div className="space-y-3">
+            <div className="rounded-xl p-4 space-y-3" style={{background:'#eef2fa', border:'1px solid #c8d5ed'}}>
+              <div className="flex items-start justify-between">
                 <div>
-                  <div style={{fontSize:'11px', color:'#7b8db0', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px'}}>Orden encontrada</div>
-                  <div style={{fontSize:'20px', fontWeight:900, color:'#1a3c6e', letterSpacing:'-0.5px'}}>OC-{pedido.nOrden}</div>
+                  <div className="text-xs font-bold uppercase tracking-wider" style={{color:'#7b8db0'}}>Orden encontrada</div>
+                  <div className="text-2xl font-black" style={{color:'#1a3c6e'}}>OC-{pedido.nOrden}</div>
                 </div>
                 <button
                   onClick={exportarExcel}
                   disabled={exportando}
-                  style={{background:'#1a7c3c', color:'white', border:'none', borderRadius:'10px', padding:'8px 16px', fontWeight:600, fontSize:'12px', cursor:'pointer', display:'flex', alignItems:'center', gap:'6px'}}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white transition-all disabled:opacity-50"
+                  style={{background:'#1a7c3c', border:'none', cursor:'pointer'}}
                 >
-                  {exportando ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                  <FileSpreadsheet className="w-4 h-4" />
                   {exportando ? 'Exportando...' : 'Descargar Excel'}
                 </button>
               </div>
-              <div style={{display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:'10px'}}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
                   {lbl:'Fecha', val: pedido.fecha},
                   {lbl:'Sede', val: pedido.sede},
                   {lbl:'Proveedor', val: pedido.proveedor},
                   {lbl:'Responsable', val: pedido.responsable},
-                ].map(item => (
-                  <div key={item.lbl}>
-                    <div style={{fontSize:'9px', color:'#7b8db0', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px'}}>{item.lbl}</div>
-                    <div style={{fontSize:'12px', fontWeight:700, color:'#1a3c6e', marginTop:'2px'}}>{item.val}</div>
-                  </div>
-                ))}
+                ].map(function(item) {
+                  return (
+                    <div key={item.lbl}>
+                      <div className="text-xs font-bold uppercase tracking-wider mb-0.5" style={{color:'#7b8db0'}}>{item.lbl}</div>
+                      <div className="text-sm font-bold" style={{color:'#1a3c6e'}}>{item.val}</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Articles table */}
-            <div style={{fontSize:'11px', fontWeight:700, color:'#1a3c6e', textTransform:'uppercase', letterSpacing:'0.5px', marginBottom:'8px'}}>
+            <div className="text-xs font-bold uppercase tracking-wider" style={{color:'#1a3c6e'}}>
               {pedido.articulos.length} Artículo(s) en este pedido
             </div>
-            <div style={{border:'1px solid #d0d7e3', borderRadius:'8px', overflow:'hidden'}}>
-              <table style={{width:'100%', borderCollapse:'collapse', fontSize:'12px'}}>
+            <div className="rounded-xl overflow-hidden border border-slate-200">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr style={{background:'#1a3c6e', color:'white'}}>
-                    <th style={{padding:'8px 10px', textAlign:'left', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', width:'12%'}}>Código</th>
-                    <th style={{padding:'8px 10px', textAlign:'left', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px'}}>Artículo</th>
-                    <th style={{padding:'8px 10px', textAlign:'left', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px'}}>Sub-Artículo</th>
-                    <th style={{padding:'8px 10px', textAlign:'center', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', width:'12%'}}>Cantidad</th>
-                    <th style={{padding:'8px 10px', textAlign:'center', fontSize:'10px', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.5px', width:'12%'}}>Unidad</th>
+                  <tr style={{background:'#1a3c6e'}}>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase tracking-wider w-28">Código</th>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase tracking-wider">Artículo</th>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase tracking-wider hidden md:table-cell">Sub-Artículo</th>
+                    <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase tracking-wider w-24">Cantidad</th>
+                    <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase tracking-wider w-24">Unidad</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {pedido.articulos.map((a, idx) => (
-                    <tr key={idx} style={{background: idx % 2 === 0 ? '#ffffff' : '#f5f7fb', borderBottom:'1px solid #e8ecf4'}}>
-                      <td style={{padding:'8px 10px', fontFamily:'monospace', fontSize:'11px', color:'#555'}}>{a.codigo}</td>
-                      <td style={{padding:'8px 10px', fontWeight:600, color:'#1a1a2e'}}>{a.articulo}</td>
-                      <td style={{padding:'8px 10px', color:'#888', fontSize:'11px'}}>{a.subArticulo}</td>
-                      <td style={{padding:'8px 10px', textAlign:'center', fontWeight:700, color:'#1a3c6e', fontSize:'13px'}}>{a.cantidad}</td>
-                      <td style={{padding:'8px 10px', textAlign:'center', color:'#555', fontSize:'11px'}}>{a.unidad}</td>
-                    </tr>
-                  ))}
+                  {pedido.articulos.map(function(a, idx) {
+                    return (
+                      <tr key={idx} className={'border-b border-slate-100 ' + (idx % 2 === 0 ? 'bg-white' : 'bg-slate-50')}>
+                        <td className="py-2 px-3 font-mono text-xs text-slate-500">{a.codigo}</td>
+                        <td className="py-2 px-3 font-medium text-slate-800">{a.articulo}</td>
+                        <td className="py-2 px-3 text-slate-500 text-xs hidden md:table-cell">{a.subArticulo}</td>
+                        <td className="py-2 px-3 text-center font-bold text-blue-800">{a.cantidad}</td>
+                        <td className="py-2 px-3 text-center text-slate-500 text-xs">{a.unidad}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -463,16 +463,15 @@ function BuscadorPedidos() {
         )}
 
         {!pedido && !errorBusq && !buscando && (
-          <div style={{textAlign:'center', padding:'24px 0', color:'#aaa', fontSize:'13px'}}>
-            <Search style={{width:'32px', height:'32px', margin:'0 auto 8px', color:'#d0d7e3'}} />
-            <div>Ingresa un ID de pedido para consultar su información</div>
+          <div className="text-center py-6 text-slate-400">
+            <Search className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+            <div className="text-sm">Ingresa un ID de pedido para consultar su información</div>
           </div>
         )}
       </div>
     </div>
   );
 }
-
 // ─────────────────────────────────────────────
 // SheetsOrderForm - Componente principal
 // ─────────────────────────────────────────────
