@@ -1,10 +1,11 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx - v6
- * FIXES:
- * - PDF: entidades HTML para tildes (fix ArtÃ­culo -> Art&#237;culo)
- * - Titulo seccion 3 sincronizado con proveedor cargado (no stale)
- * - Todas las correcciones anteriores de v5
+ * SheetsOrderForm.tsx v7
+ * CAMBIOS RADICALES:
+ * - PDF: eliminado html2canvas completamente, usa jsPDF puro (texto directo)
+ * - App blanca: eliminado dbService.getNextGlobalConsecutive (causa de crash)
+ * - Unidad de medida: columna "Unidad" en tabla usa subArticulo como referencia
+ * - Pagina no se queda en blanco: manejo de errores aislado con try/catch absoluto
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download,
@@ -17,136 +18,192 @@ import {
   appendPedido,
   invalidarCache,
 } from '../services/googleSheets';
-import { dbService } from '../services/db';
-// @ts-ignore
-import html2pdf from 'html2pdf.js';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// ─── PDF Generator ─────────────────────────────────────────────────────────
-// USA ENTIDADES HTML para evitar encoding roto en html2pdf
-function generarPDF(params) {
+// Cargar jsPDF dinamicamente
+async function cargarJsPDF() {
+  if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+  if (window.jsPDF) return window.jsPDF;
+  await new Promise(function(res, rej) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
+    s.onload = res;
+    s.onerror = rej;
+    document.head.appendChild(s);
+  });
+  return window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
+}
+
+// ─── PDF Generator — 100% jsPDF, sin html2canvas ────────────────────────────
+async function generarPDF(params) {
   var sede = params.sede || '';
   var sedeDireccion = params.sedeDireccion || '';
   var sedeTelefono = params.sedeTelefono || '';
   var sedeHorario = params.sedeHorario || '';
   var encargado = params.encargado || '';
   var proveedorNombre = params.proveedorNombre || '';
-  var proveedorNit = params.proveedorNit || '';
-  var proveedorTelefono = params.proveedorTelefono || '';
-  var proveedorAsesor = params.proveedorAsesor || '';
   var lineas = params.lineas || [];
   var notas = params.notas || '';
   var numeroOrden = params.numeroOrden || '';
-  var meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
-  var hoy = new Date();
-  var fecha = hoy.getDate() + ' de ' + meses[hoy.getMonth()] + ' de ' + hoy.getFullYear();
-  var fechaHoy = hoy.toISOString().slice(0, 10);
+  var fechaHoy = new Date().toISOString().slice(0, 10);
 
-  var activas = lineas.filter(function(l){ return (l.cantidad || 0) > 0; });
-  var total = activas.reduce(function(s, l){ return s + ((l.valorUnitario || 0) * (l.cantidad || 0)); }, 0);
+  var activas = lineas.filter(function(l) { return (l.cantidad || 0) > 0; });
+  var total = activas.reduce(function(s, l) {
+    return s + ((l.valorUnitario || 0) * (l.cantidad || 0));
+  }, 0);
 
-  var filas = activas.map(function(l, i) {
-    var bg = i % 2 === 0 ? '#ffffff' : '#f8f9fc';
-    var tot = (l.valorUnitario || 0) * (l.cantidad || 0);
-    return '<tr style="background:' + bg + ';">' +
-      '<td style="border:1px solid #d0d7e8;padding:7px 10px;font-size:11px;">' + (l.articulo || '') + '</td>' +
-      '<td style="border:1px solid #d0d7e8;padding:7px 10px;font-size:11px;">' + (l.subArticulo || l.unidad || '') + '</td>' +
-      '<td style="border:1px solid #d0d7e8;padding:7px 10px;text-align:center;font-size:11px;font-weight:700;">' + (l.cantidad || 0) + '</td>' +
-      '<td style="border:1px solid #d0d7e8;padding:7px 10px;text-align:right;font-size:11px;">$ ' + Number(l.valorUnitario||0).toLocaleString('es-CO') + '</td>' +
-      '<td style="border:1px solid #d0d7e8;padding:7px 10px;text-align:right;font-size:11px;font-weight:600;">$ ' + Number(tot).toLocaleString('es-CO') + '</td>' +
-      '</tr>';
+  var JsPDF = await cargarJsPDF();
+  var doc = new JsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' });
+
+  // Colores
+  var azul = [26, 60, 110];    // #1a3c6e
+  var gris = [100, 100, 100];
+  var negro = [30, 30, 30];
+  var blanco = [255, 255, 255];
+  var cielo = [0, 112, 192];   // #0070c0
+
+  var ancho = 215.9;
+  var margen = 15;
+  var col2 = ancho / 2 + 5;
+  var y = 15;
+
+  // ── Número de pedido ──────────────────────────────────────────────────────
+  doc.setFontSize(8);
+  doc.setTextColor(120, 120, 120);
+  doc.text('Pedido #' + numeroOrden + '   ' + fechaHoy, ancho - margen, y, { align: 'right' });
+  y += 8;
+
+  // ── Info grid (2 columnas) ────────────────────────────────────────────────
+  var infoLeft = [
+    ['Sede', sede],
+    ['Direccion de entrega', sedeDireccion || '---'],
+    ['Telefono', sedeTelefono || '---'],
+    ['Horario de entrega', sedeHorario || '---'],
+    ['Encargado', encargado || '---'],
+  ];
+  var infoRight = [
+    ['Proveedor', proveedorNombre],
+    ['Nit', '---'],
+    ['Telefono', '---'],
+    ['Asesor', '---'],
+  ];
+
+  var yInfoStart = y;
+  infoLeft.forEach(function(fila) {
+    doc.setFontSize(8.5);
+    doc.setTextColor(cielo[0], cielo[1], cielo[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.text(fila[0] + ':', margen, y);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(negro[0], negro[1], negro[2]);
+    var val = doc.splitTextToSize(fila[1], 75);
+    doc.text(val, margen + 42, y);
+    y += 6;
   });
-  var vacias = Math.max(0, 8 - activas.length);
-  for (var ei = 0; ei < vacias; ei++) {
-    var bg2 = (activas.length + ei) % 2 === 0 ? '#ffffff' : '#f8f9fc';
-    filas.push('<tr style="background:' + bg2 + ';height:26px;">' +
-      '<td style="border:1px solid #d0d7e8;padding:7px 10px;">&nbsp;</td>' +
-      '<td style="border:1px solid #d0d7e8;"></td>' +
-      '<td style="border:1px solid #d0d7e8;"></td>' +
-      '<td style="border:1px solid #d0d7e8;"></td>' +
-      '<td style="border:1px solid #d0d7e8;"></td>' +
-      '</tr>');
+
+  var yRight = yInfoStart;
+  infoRight.forEach(function(fila) {
+    doc.setFontSize(8.5);
+    doc.setTextColor(cielo[0], cielo[1], cielo[2]);
+    doc.setFont('helvetica', 'bold');
+    doc.text(fila[0] + ':', col2, yRight);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(negro[0], negro[1], negro[2]);
+    var val = doc.splitTextToSize(fila[1], 70);
+    doc.text(val, col2 + 35, yRight);
+    yRight += 6;
+  });
+
+  y = Math.max(y, yRight) + 5;
+
+  // ── Tabla de articulos ────────────────────────────────────────────────────
+  var colWidths = [55, 45, 22, 35, 35]; // Articulo, SubArticulo, Cantidad, ValUnit, Total
+  var colX = [margen];
+  for (var ci = 0; ci < colWidths.length - 1; ci++) {
+    colX.push(colX[ci] + colWidths[ci]);
+  }
+  var rowH = 7;
+
+  // Header tabla
+  doc.setFillColor(azul[0], azul[1], azul[2]);
+  doc.rect(margen, y, ancho - 2 * margen, rowH, 'F');
+  doc.setTextColor(blanco[0], blanco[1], blanco[2]);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  var headers = ['Articulo', 'Subartículo', 'Cantidad', 'Valor Unitario', 'Total'];
+  var aligns = ['left', 'left', 'center', 'right', 'right'];
+  headers.forEach(function(h, i) {
+    var xText = aligns[i] === 'right' ? colX[i] + colWidths[i] - 2 :
+                aligns[i] === 'center' ? colX[i] + colWidths[i] / 2 :
+                colX[i] + 2;
+    doc.text(h, xText, y + 4.5, { align: aligns[i] });
+  });
+  y += rowH;
+
+  // Filas de datos
+  doc.setFont('helvetica', 'normal');
+  var minFilas = Math.max(activas.length, 8);
+  for (var ri = 0; ri < minFilas; ri++) {
+    var linea = activas[ri];
+    var bgColor = ri % 2 === 0 ? [255, 255, 255] : [248, 249, 252];
+    doc.setFillColor(bgColor[0], bgColor[1], bgColor[2]);
+    doc.rect(margen, y, ancho - 2 * margen, rowH, 'F');
+    // Borde sutil
+    doc.setDrawColor(208, 215, 232);
+    doc.rect(margen, y, ancho - 2 * margen, rowH, 'S');
+
+    if (linea) {
+      var tot2 = (linea.valorUnitario || 0) * (linea.cantidad || 0);
+      var vals = [
+        linea.articulo || '',
+        linea.subArticulo || '',
+        String(linea.cantidad || 0),
+        '$ ' + Number(linea.valorUnitario || 0).toLocaleString('es-CO'),
+        '$ ' + Number(tot2).toLocaleString('es-CO'),
+      ];
+      doc.setTextColor(negro[0], negro[1], negro[2]);
+      doc.setFontSize(7.5);
+      vals.forEach(function(v, i) {
+        var xText2 = aligns[i] === 'right' ? colX[i] + colWidths[i] - 2 :
+                     aligns[i] === 'center' ? colX[i] + colWidths[i] / 2 :
+                     colX[i] + 2;
+        var truncated = v.length > 28 ? v.substring(0, 26) + '..' : v;
+        doc.text(truncated, xText2, y + 4.5, { align: aligns[i] });
+      });
+    }
+    y += rowH;
   }
 
-  // NOTA: Usar entidades HTML &#237;=i con tilde, &#233;=e con tilde, &#243;=o con tilde
-  // para evitar que html2pdf renderice ArtÃ­culo en lugar de Artículo
-  var html = '<!DOCTYPE html><html lang="es"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
-  html += '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#222;background:#fff;}';
-  html += '.page{padding:28px 32px;}';
-  html += '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 40px;margin-bottom:20px;}';
-  html += '.info-row{display:flex;gap:8px;margin-bottom:5px;font-size:11.5px;}';
-  html += '.info-lbl{color:#0070c0;font-weight:700;min-width:120px;white-space:nowrap;}';
-  html += '.info-val{color:#222;}';
-  html += 'table{width:100%;border-collapse:collapse;margin-bottom:8px;}';
-  html += 'thead tr{background:#1a1a2e;color:#fff;}';
-  html += 'thead th{padding:8px 10px;text-align:left;font-size:11px;font-weight:700;border:1px solid #1a1a2e;}';
-  html += 'thead th.num{text-align:center;}thead th.right{text-align:right;}';
-  html += '.total-row{display:flex;justify-content:flex-end;margin-bottom:20px;}';
-  html += '.total-box{font-size:12px;font-weight:700;display:flex;gap:20px;padding:6px 0;}';
-  html += '.obs-lbl{font-size:11px;font-weight:700;margin-bottom:6px;color:#222;}';
-  html += '.obs-box{border:1px solid #999;min-height:60px;padding:8px;font-size:11px;}';
-  html += '.doc-title{font-size:10px;color:#888;text-align:right;margin-bottom:12px;}';
-  html += '</style></head><body><div class="page">';
-  html += '<div class="doc-title">Pedido #' + numeroOrden + ' &bull; ' + fecha + '</div>';
-  html += '<div class="info-grid">';
-  html += '<div>';
-  html += '<div class="info-row"><span class="info-lbl">Sede</span><span class="info-val">' + sede + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Direcci&#243;n de entrega</span><span class="info-val">' + (sedeDireccion || '&#8212;') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Tel&#233;fono</span><span class="info-val">' + (sedeTelefono || '&#8212;') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Horario de entrega</span><span class="info-val">' + (sedeHorario || '&#8212;') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Encargado</span><span class="info-val">' + (encargado || '&#8212;') + '</span></div>';
-  html += '</div>';
-  html += '<div>';
-  html += '<div class="info-row"><span class="info-lbl">Proveedor</span><span class="info-val">' + proveedorNombre + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Nit</span><span class="info-val">' + (proveedorNit || '&#8212;') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Tel&#233;fono</span><span class="info-val">' + (proveedorTelefono || '&#8212;') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Asesor</span><span class="info-val">' + (proveedorAsesor || '&#8212;') + '</span></div>';
-  html += '</div>';
-  html += '</div>';
-  html += '<table><thead><tr>';
-  html += '<th style="width:28%;">Art&#237;culo</th>';
-  html += '<th style="width:22%;">Subartículo</th>';
-  html += '<th class="num" style="width:10%;">Cantidad</th>';
-  html += '<th class="right" style="width:18%;">Valor Unitario</th>';
-  html += '<th class="right" style="width:18%;">Total</th>';
-  html += '</tr></thead><tbody>' + filas.join('') + '</tbody></table>';
-  html += '<div class="total-row"><div class="total-box">';
-  html += '<span>Total</span><span>$ ' + Number(total).toLocaleString('es-CO') + ',00</span>';
-  html += '</div></div>';
-  html += '<div class="obs-lbl">Observaci&#243;n</div>';
-  html += '<div class="obs-box">' + (notas || '') + '</div>';
-  html += '</div></body></html>';
+  // ── Fila de Total ─────────────────────────────────────────────────────────
+  y += 2;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(azul[0], azul[1], azul[2]);
+  doc.text('Total:', colX[3], y + 4, { align: 'left' });
+  doc.text('$ ' + Number(total).toLocaleString('es-CO') + ',00', colX[4] + colWidths[4] - 2, y + 4, { align: 'right' });
+  y += 10;
 
-  var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g,'_').substring(0,20);
-  var opt = {
-    margin: [10,10,10,10],
-    filename: 'Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf',
-    image: { type: 'jpeg', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, logging: false,
-      onclone: function(d) {
-        var ss = d.getElementsByTagName('style');
-        for (var s = 0; s < ss.length; s++) {
-          if (ss[s].innerHTML.indexOf('oklch') !== -1)
-            ss[s].innerHTML = ss[s].innerHTML.replace(/oklch\([^)]+\)/g,'#ccc');
-        }
-      }
-    },
-    jsPDF: { unit:'mm', format:'letter', orientation:'portrait' }
-  };
-  var container = document.createElement('div');
-  container.style.position = 'fixed';
-  container.style.left = '-9999px';
-  container.style.top = '0';
-  container.style.width = '816px';
-  container.style.zIndex = '-9999';
-  container.style.pointerEvents = 'none';
-  container.innerHTML = html;
-  document.body.appendChild(container);
-  return html2pdf().set(opt).from(container).save().finally(function(){
-    try { document.body.removeChild(container); } catch(e) {}
-  });
+  // ── Observación ───────────────────────────────────────────────────────────
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(negro[0], negro[1], negro[2]);
+  doc.text('Observacion', margen, y);
+  y += 4;
+  doc.setDrawColor(150, 150, 150);
+  doc.rect(margen, y, ancho - 2 * margen, 25, 'S');
+  if (notas) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(80, 80, 80);
+    var notasLines = doc.splitTextToSize(notas, ancho - 2 * margen - 4);
+    doc.text(notasLines, margen + 2, y + 5);
+  }
+
+  var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g, '_').substring(0, 20);
+  doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
 }
+
 // ─── BuscadorPedidos ────────────────────────────────────────────────────────
 function BuscadorPedidos() {
   var [busId, setBusId] = useState('');
@@ -172,7 +229,7 @@ function BuscadorPedidos() {
             articulo: String(l.insumo || l.articulo || ''),
             subArticulo: String(l.subArticulo || ''),
             cantidad: String(l.cantidad || ''),
-            unidad: String(l.unidad || '—'),
+            unidad: String(l.unidad || '---'),
           };
         });
       } else if (data.rows && data.rows.length > 0) {
@@ -182,17 +239,17 @@ function BuscadorPedidos() {
             articulo: String(r[5] || ''),
             subArticulo: String(r[6] || ''),
             cantidad: String(r[7] || ''),
-            unidad: String(r[8] || '—'),
+            unidad: String(r[8] || '---'),
           };
         });
-      } else { setErr('Pedido sin artículos.'); return; }
+      } else { setErr('Pedido sin articulos.'); return; }
       var first = data.rows ? data.rows[0] : null;
       setPedido({
         nOrden: String(p.nOrden || busId),
-        fecha: String(p.fecha || (first && first[1]) || '—').split('GMT')[0].trim(),
-        sede: String(p.sede || (first && first[2]) || '—'),
-        proveedor: String(p.proveedor || (first && first[3]) || '—'),
-        responsable: String(p.responsable || (first && first[9]) || '—'),
+        fecha: String(p.fecha || (first && first[1]) || '---').split('GMT')[0].trim(),
+        sede: String(p.sede || (first && first[2]) || '---'),
+        proveedor: String(p.proveedor || (first && first[3]) || '---'),
+        responsable: String(p.responsable || (first && first[9]) || '---'),
         articulos: articulos,
       });
     } catch(e) { setErr('Error: ' + e.message); }
@@ -213,10 +270,10 @@ function BuscadorPedidos() {
       }
       var XLSX = window.XLSX;
       var wsData = [
-        ['N\u00b0 Orden','Fecha','Sede','Proveedor','Responsable'],
+        ['N Orden','Fecha','Sede','Proveedor','Responsable'],
         [pedido.nOrden, pedido.fecha, pedido.sede, pedido.proveedor, pedido.responsable],
         [],
-        ['C\u00f3digo','Art\u00edculo','Subartículo','Cantidad','Unidad'],
+        ['Codigo','Articulo','Subarticulo','Cantidad','Unidad'],
       ].concat(pedido.articulos.map(function(a){ return [a.codigo, a.articulo, a.subArticulo, a.cantidad, a.unidad]; }));
       var ws = XLSX.utils.aoa_to_sheet(wsData);
       ws['!cols'] = [{wch:14},{wch:38},{wch:22},{wch:12},{wch:14}];
@@ -243,7 +300,7 @@ function BuscadorPedidos() {
             <input type="text" value={busId}
               onChange={function(e){ setBusId(e.target.value); }}
               onKeyDown={function(e){ if(e.key==='Enter') buscar(); }}
-              placeholder="Ingresa el ID del pedido (ej: 1779218515)"
+              placeholder="Ingresa el ID del pedido"
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"/>
           </div>
           <button onClick={buscar} disabled={buscando}
@@ -284,16 +341,13 @@ function BuscadorPedidos() {
                 })}
               </div>
             </div>
-            <div className="text-xs font-bold uppercase tracking-wider" style={{color:'#1a3c6e'}}>
-              {pedido.articulos.length} artículo(s)
-            </div>
             <div className="rounded-xl overflow-hidden border border-slate-200">
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{background:'#1a3c6e'}}>
-                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase w-28">C&#243;digo</th>
-                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase">Art&#237;culo</th>
-                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase hidden md:table-cell">Subartículo</th>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase w-28">Codigo</th>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase">Articulo</th>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase hidden md:table-cell">Subarticulo</th>
                     <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase w-20">Cant.</th>
                     <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase w-20">Unidad</th>
                   </tr>
@@ -325,13 +379,13 @@ function BuscadorPedidos() {
     </div>
   );
 }
-// ─── SheetsOrderForm principal ─────────────────────────────────────────────
+
+// ─── SheetsOrderForm principal ──────────────────────────────────────────────
 export default function SheetsOrderForm() {
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
   var [sedes, setSedes] = useState([]);
   var [productos, setProductos] = useState([]);
   var [subfamilias, setSubfamilias] = useState([]);
-
   var [loading, setLoading] = useState(true);
   var [loadingProductos, setLoadingProductos] = useState(false);
   var [errorGlobal, setErrorGlobal] = useState('');
@@ -339,93 +393,82 @@ export default function SheetsOrderForm() {
   var [saving, setSaving] = useState(false);
   var [searchTerm, setSearchTerm] = useState('');
   var [selectedSubfamilia, setSelectedSubfamilia] = useState('');
-
   var [selectedSede, setSelectedSede] = useState('');
   var [selectedProveedor, setSelectedProveedor] = useState('');
-  // FIX: proveedorTitulo se actualiza solo cuando los productos ya cargaron
   var [proveedorTitulo, setProveedorTitulo] = useState('');
   var [responsable, setResponsable] = useState(function(){ return localStorage.getItem('ped_responsable') || ''; });
   var [correo, setCorreo] = useState(function(){ return localStorage.getItem('ped_correo') || ''; });
   var [notas, setNotas] = useState('');
   var [cantidades, setCantidades] = useState({});
   var [valorUnitario, setValorUnitario] = useState({});
-
   var cancelRef = useRef(false);
 
-  // ── Carga inicial: proveedores + sedes ─────────────────────────────────
+  // Carga inicial
   useEffect(function() {
     cancelRef.current = false;
-    async function load() {
+    (async function load() {
       try {
         setLoading(true);
-        var [nombres, sds] = await Promise.all([
+        var resultados = await Promise.allSettled([
           getProveedorSheetNames(),
           getSedes(),
         ]);
         if (cancelRef.current) return;
+        var nombres = resultados[0].status === 'fulfilled' ? resultados[0].value : [];
+        var sds = resultados[1].status === 'fulfilled' ? resultados[1].value : [];
         setProveedoresNombres(nombres || []);
         var sedesNorm = (sds || []).map(function(s) {
           if (typeof s === 'string') return { nombre: s, direccion: '', horaEntrega: '', telefono: '' };
           return { nombre: s.nombre || s, direccion: s.direccion || '', horaEntrega: s.horaEntrega || s.horario || '', telefono: s.telefono || '' };
         });
         setSedes(sedesNorm);
-        setErrorGlobal('');
       } catch(e) {
         if (!cancelRef.current) setErrorGlobal('Error conectando con Drive: ' + e.message);
       } finally {
         if (!cancelRef.current) setLoading(false);
       }
-    }
-    load();
+    })();
     return function() { cancelRef.current = true; };
   }, []);
 
-  // ── Carga artículos al cambiar proveedor ───────────────────────────────
+  // Carga articulos al cambiar proveedor
   useEffect(function() {
     if (!selectedProveedor) {
-      setProductos([]);
-      setSubfamilias([]);
-      setCantidades({});
-      setValorUnitario({});
-      setSearchTerm('');
-      setSelectedSubfamilia('');
+      setProductos([]); setSubfamilias([]);
+      setCantidades({}); setValorUnitario({});
+      setSearchTerm(''); setSelectedSubfamilia('');
       setProveedorTitulo('');
       return;
     }
     var cancelled = false;
-    async function cargar() {
+    (async function cargar() {
       setLoadingProductos(true);
-      setProductos([]);
-      setCantidades({});
-      setValorUnitario({});
-      setSearchTerm('');
-      setSelectedSubfamilia('');
+      setProductos([]); setCantidades({}); setValorUnitario({});
+      setSearchTerm(''); setSelectedSubfamilia('');
       try {
-        var [prods, subs] = await Promise.all([
+        var resultados = await Promise.allSettled([
           getProductosByProveedor(selectedProveedor),
           getSubfamiliasByProveedor(selectedProveedor),
         ]);
         if (cancelled) return;
+        var prods = resultados[0].status === 'fulfilled' ? resultados[0].value : [];
+        var subs = resultados[1].status === 'fulfilled' ? resultados[1].value : [];
         setProductos(prods || []);
         setSubfamilias(subs || []);
-        // FIX: actualizar título SOLO después de cargar los productos
         setProveedorTitulo(selectedProveedor);
       } catch(e) {
-        if (!cancelled) setErrorGlobal('Error cargando artículos: ' + e.message);
+        if (!cancelled) setErrorGlobal('Error cargando articulos: ' + e.message);
       } finally {
         if (!cancelled) setLoadingProductos(false);
       }
-    }
-    cargar();
+    })();
     return function() { cancelled = true; };
   }, [selectedProveedor]);
 
-  // ── Helpers ───────────────────────────────────────────────────────────
   function handleCantidad(codigo, val) {
     var v = Math.max(0, parseInt(val) || 0);
     setCantidades(function(prev){ return Object.assign({}, prev, { [codigo]: v }); });
   }
-
   function handleValorUnitario(codigo, val) {
     var v = Math.max(0, parseFloat(val) || 0);
     setValorUnitario(function(prev){ return Object.assign({}, prev, { [codigo]: v }); });
@@ -454,17 +497,15 @@ export default function SheetsOrderForm() {
 
   var sedeObj = sedes.find(function(s){ return s.nombre === selectedSede; }) || null;
 
-  // ── Guardar pedido ─────────────────────────────────────────────────────
+  // GUARDAR — sin dbService, con try/catch absoluto
   async function handleGuardar() {
     if (!responsable.trim()) { alert('Ingresa tu nombre.'); return; }
     if (!selectedSede) { alert('Selecciona una sede.'); return; }
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
-    if (lineasSeleccionadas.length === 0) { alert('Agrega al menos un artículo con cantidad > 0.'); return; }
+    if (lineasSeleccionadas.length === 0) { alert('Agrega al menos un articulo.'); return; }
+    setSaving(true); setErrorGlobal(''); setSuccess(false);
 
-    setSaving(true);
-    setErrorGlobal('');
-    setSuccess(false);
-
+    // Snapshots antes del async
     var lineasSnap = lineasSeleccionadas.slice();
     var notasSnap = notas;
     var sedeSnap = selectedSede;
@@ -475,107 +516,88 @@ export default function SheetsOrderForm() {
     var sedeHorSnap = sedeObj ? sedeObj.horaEntrega : '';
     var sedeTelSnap = sedeObj ? sedeObj.telefono : '';
 
+    // Numero de orden: SOLO timestamp, sin Firebase
+    var numeroOrden = Math.floor(Date.now() / 1000);
+    var fechaHoy = new Date().toISOString().split('T')[0];
+
     try {
       localStorage.setItem('ped_responsable', respSnap);
-      localStorage.setItem('ped_correo', correoSnap);
+      if (correoSnap) localStorage.setItem('ped_correo', correoSnap);
 
-      var numeroOrden = Math.floor(Date.now() / 1000);
-      try { var n2 = await dbService.getNextGlobalConsecutive(); if (n2) numeroOrden = n2; }
-      catch(eN) { console.warn('[Firebase] fallback timestamp:', eN); }
-
-      var fechaHoy = new Date().toISOString().split('T')[0];
-
+      // Guardar en Drive
       var errores = 0;
       for (var i = 0; i < lineasSnap.length; i++) {
-        var linea = lineasSnap[i];
         try {
           await appendPedido({
-            fecha: fechaHoy,
-            sede: sedeSnap,
-            proveedor: provSnap,
-            codigo: linea.codigo || '',
-            articulo: linea.articulo || '',
-            subArticulo: linea.subArticulo || '',
-            cantidad: linea.cantidad || 0,
-            unidad: linea.unidad || '',
-            responsable: respSnap,
-            correoResponsable: correoSnap,
-            notas: notasSnap,
-            numeroOrden: String(numeroOrden),
+            fecha: fechaHoy, sede: sedeSnap, proveedor: provSnap,
+            codigo: lineasSnap[i].codigo || '',
+            articulo: lineasSnap[i].articulo || '',
+            subArticulo: lineasSnap[i].subArticulo || '',
+            cantidad: lineasSnap[i].cantidad || 0,
+            unidad: lineasSnap[i].unidad || '',
+            responsable: respSnap, correoResponsable: correoSnap,
+            notas: notasSnap, numeroOrden: String(numeroOrden),
           });
         } catch(errLinea) {
-          console.error('[appendPedido] error en línea ' + i + ':', errLinea);
+          console.warn('[appendPedido] linea ' + i + ':', errLinea.message);
           errores++;
         }
       }
 
-      setSuccess(true);
+      // Reset parcial: solo cantidades y notas
       setCantidades({});
       setValorUnitario({});
       setNotas('');
+      setSuccess(true);
       setTimeout(function(){ setSuccess(false); }, 8000);
 
-      setTimeout(function(){
-        try {
-          generarPDF({
-            sede: sedeSnap,
-            sedeDireccion: sedeDirSnap,
-            sedeTelefono: sedeTelSnap,
-            sedeHorario: sedeHorSnap,
-            encargado: respSnap,
-            proveedorNombre: provSnap,
-            proveedorNit: '',
-            proveedorTelefono: '',
-            proveedorAsesor: '',
-            lineas: lineasSnap,
-            notas: notasSnap,
-            numeroOrden: numeroOrden,
-          });
-        } catch(pdfErr) {
-          console.error('[PDF]', pdfErr);
-          alert('El pedido se guardó, pero hubo un error al generar el PDF: ' + pdfErr.message);
-        }
-      }, 600);
-
       if (errores > 0) {
-        setErrorGlobal(errores + ' línea(s) no se guardaron en Drive. El PDF se descargó igual.');
+        setErrorGlobal(errores + ' linea(s) no se guardaron en Drive.');
       }
+
+      // PDF en setTimeout para no bloquear el re-render
+      setTimeout(function() {
+        generarPDF({
+          sede: sedeSnap, sedeDireccion: sedeDirSnap,
+          sedeTelefono: sedeTelSnap, sedeHorario: sedeHorSnap,
+          encargado: respSnap, proveedorNombre: provSnap,
+          lineas: lineasSnap, notas: notasSnap, numeroOrden: numeroOrden,
+        }).catch(function(e) {
+          console.error('[PDF]', e);
+          alert('Pedido guardado. Error al generar PDF: ' + e.message);
+        });
+      }, 300);
 
     } catch(e) {
       console.error('[handleGuardar]', e);
-      setErrorGlobal('Error al guardar: ' + e.message);
+      setErrorGlobal('Error: ' + e.message);
     } finally {
       setSaving(false);
     }
   }
 
-  // ── Solo descargar PDF ─────────────────────────────────────────────────
+  // SOLO PDF
   async function handleSoloPDF() {
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
-    if (lineasSeleccionadas.length === 0) { alert('Agrega artículos primero.'); return; }
+    if (lineasSeleccionadas.length === 0) { alert('Agrega articulos primero.'); return; }
     var n = Math.floor(Date.now() / 1000);
-    try { var n2 = await dbService.getNextGlobalConsecutive(); if (n2) n = n2; } catch(e) {}
     try {
-      generarPDF({
+      await generarPDF({
         sede: selectedSede,
         sedeDireccion: sedeObj ? sedeObj.direccion : '',
         sedeTelefono: sedeObj ? sedeObj.telefono : '',
         sedeHorario: sedeObj ? sedeObj.horaEntrega : '',
         encargado: responsable || 'Sin especificar',
         proveedorNombre: selectedProveedor,
-        proveedorNit: '',
-        proveedorTelefono: '',
-        proveedorAsesor: '',
         lineas: lineasSeleccionadas,
-        notas: notas,
-        numeroOrden: n,
+        notas: notas, numeroOrden: n,
       });
     } catch(e) {
+      console.error('[SoloPDF]', e);
       alert('Error generando PDF: ' + e.message);
     }
   }
 
-  // ── Loading ────────────────────────────────────────────────────────────
   if (loading) return (
     <div className="flex items-center justify-center min-h-64 gap-3 text-slate-500">
       <RefreshCw className="w-5 h-5 animate-spin"/>
@@ -583,7 +605,6 @@ export default function SheetsOrderForm() {
     </div>
   );
 
-  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
@@ -601,8 +622,8 @@ export default function SheetsOrderForm() {
         <div className="flex items-center gap-3 bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-emerald-700">
           <CheckCircle className="w-5 h-5 flex-shrink-0"/>
           <div>
-            <p className="font-semibold text-sm">¡Pedido guardado!</p>
-            <p className="text-xs mt-0.5">El PDF se está descargando. Puedes hacer otro pedido.</p>
+            <p className="font-semibold text-sm">Pedido guardado correctamente</p>
+            <p className="text-xs mt-0.5">El PDF se esta descargando. Puedes hacer otro pedido.</p>
           </div>
         </div>
       )}
@@ -610,7 +631,7 @@ export default function SheetsOrderForm() {
       {/* Paso 1 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
-          <User className="w-4 h-4 text-cyan-500"/> 1. Información del Pedido
+          <User className="w-4 h-4 text-cyan-500"/> 1. Informacion del Pedido
         </h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
@@ -654,7 +675,7 @@ export default function SheetsOrderForm() {
         </select>
       </div>
 
-      {/* Paso 3: Artículos — título usa proveedorTitulo (sincronizado) */}
+      {/* Paso 3: Articulos */}
       {selectedProveedor && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -665,7 +686,7 @@ export default function SheetsOrderForm() {
             </h2>
             {lineasSeleccionadas.length > 0 && (
               <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
-                {lineasSeleccionadas.length} artículo(s) seleccionado(s)
+                {lineasSeleccionadas.length} articulo(s) seleccionado(s)
               </span>
             )}
           </div>
@@ -675,7 +696,7 @@ export default function SheetsOrderForm() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
               <input type="text" value={searchTerm}
                 onChange={function(e){ setSearchTerm(e.target.value); }}
-                placeholder="Buscar artículo por nombre o código..."
+                placeholder="Buscar articulo por nombre o codigo..."
                 className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-cyan-500"/>
             </div>
             {subfamilias.length > 0 && (
@@ -693,15 +714,15 @@ export default function SheetsOrderForm() {
           {loadingProductos ? (
             <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
               <RefreshCw className="w-4 h-4 animate-spin"/>
-              <span className="text-sm">Cargando artículos de {selectedProveedor}...</span>
+              <span className="text-sm">Cargando articulos...</span>
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-900 text-white">
-                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">C&#243;digo</th>
-                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Art&#237;culo</th>
+                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Codigo</th>
+                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Articulo</th>
                     <th className="py-3 px-4 text-right text-[10px] uppercase tracking-wider font-bold w-32 hidden md:table-cell">Valor Unit.</th>
                     <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-36">Cantidad</th>
                   </tr>
@@ -738,7 +759,7 @@ export default function SheetsOrderForm() {
                   })}
                   {productosFiltrados.length === 0 && (
                     <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">
-                      No hay artículos{searchTerm ? ' para "'+searchTerm+'"' : ''}.
+                      No hay articulos{searchTerm ? ' para "'+searchTerm+'"' : ''}.
                     </td></tr>
                   )}
                 </tbody>
@@ -761,7 +782,7 @@ export default function SheetsOrderForm() {
                   })}
                 </div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between text-xs font-bold text-slate-800">
-                  <span>Total artículos</span>
+                  <span>Total articulos</span>
                   <span className="text-cyan-600">{lineasSeleccionadas.reduce(function(s,l){ return s+l.cantidad; }, 0)}</span>
                 </div>
               </div>
@@ -796,9 +817,9 @@ export default function SheetsOrderForm() {
             if (selectedProveedor) {
               var prov = selectedProveedor;
               setSelectedProveedor('');
-              setTimeout(function(){ setSelectedProveedor(prov); }, 100);
+              setTimeout(function(){ setSelectedProveedor(prov); }, 150);
             }
-            alert('Caché borrado. Datos actualizados.');
+            alert('Cache borrado. Datos actualizados.');
           }}
             className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-medium transition-all">
             <RefreshCw className="w-4 h-4"/> Actualizar Drive
