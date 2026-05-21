@@ -1,13 +1,10 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx - v5
+ * SheetsOrderForm.tsx - v6
  * FIXES:
- * - PDF con mapa exacto del usuario (Sede, Proveedor, tabla Articulo/Subartículo/Cantidad/Valor/Total)
- * - Página NO se queda en blanco después de guardar
- * - Productos recargan siempre que cambia proveedor
- * - unidad leída como subArticulo (único campo disponible como clasificación)
- * - Mapeos correctos en BuscadorPedidos
- * - Firebase errors ignorados (solo Drive)
+ * - PDF: entidades HTML para tildes (fix ArtÃ­culo -> Art&#237;culo)
+ * - Titulo seccion 3 sincronizado con proveedor cargado (no stale)
+ * - Todas las correcciones anteriores de v5
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download,
@@ -26,16 +23,8 @@ import html2pdf from 'html2pdf.js';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// ─── PDF Generator — mapa exacto del usuario ─────────────────────────────────
-// Layout:
-// [HEADER INFO]  Sede | Proveedor
-// Direccion      NIT
-// Telefono       Telefono
-// Horario        Asesor
-// Encargado
-// [TABLA] Artículo | Subartículo | Cantidad | Valor Unitario | Total
-// [TOTAL]
-// [OBSERVACION]
+// ─── PDF Generator ─────────────────────────────────────────────────────────
+// USA ENTIDADES HTML para evitar encoding roto en html2pdf
 function generarPDF(params) {
   var sede = params.sede || '';
   var sedeDireccion = params.sedeDireccion || '';
@@ -49,14 +38,14 @@ function generarPDF(params) {
   var lineas = params.lineas || [];
   var notas = params.notas || '';
   var numeroOrden = params.numeroOrden || '';
-  var fecha = new Date().toLocaleDateString('es-CO', { year:'numeric', month:'long', day:'numeric' });
-  var fechaHoy = new Date().toISOString().slice(0, 10);
+  var meses = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  var hoy = new Date();
+  var fecha = hoy.getDate() + ' de ' + meses[hoy.getMonth()] + ' de ' + hoy.getFullYear();
+  var fechaHoy = hoy.toISOString().slice(0, 10);
 
-  // Solo líneas con cantidad > 0
   var activas = lineas.filter(function(l){ return (l.cantidad || 0) > 0; });
   var total = activas.reduce(function(s, l){ return s + ((l.valorUnitario || 0) * (l.cantidad || 0)); }, 0);
 
-  // Filas de artículos
   var filas = activas.map(function(l, i) {
     var bg = i % 2 === 0 ? '#ffffff' : '#f8f9fc';
     var tot = (l.valorUnitario || 0) * (l.cantidad || 0);
@@ -68,9 +57,8 @@ function generarPDF(params) {
       '<td style="border:1px solid #d0d7e8;padding:7px 10px;text-align:right;font-size:11px;font-weight:600;">$ ' + Number(tot).toLocaleString('es-CO') + '</td>' +
       '</tr>';
   });
-  // Filas vacías hasta 8 mínimo
-  var vacías = Math.max(0, 8 - activas.length);
-  for (var ei = 0; ei < vacías; ei++) {
+  var vacias = Math.max(0, 8 - activas.length);
+  for (var ei = 0; ei < vacias; ei++) {
     var bg2 = (activas.length + ei) % 2 === 0 ? '#ffffff' : '#f8f9fc';
     filas.push('<tr style="background:' + bg2 + ';height:26px;">' +
       '<td style="border:1px solid #d0d7e8;padding:7px 10px;">&nbsp;</td>' +
@@ -81,7 +69,9 @@ function generarPDF(params) {
       '</tr>');
   }
 
-  var html = '<!DOCTYPE html><html><head><meta charset="utf-8"/>';
+  // NOTA: Usar entidades HTML &#237;=i con tilde, &#233;=e con tilde, &#243;=o con tilde
+  // para evitar que html2pdf renderice ArtÃ­culo en lugar de Artículo
+  var html = '<!DOCTYPE html><html lang="es"><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>';
   html += '<style>*{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;color:#222;background:#fff;}';
   html += '.page{padding:28px 32px;}';
   html += '.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 40px;margin-bottom:20px;}';
@@ -98,47 +88,34 @@ function generarPDF(params) {
   html += '.obs-box{border:1px solid #999;min-height:60px;padding:8px;font-size:11px;}';
   html += '.doc-title{font-size:10px;color:#888;text-align:right;margin-bottom:12px;}';
   html += '</style></head><body><div class="page">';
-
-  // Número de pedido arriba
   html += '<div class="doc-title">Pedido #' + numeroOrden + ' &bull; ' + fecha + '</div>';
-
-  // Info grid izquierda / derecha
   html += '<div class="info-grid">';
-  // Columna izquierda: Sede info
   html += '<div>';
   html += '<div class="info-row"><span class="info-lbl">Sede</span><span class="info-val">' + sede + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Dirección de entrega</span><span class="info-val">' + (sedeDireccion || '—') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Teléfono</span><span class="info-val">' + (sedeTelefono || '—') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Horario de entrega</span><span class="info-val">' + (sedeHorario || '—') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Encargado</span><span class="info-val">' + (encargado || '—') + '</span></div>';
+  html += '<div class="info-row"><span class="info-lbl">Direcci&#243;n de entrega</span><span class="info-val">' + (sedeDireccion || '&#8212;') + '</span></div>';
+  html += '<div class="info-row"><span class="info-lbl">Tel&#233;fono</span><span class="info-val">' + (sedeTelefono || '&#8212;') + '</span></div>';
+  html += '<div class="info-row"><span class="info-lbl">Horario de entrega</span><span class="info-val">' + (sedeHorario || '&#8212;') + '</span></div>';
+  html += '<div class="info-row"><span class="info-lbl">Encargado</span><span class="info-val">' + (encargado || '&#8212;') + '</span></div>';
   html += '</div>';
-  // Columna derecha: Proveedor info
   html += '<div>';
   html += '<div class="info-row"><span class="info-lbl">Proveedor</span><span class="info-val">' + proveedorNombre + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Nit</span><span class="info-val">' + (proveedorNit || '—') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Teléfono</span><span class="info-val">' + (proveedorTelefono || '—') + '</span></div>';
-  html += '<div class="info-row"><span class="info-lbl">Asesor</span><span class="info-val">' + (proveedorAsesor || '—') + '</span></div>';
+  html += '<div class="info-row"><span class="info-lbl">Nit</span><span class="info-val">' + (proveedorNit || '&#8212;') + '</span></div>';
+  html += '<div class="info-row"><span class="info-lbl">Tel&#233;fono</span><span class="info-val">' + (proveedorTelefono || '&#8212;') + '</span></div>';
+  html += '<div class="info-row"><span class="info-lbl">Asesor</span><span class="info-val">' + (proveedorAsesor || '&#8212;') + '</span></div>';
   html += '</div>';
   html += '</div>';
-
-  // Tabla de artículos
   html += '<table><thead><tr>';
-  html += '<th style="width:28%;">Artículo</th>';
+  html += '<th style="width:28%;">Art&#237;culo</th>';
   html += '<th style="width:22%;">Subartículo</th>';
   html += '<th class="num" style="width:10%;">Cantidad</th>';
   html += '<th class="right" style="width:18%;">Valor Unitario</th>';
   html += '<th class="right" style="width:18%;">Total</th>';
   html += '</tr></thead><tbody>' + filas.join('') + '</tbody></table>';
-
-  // Total
   html += '<div class="total-row"><div class="total-box">';
   html += '<span>Total</span><span>$ ' + Number(total).toLocaleString('es-CO') + ',00</span>';
   html += '</div></div>';
-
-  // Observación
-  html += '<div class="obs-lbl">Observación</div>';
+  html += '<div class="obs-lbl">Observaci&#243;n</div>';
   html += '<div class="obs-box">' + (notas || '') + '</div>';
-
   html += '</div></body></html>';
 
   var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g,'_').substring(0,20);
@@ -170,11 +147,7 @@ function generarPDF(params) {
     try { document.body.removeChild(container); } catch(e) {}
   });
 }
-
-// ─── BuscadorPedidos ──────────────────────────────────────────────────────────
-// Campos del Apps Script getPedidoByOrden:
-// p.nOrden, p.fecha, p.sede, p.proveedor, p.responsable
-// p.lineas[]: { codigo, insumo (=artículo real), subArticulo (=subcat), cantidad, unidad }
+// ─── BuscadorPedidos ────────────────────────────────────────────────────────
 function BuscadorPedidos() {
   var [busId, setBusId] = useState('');
   var [buscando, setBuscando] = useState(false);
@@ -196,19 +169,18 @@ function BuscadorPedidos() {
         articulos = p.lineas.map(function(l){
           return {
             codigo: String(l.codigo || ''),
-            articulo: String(l.insumo || l.articulo || ''),   // artículo real
-            subArticulo: String(l.subArticulo || ''),          // subcategoría
+            articulo: String(l.insumo || l.articulo || ''),
+            subArticulo: String(l.subArticulo || ''),
             cantidad: String(l.cantidad || ''),
             unidad: String(l.unidad || '—'),
           };
         });
       } else if (data.rows && data.rows.length > 0) {
-        // formato legacy: [nOrden,fecha,sede,proveedor,codigo,insumo,subArticulo,cantidad,unidad,responsable]
         articulos = data.rows.map(function(r){
           return {
             codigo: String(r[4] || ''),
-            articulo: String(r[5] || ''),    // insumo = artículo real
-            subArticulo: String(r[6] || ''), // subArticulo
+            articulo: String(r[5] || ''),
+            subArticulo: String(r[6] || ''),
             cantidad: String(r[7] || ''),
             unidad: String(r[8] || '—'),
           };
@@ -241,10 +213,10 @@ function BuscadorPedidos() {
       }
       var XLSX = window.XLSX;
       var wsData = [
-        ['N° Orden','Fecha','Sede','Proveedor','Responsable'],
+        ['N\u00b0 Orden','Fecha','Sede','Proveedor','Responsable'],
         [pedido.nOrden, pedido.fecha, pedido.sede, pedido.proveedor, pedido.responsable],
         [],
-        ['Código','Artículo','Subartículo','Cantidad','Unidad'],
+        ['C\u00f3digo','Art\u00edculo','Subartículo','Cantidad','Unidad'],
       ].concat(pedido.articulos.map(function(a){ return [a.codigo, a.articulo, a.subArticulo, a.cantidad, a.unidad]; }));
       var ws = XLSX.utils.aoa_to_sheet(wsData);
       ws['!cols'] = [{wch:14},{wch:38},{wch:22},{wch:12},{wch:14}];
@@ -319,8 +291,8 @@ function BuscadorPedidos() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{background:'#1a3c6e'}}>
-                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase w-28">Código</th>
-                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase">Artículo</th>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase w-28">C&#243;digo</th>
+                    <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase">Art&#237;culo</th>
                     <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase hidden md:table-cell">Subartículo</th>
                     <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase w-20">Cant.</th>
                     <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase w-20">Unidad</th>
@@ -353,10 +325,8 @@ function BuscadorPedidos() {
     </div>
   );
 }
-
-// ─── SheetsOrderForm principal ───────────────────────────────────────────────
+// ─── SheetsOrderForm principal ─────────────────────────────────────────────
 export default function SheetsOrderForm() {
-  // ── Estado ────────────────────────────────────────────────────────────────
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
   var [sedes, setSedes] = useState([]);
   var [productos, setProductos] = useState([]);
@@ -372,16 +342,17 @@ export default function SheetsOrderForm() {
 
   var [selectedSede, setSelectedSede] = useState('');
   var [selectedProveedor, setSelectedProveedor] = useState('');
+  // FIX: proveedorTitulo se actualiza solo cuando los productos ya cargaron
+  var [proveedorTitulo, setProveedorTitulo] = useState('');
   var [responsable, setResponsable] = useState(function(){ return localStorage.getItem('ped_responsable') || ''; });
   var [correo, setCorreo] = useState(function(){ return localStorage.getItem('ped_correo') || ''; });
   var [notas, setNotas] = useState('');
   var [cantidades, setCantidades] = useState({});
   var [valorUnitario, setValorUnitario] = useState({});
 
-  // Ref para cancelar efectos
   var cancelRef = useRef(false);
 
-  // ── Carga inicial: proveedores + sedes ────────────────────────────────────
+  // ── Carga inicial: proveedores + sedes ─────────────────────────────────
   useEffect(function() {
     cancelRef.current = false;
     async function load() {
@@ -393,7 +364,6 @@ export default function SheetsOrderForm() {
         ]);
         if (cancelRef.current) return;
         setProveedoresNombres(nombres || []);
-        // Sedes pueden ser strings o objetos
         var sedesNorm = (sds || []).map(function(s) {
           if (typeof s === 'string') return { nombre: s, direccion: '', horaEntrega: '', telefono: '' };
           return { nombre: s.nombre || s, direccion: s.direccion || '', horaEntrega: s.horaEntrega || s.horario || '', telefono: s.telefono || '' };
@@ -410,8 +380,7 @@ export default function SheetsOrderForm() {
     return function() { cancelRef.current = true; };
   }, []);
 
-  // ── Carga artículos al cambiar proveedor ──────────────────────────────────
-  // FIX: useEffect con selectedProveedor como dependencia - siempre recarga
+  // ── Carga artículos al cambiar proveedor ───────────────────────────────
   useEffect(function() {
     if (!selectedProveedor) {
       setProductos([]);
@@ -420,18 +389,18 @@ export default function SheetsOrderForm() {
       setValorUnitario({});
       setSearchTerm('');
       setSelectedSubfamilia('');
+      setProveedorTitulo('');
       return;
     }
     var cancelled = false;
     async function cargar() {
       setLoadingProductos(true);
-      setProductos([]);      // limpiar inmediatamente
+      setProductos([]);
       setCantidades({});
       setValorUnitario({});
       setSearchTerm('');
       setSelectedSubfamilia('');
       try {
-        // Invalidar caché para asegurar datos frescos si hay problemas
         var [prods, subs] = await Promise.all([
           getProductosByProveedor(selectedProveedor),
           getSubfamiliasByProveedor(selectedProveedor),
@@ -439,6 +408,8 @@ export default function SheetsOrderForm() {
         if (cancelled) return;
         setProductos(prods || []);
         setSubfamilias(subs || []);
+        // FIX: actualizar título SOLO después de cargar los productos
+        setProveedorTitulo(selectedProveedor);
       } catch(e) {
         if (!cancelled) setErrorGlobal('Error cargando artículos: ' + e.message);
       } finally {
@@ -449,7 +420,7 @@ export default function SheetsOrderForm() {
     return function() { cancelled = true; };
   }, [selectedProveedor]);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
+  // ── Helpers ───────────────────────────────────────────────────────────
   function handleCantidad(codigo, val) {
     var v = Math.max(0, parseInt(val) || 0);
     setCantidades(function(prev){ return Object.assign({}, prev, { [codigo]: v }); });
@@ -460,7 +431,6 @@ export default function SheetsOrderForm() {
     setValorUnitario(function(prev){ return Object.assign({}, prev, { [codigo]: v }); });
   }
 
-  // Filtrar productos por búsqueda y subfamilia
   var productosFiltrados = productos.filter(function(p) {
     var mSearch = !searchTerm ||
       (p.articulo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -469,14 +439,13 @@ export default function SheetsOrderForm() {
     return mSearch && mSub;
   });
 
-  // Líneas seleccionadas (cantidad > 0)
   var lineasSeleccionadas = productos
     .filter(function(p){ return (cantidades[p.codigo] || 0) > 0; })
     .map(function(p){
       return {
         codigo: p.codigo,
-        articulo: p.articulo,          // nombre real del artículo
-        subArticulo: p.subfamilia || '', // subfamilia como subartículo
+        articulo: p.articulo,
+        subArticulo: p.subfamilia || '',
         unidad: p.unidad || '',
         cantidad: cantidades[p.codigo] || 0,
         valorUnitario: valorUnitario[p.codigo] || 0,
@@ -485,8 +454,7 @@ export default function SheetsOrderForm() {
 
   var sedeObj = sedes.find(function(s){ return s.nombre === selectedSede; }) || null;
 
-  // ── Guardar pedido ────────────────────────────────────────────────────────
-  // FIX: sin reload, sin reset de componente, manejo robusto de errores
+  // ── Guardar pedido ─────────────────────────────────────────────────────
   async function handleGuardar() {
     if (!responsable.trim()) { alert('Ingresa tu nombre.'); return; }
     if (!selectedSede) { alert('Selecciona una sede.'); return; }
@@ -497,7 +465,6 @@ export default function SheetsOrderForm() {
     setErrorGlobal('');
     setSuccess(false);
 
-    // Capturar snapshots ANTES del async para evitar stale state
     var lineasSnap = lineasSeleccionadas.slice();
     var notasSnap = notas;
     var sedeSnap = selectedSede;
@@ -512,14 +479,12 @@ export default function SheetsOrderForm() {
       localStorage.setItem('ped_responsable', respSnap);
       localStorage.setItem('ped_correo', correoSnap);
 
-      // Número de orden
       var numeroOrden = Math.floor(Date.now() / 1000);
       try { var n2 = await dbService.getNextGlobalConsecutive(); if (n2) numeroOrden = n2; }
       catch(eN) { console.warn('[Firebase] fallback timestamp:', eN); }
 
       var fechaHoy = new Date().toISOString().split('T')[0];
 
-      // Guardar cada línea en Drive — NO detener si una falla
       var errores = 0;
       for (var i = 0; i < lineasSnap.length; i++) {
         var linea = lineasSnap[i];
@@ -529,8 +494,8 @@ export default function SheetsOrderForm() {
             sede: sedeSnap,
             proveedor: provSnap,
             codigo: linea.codigo || '',
-            articulo: linea.articulo || '',       // artículo real → campo insumo
-            subArticulo: linea.subArticulo || '',  // subfamilia
+            articulo: linea.articulo || '',
+            subArticulo: linea.subArticulo || '',
             cantidad: linea.cantidad || 0,
             unidad: linea.unidad || '',
             responsable: respSnap,
@@ -544,17 +509,12 @@ export default function SheetsOrderForm() {
         }
       }
 
-      // Mostrar éxito aunque alguna línea haya fallado
       setSuccess(true);
-
-      // IMPORTANTE: resetear solo cantidades y notas — NO el proveedor ni otros campos
-      // Esto evita que la página quede en blanco
       setCantidades({});
       setValorUnitario({});
       setNotas('');
       setTimeout(function(){ setSuccess(false); }, 8000);
 
-      // Generar PDF después de un pequeño delay (evita conflicto con re-render)
       setTimeout(function(){
         try {
           generarPDF({
@@ -589,7 +549,7 @@ export default function SheetsOrderForm() {
     }
   }
 
-  // ── Solo descargar PDF ────────────────────────────────────────────────────
+  // ── Solo descargar PDF ─────────────────────────────────────────────────
   async function handleSoloPDF() {
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
     if (lineasSeleccionadas.length === 0) { alert('Agrega artículos primero.'); return; }
@@ -615,7 +575,7 @@ export default function SheetsOrderForm() {
     }
   }
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  // ── Loading ────────────────────────────────────────────────────────────
   if (loading) return (
     <div className="flex items-center justify-center min-h-64 gap-3 text-slate-500">
       <RefreshCw className="w-5 h-5 animate-spin"/>
@@ -623,11 +583,10 @@ export default function SheetsOrderForm() {
     </div>
   );
 
-  // ── Render ────────────────────────────────────────────────────────────────
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
-      {/* Mensajes globales */}
       {errorGlobal && (
         <div className="flex items-start gap-3 bg-red-50 border border-red-200 rounded-xl p-4 text-red-700">
           <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5"/>
@@ -648,7 +607,7 @@ export default function SheetsOrderForm() {
         </div>
       )}
 
-      {/* Paso 1: Información */}
+      {/* Paso 1 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
           <User className="w-4 h-4 text-cyan-500"/> 1. Información del Pedido
@@ -683,7 +642,7 @@ export default function SheetsOrderForm() {
         </div>
       </div>
 
-      {/* Paso 2: Proveedor */}
+      {/* Paso 2 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
           <Truck className="w-4 h-4 text-cyan-500"/> 2. Seleccionar Proveedor ({proveedoresNombres.length} disponibles)
@@ -695,23 +654,22 @@ export default function SheetsOrderForm() {
         </select>
       </div>
 
-      {/* Paso 3: Artículos */}
+      {/* Paso 3: Artículos — título usa proveedorTitulo (sincronizado) */}
       {selectedProveedor && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
             <ShoppingCart className="w-4 h-4 text-cyan-500"/>
             <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest flex-1">
-              3. Artículos de {selectedProveedor}
+              3. Productos - {proveedorTitulo || selectedProveedor}
               {loadingProductos && <RefreshCw className="w-3 h-3 animate-spin text-slate-400 inline ml-2"/>}
             </h2>
             {lineasSeleccionadas.length > 0 && (
               <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-0.5">
-                {lineasSeleccionadas.length} seleccionado(s)
+                {lineasSeleccionadas.length} artículo(s) seleccionado(s)
               </span>
             )}
           </div>
 
-          {/* Filtros */}
           <div className="flex gap-3 mb-4 flex-wrap">
             <div className="relative flex-1 min-w-48">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
@@ -732,7 +690,6 @@ export default function SheetsOrderForm() {
             )}
           </div>
 
-          {/* Tabla */}
           {loadingProductos ? (
             <div className="flex items-center justify-center py-12 text-slate-400 gap-2">
               <RefreshCw className="w-4 h-4 animate-spin"/>
@@ -743,8 +700,8 @@ export default function SheetsOrderForm() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-slate-900 text-white">
-                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Código</th>
-                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Artículo</th>
+                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">C&#243;digo</th>
+                    <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Art&#237;culo</th>
                     <th className="py-3 px-4 text-right text-[10px] uppercase tracking-wider font-bold w-32 hidden md:table-cell">Valor Unit.</th>
                     <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-36">Cantidad</th>
                   </tr>
@@ -789,7 +746,6 @@ export default function SheetsOrderForm() {
             </div>
           )}
 
-          {/* Resumen */}
           {lineasSeleccionadas.length > 0 && (
             <div className="mt-4 flex justify-end">
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 min-w-52">
@@ -814,7 +770,7 @@ export default function SheetsOrderForm() {
         </div>
       )}
 
-      {/* Paso 4: Observaciones y botones */}
+      {/* Paso 4 */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
           <Save className="w-4 h-4 text-cyan-500"/> 4. Observaciones y Registro
@@ -836,22 +792,21 @@ export default function SheetsOrderForm() {
             <Download className="w-4 h-4"/> Solo Descargar PDF
           </button>
           <button onClick={function(){
-              invalidarCache();
-              if (selectedProveedor) {
-                // Forzar recarga de artículos invalidando y re-seteando proveedor
-                var prov = selectedProveedor;
-                setSelectedProveedor('');
-                setTimeout(function(){ setSelectedProveedor(prov); }, 100);
-              }
-              alert('Caché borrado. Datos actualizados.');
-            }}
+            invalidarCache();
+            if (selectedProveedor) {
+              var prov = selectedProveedor;
+              setSelectedProveedor('');
+              setTimeout(function(){ setSelectedProveedor(prov); }, 100);
+            }
+            alert('Caché borrado. Datos actualizados.');
+          }}
             className="flex items-center gap-2 px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-sm font-medium transition-all">
             <RefreshCw className="w-4 h-4"/> Actualizar Drive
           </button>
         </div>
       </div>
 
-      {/* Paso 5: Buscador */}
+      {/* Paso 5 */}
       <div>
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
           <Search className="w-4 h-4 text-cyan-500"/> 5. Consultar Pedido Existente
