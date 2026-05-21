@@ -564,7 +564,7 @@ export default function SheetsOrderForm() {
         <div className="flex flex-wrap gap-3">
           <button onClick={handleGuardar} disabled={saving||lineasSeleccionadas.length===0}
             className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
-            {saving ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+            <Save className="w-4 h-4"/>
             {saving ? 'Guardando...' : 'Guardar y Descargar PDF'}
           </button>
           <button onClick={handleSoloPDF} disabled={lineasSeleccionadas.length===0}
