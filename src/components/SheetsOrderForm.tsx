@@ -106,7 +106,7 @@ function generarPDF(params) {
   y = Math.max(y, yR) + 5;
 
   // Tabla
-  var cW = [55, 45, 22, 35, 35];
+  var cW = [72, 38, 20, 28, 22];
   var cX = [margen];
   for (var ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
   var rH = 7;
@@ -176,121 +176,147 @@ function generarPDF(params) {
   doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
 }
 
-function BuscadorPedidos() {
-  var [busId, setBusId] = useState('');
-  var [buscando, setBuscando] = useState(false);
-  var [pedido, setPedido] = useState(null);
+function HistorialPedidos() {
+  var [sedeFiltro, setSedeFiltro] = useState('');
+  var [articuloBusq, setArticuloBusq] = useState('');
+  var [cargando, setCargando] = useState(false);
+  var [pedidos, setPedidos] = useState([]);
+  var [sedesDisp, setSedesDisp] = useState([]);
   var [err, setErr] = useState('');
-  var [exportando, setExportando] = useState(false);
+  var [expandido, setExpandido] = useState(null);
 
-  async function buscar() {
-    if (!busId.trim()) { alert('Ingresa el ID.'); return; }
-    setBuscando(true); setErr(''); setPedido(null);
+  useEffect(function() { cargarHistorial(); }, []);
+
+  async function cargarHistorial() {
+    setCargando(true); setErr(''); setPedidos([]);
     try {
-      var res = await fetch(ENDPOINT + '?action=getPedidoByOrden&nOrden=' + encodeURIComponent(busId.trim()), { redirect:'follow' });
+      var res = await fetch(ENDPOINT + '?action=getHistorial', { redirect: 'follow' });
       var data = await res.json();
-      if (!data.ok) { setErr(data.error || 'No encontrado.'); return; }
-      var p = data.pedido;
-      if (!p) { setErr('Sin datos.'); return; }
-      var articulos;
-      if (p.lineas && p.lineas.length > 0) {
-        articulos = p.lineas.map(function(l){ return { codigo: String(l.codigo||''), articulo: String(l.insumo||l.articulo||''), subArticulo: String(l.subArticulo||''), cantidad: String(l.cantidad||''), unidad: String(l.unidad||'---') }; });
-      } else if (data.rows && data.rows.length > 0) {
-        articulos = data.rows.map(function(r){ return { codigo: String(r[4]||''), articulo: String(r[5]||''), subArticulo: String(r[6]||''), cantidad: String(r[7]||''), unidad: String(r[8]||'---') }; });
-      } else { setErr('Sin articulos.'); return; }
-      var first = data.rows ? data.rows[0] : null;
-      setPedido({ nOrden: String(p.nOrden||busId), fecha: String(p.fecha||(first&&first[1])||'---').split('GMT')[0].trim(), sede: String(p.sede||(first&&first[2])||'---'), proveedor: String(p.proveedor||(first&&first[3])||'---'), responsable: String(p.responsable||(first&&first[9])||'---'), articulos: articulos });
+      if (!data.ok) { setErr(data.error || 'Error cargando historial.'); return; }
+      var rows = data.rows || [];
+      var mapa = {};
+      rows.forEach(function(r) {
+        var nOrden = String(r[0] || '');
+        if (!nOrden) return;
+        if (!mapa[nOrden]) {
+          mapa[nOrden] = {
+            nOrden: nOrden,
+            fecha: String(r[1] || '---').split('GMT')[0].trim().split('T')[0] || String(r[1] || '---'),
+            sede: String(r[2] || '---'),
+            proveedor: String(r[3] || '---'),
+            responsable: String(r[9] || '---'),
+            articulos: []
+          };
+        }
+        if (r[5] || r[4]) {
+          mapa[nOrden].articulos.push({ codigo: String(r[4]||''), articulo: String(r[5]||''), subArticulo: String(r[6]||''), cantidad: String(r[7]||''), unidad: String(r[8]||'') });
+        }
+      });
+      var lista = Object.values(mapa).reverse();
+      var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
+      setSedesDisp(sds);
+      setPedidos(lista);
     } catch(e) { setErr('Error: ' + e.message); }
-    finally { setBuscando(false); }
+    finally { setCargando(false); }
   }
 
-  async function exportExcel() {
-    if (!pedido) return;
-    setExportando(true);
-    try {
-      if (typeof window.XLSX === 'undefined') {
-        await new Promise(function(r2,ej){ var s=document.createElement('script'); s.src='https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js'; s.onload=r2; s.onerror=ej; document.head.appendChild(s); });
-      }
-      var XLSX = window.XLSX;
-      var wsData = [['N Orden','Fecha','Sede','Proveedor','Responsable'],[pedido.nOrden,pedido.fecha,pedido.sede,pedido.proveedor,pedido.responsable],[],['Codigo','Articulo','Subarticulo','Cantidad','Unidad']].concat(pedido.articulos.map(function(a){ return [a.codigo,a.articulo,a.subArticulo,a.cantidad,a.unidad]; }));
-      var ws = XLSX.utils.aoa_to_sheet(wsData);
-      ws['!cols'] = [{wch:14},{wch:38},{wch:22},{wch:12},{wch:14}];
-      var wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, 'Pedido ' + pedido.nOrden);
-      XLSX.writeFile(wb, 'Pedido_' + pedido.nOrden + '.xlsx');
-    } catch(e) { alert('Error Excel: ' + e.message); }
-    finally { setExportando(false); }
-  }
+  var pedidosFiltrados = pedidos.filter(function(p) {
+    var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
+    var pasaArt = !articuloBusq || p.articulos.some(function(a) {
+      return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
+    });
+    return pasaSede && pasaArt;
+  });
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-4" style={{background:'#1a3c6e'}}>
-        <Search className="w-5 h-5 text-blue-300"/>
-        <div>
-          <div className="text-white font-bold text-sm">Buscador de Pedidos</div>
-          <div className="text-blue-300 text-xs">Consulta cualquier orden registrada</div>
+      <div className="flex items-center justify-between px-5 py-4" style={{background:'#1a3c6e'}}>
+        <div className="flex items-center gap-3">
+          <Search className="w-5 h-5 text-blue-300"/>
+          <div>
+            <div className="text-white font-bold text-sm">Historial de Pedidos</div>
+            <div className="text-blue-300 text-xs">{pedidos.length} ordenes registradas</div>
+          </div>
         </div>
+        <button onClick={cargarHistorial} disabled={cargando} className="flex items-center gap-1.5 text-xs text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+          <Download className="w-3.5 h-3.5"/>{cargando ? 'Cargando...' : 'Actualizar'}
+        </button>
       </div>
-      <div className="p-5 space-y-4">
-        <div className="flex gap-2">
+      <div className="p-4 border-b border-slate-100 space-y-2">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select value={sedeFiltro} onChange={function(e){setSedeFiltro(e.target.value);}}
+            className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500">
+            <option value="">Todas las sedes</option>
+            {sedesDisp.map(function(s){ return (<option key={s} value={s}>{s}</option>); })}
+          </select>
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
-            <input type="text" value={busId} onChange={function(e){setBusId(e.target.value);}} onKeyDown={function(e){if(e.key==='Enter')buscar();}} placeholder="ID del pedido" className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+            <input type="text" value={articuloBusq} onChange={function(e){setArticuloBusq(e.target.value);}}
+              placeholder="Buscar por articulo o codigo..." className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
           </div>
-          <button onClick={buscar} disabled={buscando} className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50" style={{background:'#1a3c6e',minWidth:'110px',justifyContent:'center'}}>
-            <Search className="w-4 h-4"/>{buscando ? 'Buscando...' : 'Buscar'}
-          </button>
         </div>
-        {err && <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div>}
-        {pedido && (
-          <div className="space-y-3">
-            <div className="rounded-xl p-4 space-y-3" style={{background:'#eef2fa',border:'1px solid #c8d5ed'}}>
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-400">Orden encontrada</div>
-                  <div className="text-2xl font-black" style={{color:'#1a3c6e'}}>#{pedido.nOrden}</div>
-                </div>
-                <button onClick={exportExcel} disabled={exportando} className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold text-white disabled:opacity-50" style={{background:'#1a7c3c'}}>
-                  <FileSpreadsheet className="w-4 h-4"/>{exportando ? 'Exportando...' : 'Excel'}
-                </button>
-              </div>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[{l:'Fecha',v:pedido.fecha},{l:'Sede',v:pedido.sede},{l:'Proveedor',v:pedido.proveedor},{l:'Responsable',v:pedido.responsable}].map(function(x){
-                  return (<div key={x.l}><div className="text-xs font-bold uppercase tracking-wider mb-0.5 text-slate-400">{x.l}</div><div className="text-sm font-bold" style={{color:'#1a3c6e'}}>{x.v}</div></div>);
-                })}
-              </div>
-            </div>
-            <div className="rounded-xl overflow-hidden border border-slate-200">
-              <table className="w-full text-sm">
-                <thead><tr style={{background:'#1a3c6e'}}>
-                  <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase w-28">Codigo</th>
-                  <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase">Articulo</th>
-                  <th className="py-2.5 px-3 text-left text-white text-xs font-bold uppercase hidden md:table-cell">Subarticulo</th>
-                  <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase w-20">Cant.</th>
-                  <th className="py-2.5 px-3 text-center text-white text-xs font-bold uppercase w-20">Unidad</th>
-                </tr></thead>
-                <tbody>
-                  {pedido.articulos.map(function(a,i){
-                    return (<tr key={i} className={'border-b border-slate-100 '+(i%2===0?'bg-white':'bg-slate-50')}>
-                      <td className="py-2 px-3 font-mono text-xs text-slate-500">{a.codigo}</td>
-                      <td className="py-2 px-3 font-medium text-slate-800">{a.articulo}</td>
-                      <td className="py-2 px-3 text-slate-500 text-xs hidden md:table-cell">{a.subArticulo}</td>
-                      <td className="py-2 px-3 text-center font-bold text-blue-800">{a.cantidad}</td>
-                      <td className="py-2 px-3 text-center text-slate-500 text-xs">{a.unidad}</td>
-                    </tr>);
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-        {!pedido && !err && !buscando && (
-          <div className="text-center py-6 text-slate-400">
-            <Search className="w-8 h-8 mx-auto mb-2 text-slate-300"/>
-            <div className="text-sm">Ingresa un ID para consultar</div>
-          </div>
-        )}
+        {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500">{pedidosFiltrados.length} resultado(s)</div>}
       </div>
+      {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
+      {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial...</div>}
+      {!cargando && pedidos.length === 0 && !err && <div className="p-8 text-center text-slate-400 text-sm">No hay pedidos registrados aun.</div>}
+      {!cargando && pedidosFiltrados.length > 0 && (
+        <div className="divide-y divide-slate-100 max-h-[600px] overflow-y-auto">
+          {pedidosFiltrados.map(function(p) {
+            var isOpen = expandido === p.nOrden;
+            var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
+            return (
+              <div key={p.nOrden}>
+                <button onClick={function(){ setExpandido(isOpen ? null : p.nOrden); }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold" style={{background:'#1a3c6e'}}>
+                      {(p.sede||'X').charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
+                      <div className="text-xs text-slate-500">{p.sede} · {p.fecha} · {p.articulos.length} art.</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform " + (isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="px-4 pb-4 bg-slate-50/50">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3 p-3 rounded-xl bg-white border border-slate-100 text-xs">
+                      {[{l:'Orden',v:'#'+p.nOrden},{l:'Fecha',v:p.fecha},{l:'Sede',v:p.sede},{l:'Responsable',v:p.responsable}].map(function(x){
+                        return (<div key={x.l}><div className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">{x.l}</div><div className="font-semibold text-slate-700">{x.v}</div></div>);
+                      })}
+                    </div>
+                    <div className="rounded-xl overflow-hidden border border-slate-200">
+                      <table className="w-full text-xs">
+                        <thead><tr style={{background:'#1a3c6e'}}>
+                          <th className="py-2 px-3 text-left text-white font-bold uppercase">Codigo</th>
+                          <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
+                          <th className="py-2 px-3 text-center text-white font-bold uppercase w-14">Cant.</th>
+                          <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
+                        </tr></thead>
+                        <tbody>
+                          {artsVis.map(function(a,i){
+                            return (<tr key={i} className={'border-b border-slate-100 '+(i%2===0?'bg-white':'bg-slate-50')}>
+                              <td className="py-1.5 px-3 font-mono text-slate-500">{a.codigo}</td>
+                              <td className="py-1.5 px-3 font-medium text-slate-800">{a.articulo}</td>
+                              <td className="py-1.5 px-3 text-center font-bold text-blue-800">{a.cantidad}</td>
+                              <td className="py-1.5 px-3 text-center text-slate-500">{a.unidad||'---'}</td>
+                            </tr>);
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -578,9 +604,9 @@ export default function SheetsOrderForm() {
 
       <div>
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
-          <Search className="w-4 h-4 text-cyan-500"/> 5. Consultar Pedido Existente
+          <Search className="w-4 h-4 text-cyan-500"/> 5. Historial de Pedidos
         </h2>
-        <BuscadorPedidos/>
+        <HistorialPedidos/>
       </div>
 
     </div>
