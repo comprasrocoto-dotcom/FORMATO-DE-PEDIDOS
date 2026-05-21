@@ -511,7 +511,7 @@ export default function SheetsOrderForm() {
                 <thead><tr className="bg-slate-900 text-white">
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Codigo</th>
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Articulo</th>
-                  <th className="py-3 px-4 text-right text-[10px] uppercase tracking-wider font-bold w-32 hidden md:table-cell">Valor Unit.</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-32 hidden md:table-cell">Unidad</th>
                   <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-36">Cantidad</th>
                 </tr></thead>
                 <tbody>
@@ -521,9 +521,7 @@ export default function SheetsOrderForm() {
                       <tr key={p.codigo||idx} className={'border-b border-slate-100 transition-colors '+(qty>0?'bg-emerald-50':idx%2===0?'bg-white':'bg-slate-50/50')}>
                         <td className="py-3 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
                         <td className="py-3 px-4 font-medium text-slate-800">{p.articulo}</td>
-                        <td className="py-3 px-4 hidden md:table-cell">
-                          <input type="number" min="0" value={vu||''} onChange={function(e){handleValorUnitario(p.codigo,e.target.value);}} placeholder="0" className="w-28 text-right py-1.5 px-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-cyan-500 ml-auto block"/>
-                        </td>
+                        <td className="py-3 px-4 text-center text-slate-500 text-xs hidden md:table-cell">{p.unidad||'---'}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
                             <button onClick={function(){handleCantidad(p.codigo,qty-1);}} className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold flex items-center justify-center text-slate-600 text-base">-</button>
