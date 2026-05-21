@@ -353,6 +353,7 @@ export default function SheetsOrderForm() {
   var [medioPago, setMedioPago] = useState('contado');
   var [busqArticulo, setBusqArticulo] = useState('');
   var [provSearch, setProvSearch] = useState('');
+  var [todosArticulos, setTodosArticulos] = useState([]);
   var [cantidades, setCantidades] = useState({});
   var [valorUnitario, setValorUnitario] = useState({});
   var cancelRef = useRef(false);
@@ -367,6 +368,17 @@ export default function SheetsOrderForm() {
         setProveedoresNombres(res[0].status==='fulfilled' ? res[0].value||[] : []);
         var sds = res[1].status==='fulfilled' ? res[1].value||[] : [];
         setSedes(sds.map(function(s){ return typeof s==='string' ? {nombre:s,direccion:'',horaEntrega:'',telefono:''} : {nombre:s.nombre||s,direccion:s.direccion||'',horaEntrega:s.horaEntrega||s.horario||'',telefono:s.telefono||''}; }));
+        try {
+          var ra = await fetch(ENDPOINT+'?action=getDatos',{redirect:'follow'});
+          var da = await ra.json();
+          if(da.articulosPorProveedor && !cancelRef.current){
+            var arts=[];
+            Object.values(da.articulosPorProveedor).forEach(function(rows){
+              (rows||[]).forEach(function(row){ if(row.subArticulo&&row.articulo){ arts.push({articulo:String(row.subArticulo||''),proveedor:String(row.articulo||''),unidad:String(row.unidad||''),codigo:String(row.codigo||'')}); } });
+            });
+            setTodosArticulos(arts);
+          }
+        } catch(ea){ console.warn('arts load:',ea.message); }
       } catch(e) { if (!cancelRef.current) setErrorGlobal('Error Drive: ' + e.message); }
       finally { if (!cancelRef.current) setLoading(false); }
     })();
@@ -549,14 +561,14 @@ export default function SheetsOrderForm() {
                   var q = busqArticulo.toLowerCase();
                   var resultados = [];
                   var seen = new Set();
-                  productos.forEach(function(p){ if((p.articulo||'').toLowerCase().includes(q)){ var key=p.proveedorNombre+'||'+p.articulo; if(!seen.has(key)){seen.add(key); resultados.push(p);} } });
-                  if(resultados.length===0) return <div className="px-4 py-3 text-xs text-slate-400">Sin resultados en base de datos</div>;
-                  return resultados.slice(0,12).map(function(p,i){
+                  todosArticulos.forEach(function(p){ if((p.articulo||'').toLowerCase().includes(q)){ var key=p.proveedor+'||'+p.articulo; if(!seen.has(key)){seen.add(key); resultados.push(p);} } });
+                  if(resultados.length===0) return <div className="px-4 py-3 text-xs text-slate-400">{todosArticulos.length===0?'Cargando...':'Sin resultados'}</div>;
+                  return resultados.slice(0,15).map(function(p,i){
                     return (<div key={i} className="px-3 py-2 border-b border-slate-100 last:border-0 flex items-center justify-between gap-2 hover:bg-slate-50 cursor-pointer"
-                      onClick={function(){ setSelectedProveedor(p.proveedorNombre); setBusqArticulo(''); setProvSearch(''); }}>
+                      onClick={function(){ setSelectedProveedor(p.proveedor); setBusqArticulo(''); setProvSearch(''); }}>
                       <div>
                         <div className="text-xs font-semibold text-slate-800">{p.articulo}</div>
-                        <div className="text-[10px] text-slate-500">{p.proveedorNombre}</div>
+                        <div className="text-[10px] text-slate-500">{p.proveedor}</div>
                       </div>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-700 border border-cyan-200 whitespace-nowrap">{p.unidad||'---'}</span>
                     </div>);
