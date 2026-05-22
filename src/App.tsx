@@ -1,10 +1,8 @@
 // @ts-nocheck
-import { useState, Component } from 'react';
+import { Component } from 'react';
 import SheetsOrderForm from './components/SheetsOrderForm';
-import InsumoTable from './components/InsumoTable';
 
 // ErrorBoundary para capturar crashes de componentes hijos
-// Previene que un error interno deje la pantalla en blanco
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -37,8 +35,6 @@ class ErrorBoundary extends Component {
 }
 
 export default function App() {
-  var [activeTab, setActiveTab] = useState('pedido');
-
   return (
     <div className="min-h-screen bg-slate-50">
       {/* Header */}
@@ -64,33 +60,10 @@ export default function App() {
         </div>
       </header>
 
-      {/* Tabs */}
-      <div className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <nav className="flex gap-1 pt-1">
-            {[
-              { id:'pedido', label:'Pedido desde Drive', icon:'M9 17H7A5 5 0 017 7h1m2 0h8a2 2 0 012 2v8a2 2 0 01-2 2H9' },
-              { id:'catalogo', label:'Catalogo Firebase', icon:'M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4' },
-            ].map(function(tab) {
-              return (
-                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                  className={'flex items-center gap-2 px-4 py-3 text-xs font-semibold transition-all border-b-2 ' + (activeTab===tab.id ? 'border-cyan-500 text-cyan-600' : 'border-transparent text-slate-500 hover:text-slate-700')}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={tab.icon}/>
-                  </svg>
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-        </div>
-      </div>
-
-      {/* Contenido con ErrorBoundary */}
+      {/* Contenido principal */}
       <main>
-        <ErrorBoundary key={activeTab}>
-          {activeTab === 'pedido' && <SheetsOrderForm/>}
-          {activeTab === 'catalogo' && <InsumoTable/>}
+        <ErrorBoundary>
+          <SheetsOrderForm/>
         </ErrorBoundary>
       </main>
 
