@@ -15,7 +15,7 @@
  * L=MedioPago, M=Timestamp, N=NroFactura, O=TipoFactura, P=ObsFactura
  */
 
-const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
+const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
 let cachedDatos: any = null;
 let cacheTimestamp = 0;
