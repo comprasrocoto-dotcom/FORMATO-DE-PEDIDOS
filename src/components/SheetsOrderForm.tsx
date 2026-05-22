@@ -1,10 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v11 - MinMax
- * - Proveedor metadata en PDF (NIT, teléfono, correo, contacto)
- * - getProveedores() cargado al inicio
- * - PDF completo con datos reales del proveedor
- * - Historial con datos de factura y PDF
+ * SheetsOrderForm.tsx v12 - fixes: PDF 6 cols with Min/Max, colSpan fix, historial counter
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download,
@@ -30,7 +26,6 @@ var _jsPDFClass = null;
   s.onload = function() { _jsPDFClass = window.jspdf ? window.jspdf.jsPDF : window.jsPDF; };
   document.head.appendChild(s);
 })();
-
 function generarPDF(params) {
   var JsPDF = _jsPDFClass || (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
   if (!JsPDF) { alert('PDF no disponible. Espera 2s e intenta de nuevo.'); return; }
@@ -53,6 +48,7 @@ function generarPDF(params) {
   var tipoFactura = params.tipoFactura || '';
   var obsFactura = params.obsFactura || '';
   var fechaHoy = new Date().toISOString().slice(0, 10);
+  var minMaxData = params.minMaxData || {};
 
   var activas = lineas.filter(function(l) { return (parseFloat(l.cantidad) || 0) > 0; });
   var total = activas.reduce(function(s, l) { return s + ((l.valorUnitario || 0) * (parseFloat(l.cantidad) || 0)); }, 0);
@@ -68,7 +64,7 @@ function generarPDF(params) {
   var y = 15;
 
   doc.setFontSize(8); doc.setTextColor(120, 120, 120);
-  doc.text('Pedido #' + numeroOrden + '   ' + fechaHoy, ancho - margen, y, { align: 'right' });
+  doc.text('Pedido #' + numeroOrden + '  ' + fechaHoy, ancho - margen, y, { align: 'right' });
   if (medioPago) {
     doc.setFontSize(7);
     doc.text('Medio de Pago: ' + medioPago.charAt(0).toUpperCase() + medioPago.slice(1), ancho - margen, y + 4, { align: 'right' });
@@ -109,14 +105,13 @@ function generarPDF(params) {
     yR += 6;
   });
   y = Math.max(y, yR) + 5;
-
+  // 6 columns: Articulo, Unidad, Min, Max, Cantidad, Total
   var cW = [55, 20, 15, 15, 18, 22];
   var cX = [margen];
   for (var ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
   var rH = 7;
   var aligns = ['left', 'center', 'center', 'center', 'center', 'right'];
   var headers = ['Articulo', 'Unidad', 'Min', 'Max', 'Cantidad', 'Total'];
-  var minMaxData = params.minMaxData || {};
 
   doc.setFillColor(azul[0], azul[1], azul[2]);
   doc.rect(margen, y, ancho - 2 * margen, rH, 'F');
@@ -141,11 +136,16 @@ function generarPDF(params) {
       var cant = parseFloat(l.cantidad) || 0;
       var t2 = (l.valorUnitario || 0) * cant;
       var cantStr = cant % 1 === 0 ? String(cant) : cant.toFixed(2);
+      // Min/Max from minMaxData
+      var mm2 = minMaxData[l.codigo] || minMaxData[l.articulo] || null;
+      var minStr = mm2 ? (mm2.min%1===0 ? String(mm2.min) : mm2.min.toFixed(2)) : '---';
+      var maxStr = mm2 ? (mm2.max%1===0 ? String(mm2.max) : mm2.max.toFixed(2)) : '---';
       var vals = [
         (l.articulo||'').substring(0,30),
         (l.unidad||'---').substring(0,10),
+        minStr,
+        maxStr,
         cantStr,
-        '$ ' + Number(l.valorUnitario||0).toLocaleString('es-CO'),
         '$ ' + Number(t2).toLocaleString('es-CO'),
       ];
       doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(7.5);
@@ -160,8 +160,8 @@ function generarPDF(params) {
   y += 2;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
   doc.setTextColor(azul[0], azul[1], azul[2]);
-  doc.text('Total:', cX[3], y + 4, { align: 'left' });
-  doc.text('$ ' + Number(total).toLocaleString('es-CO') + ',00', cX[4]+cW[4]-2, y + 4, { align: 'right' });
+  doc.text('Total:', cX[4], y + 4, { align: 'left' });
+  doc.text('$ ' + Number(total).toLocaleString('es-CO') + ',00', cX[5]+cW[5]-2, y + 4, { align: 'right' });
   y += 10;
 
   if (notas) {
@@ -186,7 +186,6 @@ function generarPDF(params) {
   var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g,'_').substring(0,20);
   doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
 }
-
 // ─── HistorialPedidos ────────────────────────────────────────────────────────
 function HistorialPedidos({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
@@ -254,14 +253,12 @@ function HistorialPedidos({ proveedoresMeta }) {
     return pasaSede && pasaArt;
   });
 
-  // Busca metadata del proveedor
   function getProvMeta(nombre) {
     if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
     var found = proveedoresMeta.find(function(p){ return p.nombre === nombre; });
     if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
     return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
   }
-
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4" style={{background:'#1a3c6e'}}>
@@ -269,7 +266,7 @@ function HistorialPedidos({ proveedoresMeta }) {
           <Search className="w-5 h-5 text-blue-300"/>
           <div>
             <div className="text-white font-bold text-sm">Historial de Pedidos</div>
-            <div className="text-blue-300 text-xs">{pedidos.length} ordenes registradas</div>
+            <div className="text-blue-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' ordenes registradas'}</div>
           </div>
         </div>
         <button onClick={cargarHistorial} disabled={cargando}
@@ -336,10 +333,10 @@ function HistorialPedidos({ proveedoresMeta }) {
                       <button onClick={function(e){ e.stopPropagation();
                         generarPDF({ sede:p.sede, sedeDireccion:'---', sedeTelefono:'---', sedeHorario:'---', encargado:p.responsable,
                           proveedorNombre:p.proveedor, provNit:pm.nit, provTel:pm.telefono, provCorreo:pm.correo, provContacto:pm.contacto,
-                          lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0}; }),
+                          lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
                           notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
-                          nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'' });
-                      }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
+                          nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'', minMaxData:{} });
+                        }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> PDF
                       </button>
                     </div>
@@ -430,7 +427,6 @@ function HistorialPedidos({ proveedoresMeta }) {
     </div>
   );
 }
-
 // ─── Componente principal SheetsOrderForm ───────────────────────────────────
 export default function SheetsOrderForm() {
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
@@ -533,10 +529,7 @@ export default function SheetsOrderForm() {
     });
 
   var sedeObj = sedes.find(function(s){ return s.nombre===selectedSede; }) || null;
-
-  // Metadata del proveedor seleccionado
   var provMeta = proveedoresMeta.find(function(p){ return p.nombre === selectedProveedor; }) || null;
-
   async function handleGuardar(descargarPDF) {
     if (!responsable.trim()) { alert('Ingresa tu nombre.'); return; }
     if (!selectedSede) { alert('Selecciona una sede.'); return; }
@@ -616,7 +609,6 @@ export default function SheetsOrderForm() {
       <RefreshCw className="w-5 h-5 animate-spin"/><span className="text-sm font-medium">Cargando datos desde Drive...</span>
     </div>
   );
-
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
@@ -666,7 +658,6 @@ export default function SheetsOrderForm() {
           </div>
         </div>
       </div>
-
       {/* 2. Proveedor */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -735,7 +726,6 @@ export default function SheetsOrderForm() {
           </div>
         </div>
       </div>
-
       {/* 3. Productos */}
       {selectedProveedor && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -777,25 +767,21 @@ export default function SheetsOrderForm() {
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Codigo</th>
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Articulo</th>
                   <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-20 hidden md:table-cell">Unidad</th>
-                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Mín</th>
-                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Máx</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Min</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Max</th>
                   <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-40">Cantidad</th>
                 </tr></thead>
                 <tbody>
                   {productosFiltrados.map(function(p,idx){
                     var qty = parseFloat(cantidades[p.codigo]) || 0;
+                    var mm = minMax[p.codigo] || minMax[p.articulo] || null;
                     return (
                       <tr key={p.codigo||idx} className={'border-b border-slate-100 transition-colors '+(qty>0?'bg-emerald-50':idx%2===0?'bg-white':'bg-slate-50/50')}>
                         <td className="py-3 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
                         <td className="py-3 px-4 font-medium text-slate-800">{p.articulo}</td>
                         <td className="py-3 px-4 text-center text-slate-500 text-xs hidden md:table-cell">{p.unidad||'---'}</td>
-                        {(function(){
-                          var mm = minMax[p.codigo] || minMax[p.articulo] || null;
-                          return (<>
-                            <td className="py-3 px-4 text-center text-xs hidden lg:table-cell">{mm ? <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-200">{mm.min%1===0?mm.min:mm.min.toFixed(2)}</span> : <span className="text-slate-300">---</span>}</td>
-                            <td className="py-3 px-4 text-center text-xs hidden lg:table-cell">{mm ? <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold border border-red-200">{mm.max%1===0?mm.max:mm.max.toFixed(2)}</span> : <span className="text-slate-300">---</span>}</td>
-                          </>);
-                        })()}
+                        <td className="py-3 px-4 text-center text-xs hidden lg:table-cell">{mm ? <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-200">{mm.min%1===0?mm.min:mm.min.toFixed(2)}</span> : <span className="text-slate-300">---</span>}</td>
+                        <td className="py-3 px-4 text-center text-xs hidden lg:table-cell">{mm ? <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold border border-red-200">{mm.max%1===0?mm.max:mm.max.toFixed(2)}</span> : <span className="text-slate-300">---</span>}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
                             <button onClick={function(){ handleCantidad(p.codigo, Math.max(0, qty-1)); }}
@@ -810,7 +796,7 @@ export default function SheetsOrderForm() {
                       </tr>
                     );
                   })}
-                  {productosFiltrados.length===0 && <tr><td colSpan={4} className="py-12 text-center text-slate-400 text-sm">No hay articulos{searchTerm?' para "'+searchTerm+'"':''}.</td></tr>}
+                  {productosFiltrados.length===0 && <tr><td colSpan={6} className="py-12 text-center text-slate-400 text-sm">No hay articulos{searchTerm?' para "'+searchTerm+'"':''}.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -835,7 +821,6 @@ export default function SheetsOrderForm() {
           )}
         </div>
       )}
-
       {/* 4. Medio de Pago */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
