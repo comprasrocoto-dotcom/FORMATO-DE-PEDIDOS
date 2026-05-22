@@ -221,3 +221,44 @@ export function invalidarCacheMinMax() {
   cachedMinMax = null;
   minMaxTimestamp = 0;
 }
+
+export interface InventarioMaestroItem {
+  nombre: string;
+  tipo: 'INSUMO' | 'SUBRECETA';
+  vendidoTotal: number;
+  trasladoTotal: number;
+  fabricadoTotal: number;
+  consumoFabricaciones: number;
+  consumoReal: number;
+  promDiario: number;
+  inventarioSugerido: number;
+  factorConsumo: string;
+  fechaActualizacion: string;
+}
+
+let cachedInventario: InventarioMaestroItem[] | null = null;
+let inventarioTimestamp = 0;
+const INVENTARIO_TTL = 15 * 60 * 1000; // 15 min
+
+export async function getInventarioMaestro(): Promise<InventarioMaestroItem[]> {
+  const now = Date.now();
+  if (cachedInventario && (now - inventarioTimestamp) < INVENTARIO_TTL) return cachedInventario;
+  const url = APPS_SCRIPT_URL + '?action=getInventarioMaestro';
+  try {
+    const res = await fetch(url, { redirect: 'follow' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Error al obtener inventario');
+    cachedInventario = data.maestro || [];
+    inventarioTimestamp = now;
+    return cachedInventario;
+  } catch(e: any) {
+    console.error('[getInventarioMaestro]', e);
+    return [];
+  }
+}
+
+export function invalidarCacheInventario() {
+  cachedInventario = null;
+  inventarioTimestamp = 0;
+}
