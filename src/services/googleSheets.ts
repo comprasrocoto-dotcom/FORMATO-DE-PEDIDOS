@@ -1,15 +1,18 @@
 // @ts-nocheck
-// rebuild: v4-fix-mapping
+// rebuild: v5-medioPago-factura
 /**
  * googleSheets.ts
- * Servicio para leer datos de Google Sheets.
+ * Servicio para leer y escribir datos de Google Sheets via Apps Script.
  *
  * ESTRUCTURA REAL DEL DRIVE (BASE DE COMPRAS):
- *   - codigo     = código de barras del artículo
- *   - articulo   = nombre del PROVEEDOR (campo mal nombrado en Sheets)
- *   - subArticulo = nombre real del ARTÍCULO/INSUMO
+ * - codigo      = codigo de barras del articulo
+ * - articulo    = nombre del PROVEEDOR (campo mal nombrado en Sheets)
+ * - subArticulo = nombre real del ARTICULO/INSUMO
  *
- * Este servicio normaliza eso para que el frontend reciba datos correctos.
+ * Columnas BASE DE PEDIDOS (objetivo):
+ * A=nOrden, B=Fecha, C=Sede, D=Proveedor, E=Codigo, F=Articulo,
+ * G=Unidad, H=Cantidad, I=Correo, J=Responsable, K=Observaciones,
+ * L=MedioPago, M=Timestamp, N=NroFactura, O=TipoFactura, P=ObsFactura
  */
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || '';
@@ -27,12 +30,6 @@ export interface ProveedorSheet {
   medioPago: string;
 }
 
-// ProductoSheet normalizado:
-// - codigo    = código de barras
-// - articulo  = nombre del artículo/insumo (viene de subArticulo del Drive)
-// - subfamilia = subfamilia (si existe en futuro; por ahora vacío)
-// - unidad    = unidad de medida (no disponible en Drive aún, se deja vacío)
-// - proveedor = nombre del proveedor (viene de articulo del Drive)
 export interface ProductoSheet {
   codigo: string;
   articulo: string;
@@ -54,13 +51,20 @@ export interface PedidoRow {
   proveedor: string;
   codigo: string;
   articulo: string;
-  subArticulo: string;
-  cantidad: number | string;
   unidad: string;
+  cantidad: number | string;
   responsable: string;
   correoResponsable: string;
   notas: string;
+  medioPago: string;
   numeroOrden: number | string;
+}
+
+export interface FacturaRow {
+  nOrden: string;
+  nroFactura: string;
+  tipoFactura: string;
+  obsFactura: string;
 }
 
 async function fetchAllDatos(): Promise<any> {
@@ -77,32 +81,23 @@ async function fetchAllDatos(): Promise<any> {
   return data;
 }
 
-// Invalidar cache manualmente (para forzar recarga desde Drive)
 export function invalidarCache() {
   cachedDatos = null;
   cacheTimestamp = 0;
 }
 
-// ─── Helpers internos ────────────────────────────────────────────────────────
-
-// Filtra filas que son cabeceras o totales del Sheet
 function esFilaValida(row: any): boolean {
   var art = (row.articulo || '').trim();
   var sub = (row.subArticulo || '').trim();
   var cod = (row.codigo || '').trim().toLowerCase();
-  // Eliminar filas vacías
   if (!art && !sub && !cod) return false;
-  // Eliminar cabeceras
   if (cod === 'proveedor' || cod === 'codigo' || cod.indexOf('barras') !== -1) return false;
   if (art.toLowerCase() === 'proveedor' || art.toLowerCase() === 'articulo') return false;
-  // Eliminar totales
   if (cod.indexOf('total') !== -1 || art.toLowerCase().indexOf('total') !== -1) return false;
-  // Debe tener al menos artículo (proveedor) y subArtículo (insumo)
   if (!art || !sub) return false;
   return true;
 }
 
-// Obtiene todos los artículos de la BASE DE COMPRAS ya normalizados
 async function getAllArticulosNormalizados(): Promise<any[]> {
   const datos = await fetchAllDatos();
   const artPorHoja = datos.articulosPorProveedor || {};
@@ -112,21 +107,16 @@ async function getAllArticulosNormalizados(): Promise<any[]> {
       if (!esFilaValida(row)) return;
       todos.push({
         codigo: (row.codigo || '').trim(),
-        // articulo en Drive = nombre del PROVEEDOR
         proveedor: (row.articulo || '').trim(),
-        // subArticulo en Drive = nombre real del ARTÍCULO
         articulo: (row.subArticulo || '').trim(),
-        subfamilia: '',   // no disponible en Drive aún
-        unidad: (row.unidad || '').trim(), // vacío por ahora
+        subfamilia: (row.subfamilia || '').trim(),
+        unidad: (row.unidad || '').trim(),
       });
     });
   });
   return todos;
 }
 
-// ─── Exports públicos ────────────────────────────────────────────────────────
-
-// Lista de proveedores únicos extraída del campo "articulo" del Drive
 export async function getProveedorSheetNames(): Promise<string[]> {
   const articulos = await getAllArticulosNormalizados();
   const nombres = new Set<string>();
@@ -134,11 +124,9 @@ export async function getProveedorSheetNames(): Promise<string[]> {
   return Array.from(nombres).sort();
 }
 
-// Proveedores con metadata (telefono, correo, etc.) — del endpoint proveedores
 export async function getProveedores(): Promise<ProveedorSheet[]> {
   const datos = await fetchAllDatos();
   const proveedoresMeta = datos.proveedores || [];
-  // Si hay metadata de proveedores en el endpoint, usarla
   if (proveedoresMeta.length > 0) {
     return proveedoresMeta.map((p: any, idx: number) => ({
       id: 'prov-' + idx,
@@ -149,14 +137,12 @@ export async function getProveedores(): Promise<ProveedorSheet[]> {
       medioPago: '',
     }));
   }
-  // Fallback: construir desde los artículos
   const nombres = await getProveedorSheetNames();
   return nombres.map(function(n, idx) {
     return { id: 'prov-' + idx, nombre: n, telefono: '', correo: '', asesor: '', medioPago: '' };
   });
 }
 
-// Artículos de un proveedor específico (mapeados correctamente)
 export async function getProductosByProveedor(proveedorNombre: string): Promise<ProductoSheet[]> {
   try {
     const todos = await getAllArticulosNormalizados();
@@ -165,7 +151,7 @@ export async function getProductosByProveedor(proveedorNombre: string): Promise<
       .map(function(a) {
         return {
           codigo: a.codigo,
-          articulo: a.articulo,   // nombre real del artículo
+          articulo: a.articulo,
           subfamilia: a.subfamilia,
           unidad: a.unidad,
           proveedorNombre: a.proveedor,
@@ -177,7 +163,6 @@ export async function getProductosByProveedor(proveedorNombre: string): Promise<
   }
 }
 
-// Subfamilias únicas de un proveedor
 export async function getSubfamiliasByProveedor(proveedorNombre: string): Promise<string[]> {
   const productos = await getProductosByProveedor(proveedorNombre);
   const subs = new Set<string>();
@@ -189,7 +174,6 @@ export async function getSedes(): Promise<SedeSheet[]> {
   const datos = await fetchAllDatos();
   const sedes = datos.sedes || [];
   if (sedes.length === 0) return [];
-  // sedes puede ser array de strings o array de objetos
   return sedes.map(function(s: any) {
     if (typeof s === 'string') {
       return { nombre: s, direccion: '', horaEntrega: '', telefono: '' };
@@ -207,8 +191,10 @@ export async function getAllDatos(): Promise<any> {
   return fetchAllDatos();
 }
 
-// Guarda pedido en Drive via Apps Script
-// Columnas: N°Orden | Fecha | Sede | Proveedor | Cod.Barras | Insumo | SubArticulo | Cantidad | Unidad | Responsable | Correo | Observaciones | Timestamp
+// Guarda pedido en Drive
+// Columnas: A=nOrden, B=Fecha, C=Sede, D=Proveedor, E=Codigo, F=Articulo,
+//           G=Unidad, H=Cantidad, I=Correo, J=Responsable, K=Observaciones,
+//           L=MedioPago, M=Timestamp
 export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; error?: string }> {
   if (!APPS_SCRIPT_URL) {
     console.warn('[appendPedido] URL no configurada.');
@@ -222,16 +208,16 @@ export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; er
     sede: pedido.sede || '',
     proveedor: pedido.proveedor || '',
     codigo: pedido.codigo || '',
-    insumo: pedido.articulo || '',        // nombre real del artículo
-    subArticulo: pedido.subArticulo || '', // subfamilia
-    cantidad: pedido.cantidad ?? 0,
+    insumo: pedido.articulo || '',
     unidad: pedido.unidad || '',
-    responsable: pedido.responsable || '',
+    cantidad: pedido.cantidad ?? 0,
     correo: pedido.correoResponsable || '',
+    responsable: pedido.responsable || '',
     observaciones: pedido.notas || '',
+    medioPago: pedido.medioPago || 'contado',
   };
 
-  console.log('[appendPedido] Enviando OC:', payload.nOrden, '| Insumo:', payload.insumo, '| Cod:', payload.codigo);
+  console.log('[appendPedido] OC:', payload.nOrden, '| Art:', payload.insumo, '| MedioPago:', payload.medioPago);
 
   try {
     const res = await fetch(APPS_SCRIPT_URL, {
@@ -249,6 +235,42 @@ export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; er
     return { ok: true };
   } catch (err: any) {
     console.error('[appendPedido] Error:', err.message);
+    return { ok: false, error: err.message };
+  }
+}
+
+// Actualiza datos de factura en una orden existente
+export async function actualizarFactura(factura: FacturaRow): Promise<{ ok: boolean; error?: string }> {
+  if (!APPS_SCRIPT_URL) {
+    return { ok: false, error: 'URL no configurada' };
+  }
+
+  const payload = {
+    action: 'actualizarFactura',
+    nOrden: factura.nOrden || '',
+    nroFactura: factura.nroFactura || '',
+    tipoFactura: factura.tipoFactura || 'contado',
+    obsFactura: factura.obsFactura || '',
+  };
+
+  console.log('[actualizarFactura] OC:', payload.nOrden, '| Factura:', payload.nroFactura);
+
+  try {
+    const res = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
+    });
+    const text = await res.text().catch(() => '');
+    if (!res.ok) return { ok: false, error: 'HTTP ' + res.status };
+    try {
+      const json = JSON.parse(text);
+      if (json.ok === false) return { ok: false, error: json.error };
+    } catch (_) {}
+    return { ok: true };
+  } catch (err: any) {
+    console.error('[actualizarFactura] Error:', err.message);
     return { ok: false, error: err.message };
   }
 }
