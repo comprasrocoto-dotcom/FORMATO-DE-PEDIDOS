@@ -1,17 +1,17 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v9 - Rediseno completo
- * - Elimina tab Catalogo Firebase
- * - Historial con campos de factura (numero, contado/credito, observacion)
- * - Soporte decimales en cantidades
- * - Columnas correctas BASE DE PEDIDOS: G=unidad, I=correo, K=obs, L=medioPago
- * - PDF con datos completos de sede y proveedor
+ * SheetsOrderForm.tsx v10
+ * - Proveedor metadata en PDF (NIT, teléfono, correo, contacto)
+ * - getProveedores() cargado al inicio
+ * - PDF completo con datos reales del proveedor
+ * - Historial con datos de factura y PDF
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download,
   AlertCircle, CheckCircle, Search, Filter, FileText, Edit3 } from 'lucide-react';
 import {
   getProveedorSheetNames,
+  getProveedores,
   getProductosByProveedor,
   getSubfamiliasByProveedor,
   getSedes,
@@ -22,7 +22,6 @@ import {
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// Precarga de jsPDF al arrancar el modulo (FUERA de React)
 var _jsPDFClass = null;
 (function() {
   var s = document.createElement('script');
@@ -31,16 +30,15 @@ var _jsPDFClass = null;
   document.head.appendChild(s);
 })();
 
-// Generador de PDF - jsPDF puro sin operaciones DOM
 function generarPDF(params) {
   var JsPDF = _jsPDFClass || (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
   if (!JsPDF) { alert('PDF no disponible. Espera 2s e intenta de nuevo.'); return; }
 
   var sede = params.sede || '';
-  var sedeDireccion = params.sedeDireccion || '';
-  var sedeTelefono = params.sedeTelefono || '';
-  var sedeHorario = params.sedeHorario || '';
-  var encargado = params.encargado || '';
+  var sedeDireccion = params.sedeDireccion || '---';
+  var sedeTelefono = params.sedeTelefono || '---';
+  var sedeHorario = params.sedeHorario || '---';
+  var encargado = params.encargado || '---';
   var proveedorNombre = params.proveedorNombre || '';
   var provNit = params.provNit || '---';
   var provTel = params.provTel || '---';
@@ -68,22 +66,20 @@ function generarPDF(params) {
   var col2 = ancho / 2 + 5;
   var y = 15;
 
-  // Numero de pedido
   doc.setFontSize(8); doc.setTextColor(120, 120, 120);
-  doc.text('Pedido #' + numeroOrden + '  ' + fechaHoy, ancho - margen, y, { align: 'right' });
+  doc.text('Pedido #' + numeroOrden + '   ' + fechaHoy, ancho - margen, y, { align: 'right' });
   if (medioPago) {
     doc.setFontSize(7);
     doc.text('Medio de Pago: ' + medioPago.charAt(0).toUpperCase() + medioPago.slice(1), ancho - margen, y + 4, { align: 'right' });
   }
   y += 10;
 
-  // Info de sede y proveedor
   var infoLeft = [
     ['Sede', sede],
-    ['Direccion', sedeDireccion || '---'],
-    ['Telefono Sede', sedeTelefono || '---'],
-    ['Horario', sedeHorario || '---'],
-    ['Encargado', encargado || '---'],
+    ['Direccion', sedeDireccion],
+    ['Telefono Sede', sedeTelefono],
+    ['Horario', sedeHorario],
+    ['Encargado', encargado],
   ];
   var infoRight = [
     ['Proveedor', proveedorNombre],
@@ -113,7 +109,6 @@ function generarPDF(params) {
   });
   y = Math.max(y, yR) + 5;
 
-  // Tabla de articulos
   var cW = [70, 25, 20, 28, 22];
   var cX = [margen];
   for (var ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
@@ -160,7 +155,6 @@ function generarPDF(params) {
     y += rH;
   }
 
-  // Total
   y += 2;
   doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
   doc.setTextColor(azul[0], azul[1], azul[2]);
@@ -168,7 +162,6 @@ function generarPDF(params) {
   doc.text('$ ' + Number(total).toLocaleString('es-CO') + ',00', cX[4]+cW[4]-2, y + 4, { align: 'right' });
   y += 10;
 
-  // Observacion del pedido
   if (notas) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(negro[0], negro[1], negro[2]);
     doc.text('Observacion del Pedido:', margen, y); y += 4;
@@ -179,7 +172,6 @@ function generarPDF(params) {
     y += 22;
   }
 
-  // Datos de factura si existen
   if (nroFactura || tipoFactura || obsFactura) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(azul[0], azul[1], azul[2]);
     doc.text('Informacion de Factura:', margen, y); y += 5;
@@ -193,8 +185,8 @@ function generarPDF(params) {
   doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
 }
 
-// ─── Componente HistorialPedidos ────────────────────────────────────────────
-function HistorialPedidos() {
+// ─── HistorialPedidos ────────────────────────────────────────────────────────
+function HistorialPedidos({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
   var [articuloBusq, setArticuloBusq] = useState('');
   var [cargando, setCargando] = useState(false);
@@ -202,7 +194,6 @@ function HistorialPedidos() {
   var [sedesDisp, setSedesDisp] = useState([]);
   var [err, setErr] = useState('');
   var [expandido, setExpandido] = useState(null);
-  // Estado para edicion de factura por orden
   var [editandoFactura, setEditandoFactura] = useState(null);
   var [facturaData, setFacturaData] = useState({});
 
@@ -221,28 +212,18 @@ function HistorialPedidos() {
         if (!nOrden) return;
         if (!mapa[nOrden]) {
           mapa[nOrden] = {
-            nOrden: nOrden,
-            fecha: String(r[1] || '---').split('GMT')[0].trim().split('T')[0] || String(r[1] || '---'),
-            sede: String(r[2] || '---'),
-            proveedor: String(r[3] || '---'),
-            responsable: String(r[9] || '---'),
-            // Columnas correctas: G[6]=unidad, I[8]=correo, K[10]=obs, L[11]=medioPago
-            medioPago: String(r[11] || 'contado'),
-            observaciones: String(r[10] || ''),
-            // Columnas de factura: M[12]=nroFactura, N[13]=tipoFactura, O[14]=obsFactura
-            nroFactura: String(r[12] || ''),
-            tipoFactura: String(r[13] || ''),
-            obsFactura: String(r[14] || ''),
+            nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
+            sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
+            responsable: String(r[9]||'---'), medioPago: String(r[11]||'contado'),
+            observaciones: String(r[10]||''),
+            nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
             articulos: []
           };
         }
         if (r[5] || r[4]) {
           mapa[nOrden].articulos.push({
-            codigo: String(r[4]||''),
-            articulo: String(r[5]||''),
-            unidad: String(r[6]||''),      // G[6] = unidad de medida
-            cantidad: String(r[7]||''),    // H[7] = cantidad
-            // I[8] = correo (no se muestra en tabla)
+            codigo: String(r[4]||''), articulo: String(r[5]||''),
+            unidad: String(r[6]||''), cantidad: String(r[7]||''),
           });
         }
       });
@@ -257,27 +238,27 @@ function HistorialPedidos() {
   async function guardarFactura(nOrden) {
     var fd = facturaData[nOrden] || {};
     try {
-      await actualizarFactura({
-        nOrden: nOrden,
-        nroFactura: fd.nroFactura || '',
-        tipoFactura: fd.tipoFactura || 'contado',
-        obsFactura: fd.obsFactura || '',
-      });
+      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'' });
       setEditandoFactura(null);
       await cargarHistorial();
-    } catch(e) {
-      alert('Error guardando factura: ' + e.message);
-    }
+    } catch(e) { alert('Error guardando factura: ' + e.message); }
   }
 
   var pedidosFiltrados = pedidos.filter(function(p) {
     var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
     var pasaArt = !articuloBusq || p.articulos.some(function(a) {
-      return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) ||
-             (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
+      return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
     });
     return pasaSede && pasaArt;
   });
+
+  // Busca metadata del proveedor
+  function getProvMeta(nombre) {
+    if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    var found = proveedoresMeta.find(function(p){ return p.nombre === nombre; });
+    if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -291,10 +272,10 @@ function HistorialPedidos() {
         </div>
         <button onClick={cargarHistorial} disabled={cargando}
           className="flex items-center gap-1.5 text-xs text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
-          <RefreshCw className={"w-3.5 h-3.5 " + (cargando?'animate-spin':'')}/>{cargando ? 'Cargando...' : 'Actualizar'}
+          <RefreshCw className={"w-3.5 h-3.5 " + (cargando?'animate-spin':'')}/>{cargando?'Cargando...':'Actualizar'}
         </button>
       </div>
-      <div className="p-4 border-b border-slate-100 space-y-2">
+      <div className="p-4 border-b border-slate-100">
         <div className="flex flex-col sm:flex-row gap-2">
           <select value={sedeFiltro} onChange={function(e){setSedeFiltro(e.target.value);}}
             className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500">
@@ -308,7 +289,7 @@ function HistorialPedidos() {
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
           </div>
         </div>
-        {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500">{pedidosFiltrados.length} resultado(s)</div>}
+        {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500 mt-1">{pedidosFiltrados.length} resultado(s)</div>}
       </div>
       {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
       {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial...</div>}
@@ -318,13 +299,12 @@ function HistorialPedidos() {
           {pedidosFiltrados.map(function(p) {
             var isOpen = expandido === p.nOrden;
             var isEditFac = editandoFactura === p.nOrden;
-            var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura || 'contado', obsFactura: p.obsFactura };
-            var artsVis = articuloBusq
-              ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); })
-              : p.articulos;
+            var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura||'contado', obsFactura: p.obsFactura };
+            var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase())||(a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
+            var pm = getProvMeta(p.proveedor);
             return (
               <div key={p.nOrden}>
-                <button onClick={function(){ setExpandido(isOpen ? null : p.nOrden); }}
+                <button onClick={function(){ setExpandido(isOpen?null:p.nOrden); }}
                   className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold" style={{background:'#1a3c6e'}}>
@@ -333,19 +313,18 @@ function HistorialPedidos() {
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
                       <div className="text-xs text-slate-500">{p.sede} · {p.fecha} · {p.articulos.length} art.
-                        {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold " + (p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
+                        {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
                         {p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform " + (isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
                 </button>
                 {isOpen && (
                   <div className="px-4 pb-4 bg-slate-50/50">
-                    {/* Info del pedido + botones */}
                     <div className="flex items-start justify-between gap-3 mb-3">
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl bg-white border border-slate-100 text-xs flex-1">
                         {[{l:'Orden',v:'#'+p.nOrden},{l:'Fecha',v:p.fecha},{l:'Sede',v:p.sede},{l:'Responsable',v:p.responsable},{l:'Medio Pago',v:p.medioPago||'---'}].map(function(x){
@@ -353,17 +332,15 @@ function HistorialPedidos() {
                         })}
                       </div>
                       <button onClick={function(e){ e.stopPropagation();
-                        generarPDF({ sede:p.sede, sedeDireccion:'', sedeTelefono:'', sedeHorario:'', encargado:p.responsable,
-                          proveedorNombre:p.proveedor, provNit:'---', provTel:'---', provCorreo:'---', provContacto:'---',
-                          lineas:p.articulos.map(function(a){ return {articulo:a.articulo, unidad:a.unidad||'', cantidad:Number(a.cantidad)||0, valorUnitario:0}; }),
+                        generarPDF({ sede:p.sede, sedeDireccion:'---', sedeTelefono:'---', sedeHorario:'---', encargado:p.responsable,
+                          proveedorNombre:p.proveedor, provNit:pm.nit, provTel:pm.telefono, provCorreo:pm.correo, provContacto:pm.contacto,
+                          lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0}; }),
                           notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
                           nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'' });
                       }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> PDF
                       </button>
                     </div>
-
-                    {/* Tabla de articulos */}
                     <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
                       <table className="w-full text-xs">
                         <thead><tr style={{background:'#1a3c6e'}}>
@@ -384,8 +361,6 @@ function HistorialPedidos() {
                         </tbody>
                       </table>
                     </div>
-
-                    {/* Panel de factura */}
                     <div className="rounded-xl border border-slate-200 bg-white p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
@@ -457,6 +432,7 @@ function HistorialPedidos() {
 // ─── Componente principal SheetsOrderForm ───────────────────────────────────
 export default function SheetsOrderForm() {
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
+  var [proveedoresMeta, setProveedoresMeta] = useState([]);
   var [sedes, setSedes] = useState([]);
   var [productos, setProductos] = useState([]);
   var [subfamilias, setSubfamilias] = useState([]);
@@ -485,7 +461,7 @@ export default function SheetsOrderForm() {
     (async function() {
       try {
         setLoading(true);
-        var res = await Promise.allSettled([getProveedorSheetNames(), getSedes()]);
+        var res = await Promise.allSettled([getProveedorSheetNames(), getSedes(), getProveedores()]);
         if (cancelRef.current) return;
         setProveedoresNombres(res[0].status==='fulfilled' ? res[0].value||[] : []);
         var sds = res[1].status==='fulfilled' ? res[1].value||[] : [];
@@ -494,6 +470,7 @@ export default function SheetsOrderForm() {
             ? {nombre:s,direccion:'',horaEntrega:'',telefono:''}
             : {nombre:s.nombre||s,direccion:s.direccion||'',horaEntrega:s.horaEntrega||s.horario||'',telefono:s.telefono||''};
         }));
+        if (res[2].status==='fulfilled') setProveedoresMeta(res[2].value||[]);
         try {
           var ra = await fetch(ENDPOINT+'?action=getDatos',{redirect:'follow'});
           var da = await ra.json();
@@ -535,15 +512,14 @@ export default function SheetsOrderForm() {
     return function() { cancelled = true; };
   }, [selectedProveedor]);
 
-  // Soporte decimal en cantidades
   function handleCantidad(codigo, val) {
     var parsed = parseFloat(String(val).replace(',','.'));
-    setCantidades(function(p){ return Object.assign({},p,{[codigo]: isNaN(parsed) || parsed < 0 ? 0 : parsed}); });
+    setCantidades(function(p){ return Object.assign({},p,{[codigo]: isNaN(parsed)||parsed<0 ? 0 : parsed}); });
   }
 
   var productosFiltrados = productos.filter(function(p) {
     return (!searchTerm || (p.articulo||'').toLowerCase().includes(searchTerm.toLowerCase()) || (p.codigo||'').toLowerCase().includes(searchTerm.toLowerCase())) &&
-           (!selectedSubfamilia || p.subfamilia === selectedSubfamilia);
+      (!selectedSubfamilia || p.subfamilia === selectedSubfamilia);
   });
 
   var lineasSeleccionadas = productos
@@ -554,6 +530,9 @@ export default function SheetsOrderForm() {
 
   var sedeObj = sedes.find(function(s){ return s.nombre===selectedSede; }) || null;
 
+  // Metadata del proveedor seleccionado
+  var provMeta = proveedoresMeta.find(function(p){ return p.nombre === selectedProveedor; }) || null;
+
   async function handleGuardar(descargarPDF) {
     if (!responsable.trim()) { alert('Ingresa tu nombre.'); return; }
     if (!selectedSede) { alert('Selecciona una sede.'); return; }
@@ -562,9 +541,13 @@ export default function SheetsOrderForm() {
     setSaving(true); setErrorGlobal(''); setSuccess(false);
 
     var snap = {
-      lineas: lineasSeleccionadas.slice(), notas: notas,
-      sede: selectedSede, prov: selectedProveedor, resp: responsable, correo: correo, medioPago: medioPago,
-      dir: sedeObj ? sedeObj.direccion : '', hor: sedeObj ? sedeObj.horaEntrega : '', tel: sedeObj ? sedeObj.telefono : '',
+      lineas: lineasSeleccionadas.slice(), notas, sede: selectedSede, prov: selectedProveedor,
+      resp: responsable, correo, medioPago,
+      dir: sedeObj?sedeObj.direccion:'', hor: sedeObj?sedeObj.horaEntrega:'', tel: sedeObj?sedeObj.telefono:'',
+      provNit: provMeta?provMeta.nit||'---':'---',
+      provTel: provMeta?provMeta.telefono||'---':'---',
+      provCorreo: provMeta?provMeta.correo||'---':'---',
+      provContacto: provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',
       orden: Math.floor(Date.now()/1000), fecha: new Date().toISOString().split('T')[0]
     };
 
@@ -576,11 +559,11 @@ export default function SheetsOrderForm() {
       for (var i=0; i<snap.lineas.length; i++) {
         try {
           await appendPedido({
-            fecha: snap.fecha, sede: snap.sede, proveedor: snap.prov,
-            codigo: snap.lineas[i].codigo||'', articulo: snap.lineas[i].articulo||'',
-            unidad: snap.lineas[i].unidad||'', cantidad: snap.lineas[i].cantidad||0,
-            responsable: snap.resp, correoResponsable: snap.correo,
-            notas: snap.notas, medioPago: snap.medioPago||'contado', numeroOrden: String(snap.orden)
+            fecha:snap.fecha, sede:snap.sede, proveedor:snap.prov,
+            codigo:snap.lineas[i].codigo||'', articulo:snap.lineas[i].articulo||'',
+            unidad:snap.lineas[i].unidad||'', cantidad:snap.lineas[i].cantidad||0,
+            responsable:snap.resp, correoResponsable:snap.correo,
+            notas:snap.notas, medioPago:snap.medioPago||'contado', numeroOrden:String(snap.orden)
           });
         } catch(e2) { console.warn('[appendPedido]', e2.message); errores++; }
       }
@@ -591,12 +574,15 @@ export default function SheetsOrderForm() {
       if (errores>0) setErrorGlobal(errores + ' linea(s) no guardadas en Drive.');
 
       if (descargarPDF !== false) {
-        var pdfParams = { sede:snap.sede, sedeDireccion:snap.dir, sedeTelefono:snap.tel, sedeHorario:snap.hor,
-          encargado:snap.resp, proveedorNombre:snap.prov, provNit:'---', provTel:'---', provCorreo:'---', provContacto:'---',
-          lineas:snap.lineas, notas:snap.notas, medioPago:snap.medioPago, numeroOrden:snap.orden };
         setTimeout(function() {
-          try { generarPDF(pdfParams); }
-          catch(e3) { console.error('[PDF]', e3); alert('Pedido guardado. Error PDF: ' + e3.message); }
+          try {
+            generarPDF({
+              sede:snap.sede, sedeDireccion:snap.dir, sedeTelefono:snap.tel, sedeHorario:snap.hor,
+              encargado:snap.resp, proveedorNombre:snap.prov,
+              provNit:snap.provNit, provTel:snap.provTel, provCorreo:snap.provCorreo, provContacto:snap.provContacto,
+              lineas:snap.lineas, notas:snap.notas, medioPago:snap.medioPago, numeroOrden:snap.orden
+            });
+          } catch(e3) { console.error('[PDF]', e3); alert('Pedido guardado. Error PDF: ' + e3.message); }
         }, 0);
       }
     } catch(e) { console.error('[handleGuardar]', e); setErrorGlobal('Error: ' + e.message); }
@@ -607,12 +593,17 @@ export default function SheetsOrderForm() {
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
     if (lineasSeleccionadas.length===0) { alert('Agrega articulos primero.'); return; }
     try {
-      generarPDF({ sede:selectedSede, sedeDireccion:sedeObj?sedeObj.direccion:'',
+      generarPDF({
+        sede:selectedSede, sedeDireccion:sedeObj?sedeObj.direccion:'',
         sedeTelefono:sedeObj?sedeObj.telefono:'', sedeHorario:sedeObj?sedeObj.horaEntrega:'',
         encargado:responsable||'Sin especificar', proveedorNombre:selectedProveedor,
-        provNit:'---', provTel:'---', provCorreo:'---', provContacto:'---',
-        lineas:lineasSeleccionadas, notas:notas, medioPago:medioPago||'contado',
-        numeroOrden:Math.floor(Date.now()/1000) });
+        provNit:provMeta?provMeta.nit||'---':'---',
+        provTel:provMeta?provMeta.telefono||'---':'---',
+        provCorreo:provMeta?provMeta.correo||'---':'---',
+        provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',
+        lineas:lineasSeleccionadas, notas, medioPago:medioPago||'contado',
+        numeroOrden:Math.floor(Date.now()/1000)
+      });
     } catch(e) { console.error('[SoloPDF]', e); alert('Error PDF: ' + e.message); }
   }
 
@@ -699,6 +690,14 @@ export default function SheetsOrderForm() {
               )}
             </div>
             {selectedProveedor && <div className="mt-1.5 text-xs text-cyan-700 font-semibold px-1">&#10003; {selectedProveedor}</div>}
+            {provMeta && (provMeta.nit || provMeta.telefono) && (
+              <div className="mt-2 text-xs text-slate-500 space-y-0.5 pl-1 bg-slate-50 rounded-lg p-2 border border-slate-100">
+                {provMeta.nit && <p><span className="font-semibold text-slate-600">NIT:</span> {provMeta.nit}</p>}
+                {provMeta.telefono && <p><span className="font-semibold text-slate-600">Tel:</span> {provMeta.telefono}</p>}
+                {provMeta.correo && <p><span className="font-semibold text-slate-600">Correo:</span> {provMeta.correo}</p>}
+                {(provMeta.contacto||provMeta.asesor) && <p><span className="font-semibold text-slate-600">Contacto:</span> {provMeta.contacto||provMeta.asesor}</p>}
+              </div>
+            )}
           </div>
           <div className="flex-1 max-w-md">
             <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Buscar articulo por proveedor</div>
@@ -811,7 +810,7 @@ export default function SheetsOrderForm() {
                   {lineasSeleccionadas.map(function(l){ return (
                     <div key={l.codigo} className="flex justify-between text-xs text-slate-700">
                       <span className="truncate max-w-36">{l.articulo}</span>
-                      <span className="font-bold ml-2 text-cyan-700">x{l.cantidad % 1 === 0 ? l.cantidad : l.cantidad.toFixed(2)}</span>
+                      <span className="font-bold ml-2 text-cyan-700">x{l.cantidad%1===0?l.cantidad:l.cantidad.toFixed(2)}</span>
                     </div>); })}
                 </div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between text-xs font-bold text-slate-800">
@@ -833,7 +832,7 @@ export default function SheetsOrderForm() {
           {['contado','credito'].map(function(mp){
             return (
               <button key={mp} onClick={function(){setMedioPago(mp);}}
-                className={"flex-1 py-3 rounded-xl border-2 text-sm font-bold transition-all " + (medioPago===mp ? 'border-cyan-500 bg-cyan-50 text-cyan-700' : 'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300')}>
+                className={"flex-1 py-3 rounded-xl border-2 text-sm font-bold transition-all " + (medioPago===mp?'border-cyan-500 bg-cyan-50 text-cyan-700':'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300')}>
                 {mp.charAt(0).toUpperCase()+mp.slice(1)}
               </button>
             );
@@ -852,7 +851,7 @@ export default function SheetsOrderForm() {
         <div className="flex flex-wrap gap-3">
           <button onClick={function(){ handleGuardar(true); }} disabled={saving||lineasSeleccionadas.length===0}
             className="flex items-center gap-2 px-6 py-2.5 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
-            <Save className="w-4 h-4"/>{saving ? 'Guardando...' : 'Guardar y Descargar PDF'}
+            <Save className="w-4 h-4"/>{saving?'Guardando...':'Guardar y Descargar PDF'}
           </button>
           <button onClick={function(){ handleGuardar(false); }} disabled={saving||lineasSeleccionadas.length===0}
             className="flex items-center gap-2 px-6 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
@@ -874,7 +873,7 @@ export default function SheetsOrderForm() {
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2">
           <Search className="w-4 h-4 text-cyan-500"/> 6. Historial de Pedidos
         </h2>
-        <HistorialPedidos/>
+        <HistorialPedidos proveedoresMeta={proveedoresMeta}/>
       </div>
 
     </div>
