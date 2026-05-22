@@ -188,3 +188,36 @@ export async function actualizarPedido(ajuste: AjustePedidoRow): Promise<{ ok: b
     return { ok:true };
   } catch(err: any) { return { ok:false, error:err.message }; }
 }
+
+export interface MinMaxData {
+  codigo: string;
+  articulo: string;
+  min: number;
+  max: number;
+  promDiario: number;
+  numDias: number;
+}
+
+let cachedMinMax: Record<string, MinMaxData> | null = null;
+let minMaxTimestamp = 0;
+const MINMAX_TTL = 10 * 60 * 1000; // 10 min
+
+export async function getMinMax(): Promise<Record<string, MinMaxData>> {
+  const now = Date.now();
+  if (cachedMinMax && (now - minMaxTimestamp) < MINMAX_TTL) return cachedMinMax;
+  const url = APPS_SCRIPT_URL + '?action=getMinMax';
+  try {
+    const res = await fetch(url, { redirect: 'follow' });
+    if (!res.ok) return {};
+    const data = await res.json();
+    if (!data.ok) return {};
+    cachedMinMax = data.minMax || {};
+    minMaxTimestamp = now;
+    return cachedMinMax;
+  } catch(_) { return {}; }
+}
+
+export function invalidarCacheMinMax() {
+  cachedMinMax = null;
+  minMaxTimestamp = 0;
+}
