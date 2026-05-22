@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v10
+ * SheetsOrderForm.tsx v11 - MinMax
  * - Proveedor metadata en PDF (NIT, teléfono, correo, contacto)
  * - getProveedores() cargado al inicio
  * - PDF completo con datos reales del proveedor
@@ -18,6 +18,7 @@ import {
   appendPedido,
   invalidarCache,
   actualizarFactura,
+  getMinMax,
 } from '../services/googleSheets';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
@@ -109,12 +110,13 @@ function generarPDF(params) {
   });
   y = Math.max(y, yR) + 5;
 
-  var cW = [70, 25, 20, 28, 22];
+  var cW = [55, 20, 15, 15, 18, 22];
   var cX = [margen];
   for (var ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
   var rH = 7;
-  var aligns = ['left', 'center', 'center', 'right', 'right'];
-  var headers = ['Articulo', 'Unidad', 'Cantidad', 'Valor Unit.', 'Total'];
+  var aligns = ['left', 'center', 'center', 'center', 'center', 'right'];
+  var headers = ['Articulo', 'Unidad', 'Min', 'Max', 'Cantidad', 'Total'];
+  var minMaxData = params.minMaxData || {};
 
   doc.setFillColor(azul[0], azul[1], azul[2]);
   doc.rect(margen, y, ancho - 2 * margen, rH, 'F');
@@ -433,6 +435,7 @@ function HistorialPedidos({ proveedoresMeta }) {
 export default function SheetsOrderForm() {
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
+  var [minMax, setMinMax] = useState({});
   var [sedes, setSedes] = useState([]);
   var [productos, setProductos] = useState([]);
   var [subfamilias, setSubfamilias] = useState([]);
@@ -461,7 +464,7 @@ export default function SheetsOrderForm() {
     (async function() {
       try {
         setLoading(true);
-        var res = await Promise.allSettled([getProveedorSheetNames(), getSedes(), getProveedores()]);
+        var res = await Promise.allSettled([getProveedorSheetNames(), getSedes(), getProveedores(), getMinMax()]);
         if (cancelRef.current) return;
         setProveedoresNombres(res[0].status==='fulfilled' ? res[0].value||[] : []);
         var sds = res[1].status==='fulfilled' ? res[1].value||[] : [];
@@ -471,6 +474,7 @@ export default function SheetsOrderForm() {
             : {nombre:s.nombre||s,direccion:s.direccion||'',horaEntrega:s.horaEntrega||s.horario||'',telefono:s.telefono||''};
         }));
         if (res[2].status==='fulfilled') setProveedoresMeta(res[2].value||[]);
+        if (res[3].status==='fulfilled') setMinMax(res[3].value||{});
         try {
           var ra = await fetch(ENDPOINT+'?action=getDatos',{redirect:'follow'});
           var da = await ra.json();
@@ -580,7 +584,7 @@ export default function SheetsOrderForm() {
               sede:snap.sede, sedeDireccion:snap.dir, sedeTelefono:snap.tel, sedeHorario:snap.hor,
               encargado:snap.resp, proveedorNombre:snap.prov,
               provNit:snap.provNit, provTel:snap.provTel, provCorreo:snap.provCorreo, provContacto:snap.provContacto,
-              lineas:snap.lineas, notas:snap.notas, medioPago:snap.medioPago, numeroOrden:snap.orden
+              lineas:snap.lineas, notas:snap.notas, medioPago:snap.medioPago, numeroOrden:snap.orden, minMaxData:minMax
             });
           } catch(e3) { console.error('[PDF]', e3); alert('Pedido guardado. Error PDF: ' + e3.message); }
         }, 0);
@@ -602,7 +606,7 @@ export default function SheetsOrderForm() {
         provCorreo:provMeta?provMeta.correo||'---':'---',
         provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',
         lineas:lineasSeleccionadas, notas, medioPago:medioPago||'contado',
-        numeroOrden:Math.floor(Date.now()/1000)
+        numeroOrden:Math.floor(Date.now()/1000), minMaxData:minMax
       });
     } catch(e) { console.error('[SoloPDF]', e); alert('Error PDF: ' + e.message); }
   }
@@ -772,7 +776,9 @@ export default function SheetsOrderForm() {
                 <thead><tr className="bg-slate-900 text-white">
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Codigo</th>
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Articulo</th>
-                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-28 hidden md:table-cell">Unidad</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-20 hidden md:table-cell">Unidad</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Mín</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Máx</th>
                   <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-40">Cantidad</th>
                 </tr></thead>
                 <tbody>
@@ -783,6 +789,13 @@ export default function SheetsOrderForm() {
                         <td className="py-3 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
                         <td className="py-3 px-4 font-medium text-slate-800">{p.articulo}</td>
                         <td className="py-3 px-4 text-center text-slate-500 text-xs hidden md:table-cell">{p.unidad||'---'}</td>
+                        {(function(){
+                          var mm = minMax[p.codigo] || minMax[p.articulo] || null;
+                          return (<>
+                            <td className="py-3 px-4 text-center text-xs hidden lg:table-cell">{mm ? <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 font-semibold border border-amber-200">{mm.min%1===0?mm.min:mm.min.toFixed(2)}</span> : <span className="text-slate-300">---</span>}</td>
+                            <td className="py-3 px-4 text-center text-xs hidden lg:table-cell">{mm ? <span className="px-1.5 py-0.5 rounded bg-red-50 text-red-700 font-semibold border border-red-200">{mm.max%1===0?mm.max:mm.max.toFixed(2)}</span> : <span className="text-slate-300">---</span>}</td>
+                          </>);
+                        })()}
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
                             <button onClick={function(){ handleCantidad(p.codigo, Math.max(0, qty-1)); }}
