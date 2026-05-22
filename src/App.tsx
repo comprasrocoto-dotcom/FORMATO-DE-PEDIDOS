@@ -1,8 +1,9 @@
 // @ts-nocheck
 import SheetsOrderForm from './components/SheetsOrderForm';
 import AjustePedidos from './components/AjustePedidos';
+import InventarioMaestro from './components/InventarioMaestro';
 import { useState } from 'react';
-import { ShoppingBag, Edit3 } from 'lucide-react';
+import { ShoppingBag, Edit3, BarChart2 } from 'lucide-react';
 
 export default function App() {
   var [tab, setTab] = useState('pedidos');
@@ -10,7 +11,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-100">
       {/* Header */}
       <header className="bg-[#1a3c6e] shadow-lg">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center">
@@ -30,6 +31,10 @@ export default function App() {
                 className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all " + (tab==='ajuste'?'bg-white/20 text-white':'text-cyan-300 hover:text-white hover:bg-white/10')}>
                 <Edit3 className="w-3.5 h-3.5"/> Ajuste de Pedidos
               </button>
+              <button onClick={function(){setTab('inventario');}}
+                className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all " + (tab==='inventario'?'bg-white/20 text-white':'text-cyan-300 hover:text-white hover:bg-white/10')}>
+                <BarChart2 className="w-3.5 h-3.5"/> Inventario
+              </button>
             </nav>
           </div>
         </div>
@@ -38,7 +43,8 @@ export default function App() {
       {/* Content */}
       <main>
         {tab === 'pedidos' && <SheetsOrderForm />}
-        {tab === 'ajuste'  && <AjustePedidos />}
+        {tab === 'ajuste' && <AjustePedidos />}
+        {tab === 'inventario' && <InventarioMaestro />}
       </main>
     </div>
   );
