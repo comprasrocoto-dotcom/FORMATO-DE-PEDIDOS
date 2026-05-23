@@ -144,3 +144,5 @@ Vercel (despliegue automatico en cada push)
                                             >    3. 3. **Autenticacion:** Agrega Firebase Auth para controlar quien puede hacer pedidos
                                             >       4. 4. **Historial:** Conecta la hoja `BASE DE PEDIDOS` para mostrar pedidos anteriores en la web
                                             >          5. 
+
+<!-- deploy trigger 1779494924608 -->
