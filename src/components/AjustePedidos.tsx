@@ -1,17 +1,18 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v2
- * Fix: React DOM insertBefore crash when clicking "Editar cantidades"
- * Fix: Add PDF generation with proveedor data from Drive (columns F-G-H)
- * Fix: Load proveedoresMeta for PDF supplier info
+ * AjustePedidos.tsx v3
+ * Fix: pantalla en blanco al editar - seguridad nula en lineas/codigo
+ * Fix: key estable sin remount innecesario
+ * Fix: validacion F-G-H del proveedor antes de generar PDF
+ * Fix: carga proveedoresMeta desde Drive con campos correos/telefono/contacto
  */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download } from 'lucide-react';
-import { actualizarPedido, getProveedores } from '../services/googleSheets';
+import { actualizarPedido, getProveedores, getAllDatos } from '../services/googleSheets';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// ─── jsPDF loader ────────────────────────────────────────────────────────────
+// ─── jsPDF loader ─────────────────────────────────────────────────────────────
 var _jsPDFClass = null;
 (function() {
   var s = document.createElement('script');
@@ -49,7 +50,7 @@ function generarPDFAjuste(params) {
   var y = 15;
 
   doc.setFontSize(8); doc.setTextColor(120, 120, 120);
-  doc.text('Pedido #' + numeroOrden + '  ' + fechaHoy, ancho - margen, y, { align: 'right' });
+  doc.text('Pedido #' + numeroOrden + ' ' + fechaHoy, ancho - margen, y, { align: 'right' });
   if (medioPago) {
     doc.setFontSize(7);
     doc.text('Medio de Pago: ' + medioPago.charAt(0).toUpperCase() + medioPago.slice(1), ancho - margen, y + 4, { align: 'right' });
@@ -147,53 +148,60 @@ function generarPDFAjuste(params) {
   doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
 }
 
-interface LineaPedido {
-  nOrden: string;
-  fecha: string;
-  sede: string;
-  proveedor: string;
-  codigo: string;
-  articulo: string;
-  unidad: string;
-  cantidad: number;
-  responsable: string;
-  observaciones: string;
-  medioPago: string;
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+function getProvMeta(proveedoresMeta, nombre) {
+  if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+  var found = (proveedoresMeta || []).find(function(p){ return p.nombre === nombre; });
+  if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+  return {
+    nit: found.nit||'---',
+    telefono: found.telefono||'---',
+    correo: found.correo||'---',
+    contacto: found.contacto||found.asesor||'---'
+  };
 }
 
-interface GrupoPedido {
-  nOrden: string;
-  fecha: string;
-  sede: string;
-  proveedor: string;
-  responsable: string;
-  medioPago: string;
-  lineas: LineaPedido[];
+function validarProveedorFGH(pm) {
+  // F=telefono, G=correo, H=contacto/asesor
+  var tel = pm.telefono && pm.telefono !== '---' ? pm.telefono.trim() : '';
+  var cor = pm.correo && pm.correo !== '---' ? pm.correo.trim() : '';
+  var con = pm.contacto && pm.contacto !== '---' ? pm.contacto.trim() : '';
+  return !!(tel || cor || con);
 }
 
-// ─── DetalleOrden — sub-component con key estable para evitar crash React DOM ─
-function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta }) {
+// ─── DetalleOrden ─────────────────────────────────────────────────────────────
+function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, onPDFError }) {
   var isEdit = editandoOrden === g.nOrden;
+  var lineas = g.lineas || [];
 
-  function getProvMeta(nombre) {
-    if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
-    var found = (proveedoresMeta || []).find(function(p){ return p.nombre === nombre; });
-    if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
-    return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
+  var pm = getProvMeta(proveedoresMeta, g.proveedor);
+
+  function handleDescargarPDF() {
+    if (!validarProveedorFGH(pm)) {
+      if (onPDFError) onPDFError('Datos del proveedor incompletos en la base (columnas F-G-H). Corrige antes de generar el pedido.');
+      return;
+    }
+    generarPDFAjuste({
+      sede: g.sede, encargado: g.responsable,
+      proveedorNombre: g.proveedor,
+      provNit: pm.nit, provTel: pm.telefono,
+      provCorreo: pm.correo, provContacto: pm.contacto,
+      lineas: lineas.map(function(l){ return { articulo: l.articulo||'', unidad: l.unidad||'', cantidad: Number(l.cantidad)||0, codigo: l.codigo||'' }; }),
+      notas: lineas[0] ? lineas[0].observaciones||'' : '',
+      medioPago: g.medioPago||'contado', numeroOrden: g.nOrden,
+    });
   }
-
-  var pm = getProvMeta(g.proveedor);
 
   return (
     <div className="px-4 pb-4 bg-slate-50/50">
       {/* Info del pedido */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl bg-white border border-slate-100 text-xs mb-3">
         {[{l:'Orden',v:'#'+g.nOrden},{l:'Fecha',v:g.fecha},{l:'Sede',v:g.sede},{l:'Responsable',v:g.responsable}].map(function(x){
-          return (<div key={x.l}><div className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">{x.l}</div><div className="font-semibold text-slate-700">{x.v}</div></div>);
+          return (<div key={x.l}><div className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">{x.l}</div><div className="font-semibold text-slate-700">{x.v||'---'}</div></div>);
         })}
       </div>
 
-      {/* Campo modificado por — SIEMPRE presente, sólo visible en isEdit */}
+      {/* Campo modificado por — SIEMPRE presente en DOM, visible solo en isEdit */}
       <div style={{display: isEdit ? 'block' : 'none'}} className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
@@ -209,45 +217,51 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
         </div>
       </div>
 
-      {/* Tabla artículos */}
+      {/* Tabla articulos */}
       <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
         <table className="w-full text-xs">
           <thead><tr style={{background:'#1a3c6e'}}>
-            <th className="py-2 px-3 text-left text-white font-bold uppercase">Código</th>
-            <th className="py-2 px-3 text-left text-white font-bold uppercase">Artículo</th>
+            <th className="py-2 px-3 text-left text-white font-bold uppercase">Codigo</th>
+            <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-32">Cantidad</th>
           </tr></thead>
           <tbody>
-            {g.lineas.map(function(l, i){
-              var cantActual = isEdit ? (cantidadesEdit[l.codigo] !== undefined ? cantidadesEdit[l.codigo] : l.cantidad) : l.cantidad;
-              var cambio = isEdit && parseFloat(String(cantidadesEdit[l.codigo]||l.cantidad)) !== l.cantidad;
+            {lineas.length === 0 && (
+              <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Sin artículos en este pedido.</td></tr>
+            )}
+            {lineas.map(function(l, i){
+              var codigo = l.codigo || ('linea_' + i);
+              var cantActual = isEdit ? (cantidadesEdit[codigo] !== undefined ? cantidadesEdit[codigo] : (l.cantidad || 0)) : (l.cantidad || 0);
+              var cantOriginal = parseFloat(String(l.cantidad || 0)) || 0;
+              var cantEdit = parseFloat(String(cantidadesEdit[codigo] !== undefined ? cantidadesEdit[codigo] : cantOriginal)) || 0;
+              var cambio = isEdit && cantEdit !== cantOriginal;
               return (
-                <tr key={l.codigo||i} className={'border-b border-slate-100 ' + (cambio?'bg-amber-50':i%2===0?'bg-white':'bg-slate-50')}>
-                  <td className="py-1.5 px-3 font-mono text-slate-500">{l.codigo}</td>
-                  <td className="py-1.5 px-3 font-medium text-slate-800">{l.articulo}</td>
+                <tr key={codigo + '_' + i} className={'border-b border-slate-100 ' + (cambio?'bg-amber-50':i%2===0?'bg-white':'bg-slate-50')}>
+                  <td className="py-1.5 px-3 font-mono text-slate-500">{l.codigo||'---'}</td>
+                  <td className="py-1.5 px-3 font-medium text-slate-800">{l.articulo||'---'}</td>
                   <td className="py-1.5 px-3 text-center text-slate-500">{l.unidad||'---'}</td>
                   <td className="py-1.5 px-3 text-center">
                     {isEdit ? (
                       <div className="flex items-center gap-1 justify-center">
                         <button onClick={function(){
-                          var v = Math.max(0, parseFloat(String(cantidadesEdit[l.codigo]||l.cantidad))-1);
-                          setCantidadesEdit(function(p){ return Object.assign({},p,{[l.codigo]:v}); });
+                          var v = Math.max(0, parseFloat(String(cantidadesEdit[codigo] !== undefined ? cantidadesEdit[codigo] : cantOriginal)) - 1);
+                          setCantidadesEdit(function(p){ return Object.assign({},p,{[codigo]:v}); });
                         }} className="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-600 text-sm">-</button>
                         <input type="number" min="0" step="0.01" value={cantActual}
                           onChange={function(e){
                             var v = e.target.value;
-                            setCantidadesEdit(function(p){ return Object.assign({},p,{[l.codigo]:v}); });
+                            setCantidadesEdit(function(p){ return Object.assign({},p,{[codigo]:v}); });
                           }}
                           className={"w-16 text-center py-1 border rounded text-xs font-bold focus:outline-none " + (cambio?'border-amber-400 bg-amber-50':'border-slate-200 focus:border-cyan-500')}/>
                         <button onClick={function(){
-                          var v = parseFloat(String(cantidadesEdit[l.codigo]||l.cantidad))+1;
-                          setCantidadesEdit(function(p){ return Object.assign({},p,{[l.codigo]:v}); });
+                          var v = parseFloat(String(cantidadesEdit[codigo] !== undefined ? cantidadesEdit[codigo] : cantOriginal)) + 1;
+                          setCantidadesEdit(function(p){ return Object.assign({},p,{[codigo]:v}); });
                         }} className="w-6 h-6 rounded bg-cyan-500 hover:bg-cyan-600 font-bold text-white text-sm">+</button>
-                        {cambio && <span className="text-[9px] text-amber-600 font-bold ml-1">({l.cantidad})</span>}
+                        {cambio && <span className="text-[9px] text-amber-600 font-bold ml-1">({cantOriginal})</span>}
                       </div>
                     ) : (
-                      <span className="font-bold text-blue-800">{l.cantidad % 1 === 0 ? l.cantidad : l.cantidad.toFixed(2)}</span>
+                      <span className="font-bold text-blue-800">{cantOriginal % 1 === 0 ? cantOriginal : cantOriginal.toFixed(2)}</span>
                     )}
                   </td>
                 </tr>
@@ -265,17 +279,8 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white" style={{background:'#1a3c6e'}}>
               <Edit3 className="w-3.5 h-3.5"/> Editar cantidades
             </button>
-            <button onClick={function(){
-              generarPDFAjuste({
-                sede: g.sede, encargado: g.responsable,
-                proveedorNombre: g.proveedor,
-                provNit: pm.nit, provTel: pm.telefono,
-                provCorreo: pm.correo, provContacto: pm.contacto,
-                lineas: g.lineas.map(function(l){ return {articulo:l.articulo,unidad:l.unidad||'',cantidad:Number(l.cantidad)||0,codigo:l.codigo||''}; }),
-                notas: g.lineas[0]?g.lineas[0].observaciones||'':'',
-                medioPago: g.medioPago||'contado', numeroOrden: g.nOrden,
-              });
-            }} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-700">
+            <button onClick={handleDescargarPDF}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-cyan-600 hover:bg-cyan-700">
               <Download className="w-3.5 h-3.5"/> Descargar PDF
             </button>
           </>
@@ -296,7 +301,6 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   );
 }
 
-
 // ─── Componente principal ─────────────────────────────────────────────────────
 export default function AjustePedidos() {
   var [grupos, setGrupos] = useState([]);
@@ -315,19 +319,43 @@ export default function AjustePedidos() {
 
   useEffect(function(){
     cargarPendientes();
-    // Cargar meta de proveedores para PDF
-    getProveedores().then(function(ps){ setProveedoresMeta(ps||[]); }).catch(function(){});
+    // Cargar meta proveedores desde Drive (F=telefono, G=correo, H=asesor/contacto)
+    getProveedores()
+      .then(function(ps){ if (ps && ps.length > 0) setProveedoresMeta(ps); })
+      .catch(function(e){ console.warn('[proveedoresMeta]', e.message); });
+    // Tambien intentar via getAllDatos para datos mas completos
+    getAllDatos()
+      .then(function(datos){
+        var provMeta = datos && datos.proveedores;
+        if (provMeta && provMeta.length > 0) {
+          setProveedoresMeta(provMeta.map(function(p, idx){
+            return {
+              id: 'prov-' + idx,
+              nombre: p.nombre||'',
+              nit: p.nit||'',
+              telefono: p.telefono||'',
+              correo: p.correo||'',
+              asesor: p.asesor||'',
+              contacto: p.contacto||p.asesor||'',
+              medioPago: ''
+            };
+          }));
+        }
+      })
+      .catch(function(e){ console.warn('[getAllDatos prov]', e.message); });
   }, []);
 
   async function cargarPendientes() {
     setCargando(true); setErr(''); setGrupos([]);
     try {
       var res = await fetch(ENDPOINT + '?action=getAjustes', { redirect: 'follow' });
+      if (!res.ok) { setErr('Error HTTP ' + res.status + ' al cargar pedidos.'); return; }
       var data = await res.json();
       if (!data.ok) { setErr(data.error || 'Error cargando pedidos pendientes.'); return; }
       var rows = data.rows || [];
       var mapa = {};
       rows.forEach(function(r) {
+        if (!Array.isArray(r)) return;
         var nOrden = String(r[0] || '');
         if (!nOrden) return;
         if (!mapa[nOrden]) {
@@ -358,16 +386,22 @@ export default function AjustePedidos() {
         }
       });
       setGrupos(Object.values(mapa).reverse());
-    } catch(e) { setErr('Error: ' + e.message); }
+    } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
   }
 
   function iniciarEdicion(g) {
     var cants = {};
-    (g.lineas || []).forEach(function(l){ cants[l.codigo] = l.cantidad; });
+    var lineas = g.lineas || [];
+    lineas.forEach(function(l){
+      var key = l.codigo || ('linea_idx');
+      cants[key] = l.cantidad || 0;
+    });
+    // Primero actualizar cantidades, luego activar edicion
     setCantidadesEdit(cants);
     setObsModificacion('');
-    setEditandoOrden(g.nOrden);
+    // Usar setTimeout para asegurar que el estado se actualice antes de mostrar el editor
+    setTimeout(function(){ setEditandoOrden(g.nOrden); }, 0);
   }
 
   function cancelarEdicion() {
@@ -382,18 +416,19 @@ export default function AjustePedidos() {
     var lineas = g.lineas || [];
     for (var i = 0; i < lineas.length; i++) {
       var linea = lineas[i];
-      var nuevaCant = parseFloat(String(cantidadesEdit[linea.codigo] !== undefined ? cantidadesEdit[linea.codigo] : linea.cantidad));
-      if (isNaN(nuevaCant)) nuevaCant = linea.cantidad;
-      if (nuevaCant === linea.cantidad) continue;
+      var codigo = linea.codigo || '';
+      var nuevaCant = parseFloat(String(cantidadesEdit[codigo] !== undefined ? cantidadesEdit[codigo] : linea.cantidad));
+      if (isNaN(nuevaCant)) nuevaCant = linea.cantidad || 0;
+      if (nuevaCant === (linea.cantidad || 0)) continue;
       try {
-        var r = await actualizarPedido({ nOrden: g.nOrden, codigo: linea.codigo, cantidad: nuevaCant, modificadoPor, obsModificacion });
+        var r = await actualizarPedido({ nOrden: g.nOrden, codigo, cantidad: nuevaCant, modificadoPor, obsModificacion });
         if (!r.ok) { console.warn('Error ajuste:', r.error); errores++; }
       } catch(e2) { console.warn('[ajuste]', e2.message); errores++; }
     }
     setGuardando(false);
     setEditandoOrden(null);
     setCantidadesEdit({});
-    if (errores > 0) { setErr(errores + ' línea(s) no pudieron actualizarse.'); }
+    if (errores > 0) { setErr(errores + ' linea(s) no pudieron actualizarse.'); }
     else { setSuccess('Cambios guardados exitosamente en Drive.'); setTimeout(function(){ setSuccess(''); }, 5000); }
     await cargarPendientes();
   }
@@ -446,7 +481,7 @@ export default function AjustePedidos() {
           <div className="p-8 text-center text-slate-400 text-sm flex flex-col items-center gap-2">
             <Package className="w-8 h-8 text-slate-300"/>
             <span>No hay pedidos pendientes.</span>
-            <span className="text-xs">Los pedidos sin factura aparecen aquí.</span>
+            <span className="text-xs">Los pedidos sin factura aparecen aqui.</span>
           </div>
         )}
 
@@ -485,10 +520,10 @@ export default function AjustePedidos() {
                     </div>
                   </button>
 
-                  {/* Detalle — key cambia con isEdit para forzar remount limpio */}
+                  {/* Detalle - key ESTABLE en g.nOrden, sin remount por estado de edicion */}
                   {isOpen && (
                     <DetalleOrden
-                      key={g.nOrden + '_' + (editandoOrden === g.nOrden ? 'edit' : 'view')}
+                      key={g.nOrden}
                       g={g}
                       editandoOrden={editandoOrden}
                       cantidadesEdit={cantidadesEdit}
@@ -502,6 +537,7 @@ export default function AjustePedidos() {
                       guardarCambios={guardarCambios}
                       cancelarEdicion={cancelarEdicion}
                       proveedoresMeta={proveedoresMeta}
+                      onPDFError={function(msg){ setErr(msg); }}
                     />
                   )}
                 </div>
@@ -513,9 +549,9 @@ export default function AjustePedidos() {
 
       {/* Leyenda */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-700">
-        <p className="font-bold mb-1">ℹ️ Acerca de este módulo</p>
-        <p>Aquí se muestran todos los pedidos <strong>sin factura registrada</strong>. Puedes editar las cantidades antes de confirmar la recepción. Los cambios quedan registrados en Drive con fecha, hora y nombre del responsable.</p>
+        <p className="font-bold mb-1">Acerca de este modulo</p>
+        <p>Aqui se muestran todos los pedidos <strong>sin factura registrada</strong>. Puedes editar las cantidades antes de confirmar la recepcion. Los cambios quedan registrados en Drive con fecha, hora y nombre del responsable.</p>
       </div>
     </div>
   );
-}
+    }
