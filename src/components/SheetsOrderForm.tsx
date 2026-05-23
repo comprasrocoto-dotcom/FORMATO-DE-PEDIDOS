@@ -589,6 +589,9 @@ export default function SheetsOrderForm() {
   function handleSoloPDF() {
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
     if (lineasSeleccionadas.length===0) { alert('Agrega articulos primero.'); return; }
+  // Validar datos proveedor desde Drive (columnas F-G-H)
+  var _ptf = provMeta ? (provMeta.telefono||provMeta.correo||provMeta.contacto||provMeta.asesor||'') : '';
+  if (!_ptf) { setErrorGlobal('Datos del proveedor incompletos en la base (columnas F-G-H). Completa la informacion del proveedor en el Drive antes de generar el pedido.'); return; }
     try {
       generarPDF({
         sede:selectedSede, sedeDireccion:sedeObj?sedeObj.direccion:'',
