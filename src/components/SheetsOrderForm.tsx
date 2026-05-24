@@ -1,6 +1,9 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v12 - fixes: PDF 6 cols with Min/Max, colSpan fix, historial counter
+ * SheetsOrderForm.tsx v13 - fixes: PDF F-G-H proveedor validation, proveedor data loading
+ * - Valida columnas F(telefono) G(correo) H(contacto) antes de PDF
+ * - Carga proveedoresMeta desde Drive via getAllDatos para datos completos
+ * - Mensaje de error preciso: "Datos del proveedor incompletos en la base (columnas F-G-H)"
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download,
@@ -15,6 +18,7 @@ import {
   invalidarCache,
   actualizarFactura,
   getMinMax,
+  getAllDatos,
 } from '../services/googleSheets';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
@@ -26,6 +30,17 @@ var _jsPDFClass = null;
   s.onload = function() { _jsPDFClass = window.jspdf ? window.jspdf.jsPDF : window.jsPDF; };
   document.head.appendChild(s);
 })();
+
+// ─── Helpers F-G-H ────────────────────────────────────────────────────────────
+function validarProveedorFGH(provMeta) {
+  if (!provMeta) return false;
+  // F = telefono, G = correo, H = contacto/asesor
+  var tel = (provMeta.telefono || '').trim().replace(/^-+$/, '');
+  var cor = (provMeta.correo || '').trim().replace(/^-+$/, '');
+  var con = ((provMeta.contacto || provMeta.asesor || '')).trim().replace(/^-+$/, '');
+  return !!(tel || cor || con);
+}
+
 function generarPDF(params) {
   var JsPDF = _jsPDFClass || (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
   if (!JsPDF) { alert('PDF no disponible. Espera 2s e intenta de nuevo.'); return; }
@@ -64,7 +79,7 @@ function generarPDF(params) {
   var y = 15;
 
   doc.setFontSize(8); doc.setTextColor(120, 120, 120);
-  doc.text('Pedido #' + numeroOrden + '  ' + fechaHoy, ancho - margen, y, { align: 'right' });
+  doc.text('Pedido #' + numeroOrden + ' ' + fechaHoy, ancho - margen, y, { align: 'right' });
   if (medioPago) {
     doc.setFontSize(7);
     doc.text('Medio de Pago: ' + medioPago.charAt(0).toUpperCase() + medioPago.slice(1), ancho - margen, y + 4, { align: 'right' });
@@ -78,12 +93,13 @@ function generarPDF(params) {
     ['Horario', sedeHorario],
     ['Encargado', encargado],
   ];
+  // Parte superior derecha: datos del proveedor desde columnas F-G-H de la base
   var infoRight = [
     ['Proveedor', proveedorNombre],
     ['NIT', provNit],
-    ['Tel. Proveedor', provTel],
-    ['Contacto', provContacto],
-    ['Correo', provCorreo],
+    ['Tel. Proveedor', provTel],    // columna F
+    ['Contacto', provContacto],      // columna H
+    ['Correo', provCorreo],          // columna G
   ];
 
   var yStart = y;
@@ -105,7 +121,7 @@ function generarPDF(params) {
     yR += 6;
   });
   y = Math.max(y, yR) + 5;
-  // 6 columns: Articulo, Unidad, Min, Max, Cantidad, Total
+
   var cW = [55, 20, 15, 15, 18, 22];
   var cX = [margen];
   for (var ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
@@ -136,7 +152,6 @@ function generarPDF(params) {
       var cant = parseFloat(l.cantidad) || 0;
       var t2 = (l.valorUnitario || 0) * cant;
       var cantStr = cant % 1 === 0 ? String(cant) : cant.toFixed(2);
-      // Min/Max from minMaxData
       var mm2 = minMaxData[l.codigo] || minMaxData[l.articulo] || null;
       var minStr = mm2 ? (mm2.min%1===0 ? String(mm2.min) : mm2.min.toFixed(2)) : '---';
       var maxStr = mm2 ? (mm2.max%1===0 ? String(mm2.max) : mm2.max.toFixed(2)) : '---';
@@ -185,8 +200,8 @@ function generarPDF(params) {
 
   var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g,'_').substring(0,20);
   doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
-}
-// ─── HistorialPedidos ────────────────────────────────────────────────────────
+    }
+// ─── HistorialPedidos ─────────────────────────────────────────────────────────
 function HistorialPedidos({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
   var [articuloBusq, setArticuloBusq] = useState('');
@@ -204,11 +219,13 @@ function HistorialPedidos({ proveedoresMeta }) {
     setCargando(true); setErr(''); setPedidos([]);
     try {
       var res = await fetch(ENDPOINT + '?action=getHistorial', { redirect: 'follow' });
+      if (!res.ok) { setErr('Error HTTP ' + res.status); return; }
       var data = await res.json();
       if (!data.ok) { setErr(data.error || 'Error cargando historial.'); return; }
       var rows = data.rows || [];
       var mapa = {};
       rows.forEach(function(r) {
+        if (!Array.isArray(r)) return;
         var nOrden = String(r[0] || '');
         if (!nOrden) return;
         if (!mapa[nOrden]) {
@@ -232,7 +249,7 @@ function HistorialPedidos({ proveedoresMeta }) {
       var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
       setPedidos(lista);
-    } catch(e) { setErr('Error: ' + e.message); }
+    } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
   }
 
@@ -242,7 +259,14 @@ function HistorialPedidos({ proveedoresMeta }) {
       await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'' });
       setEditandoFactura(null);
       await cargarHistorial();
-    } catch(e) { alert('Error guardando factura: ' + e.message); }
+    } catch(e) { alert('Error guardando factura: ' + (e.message||'Error')); }
+  }
+
+  function getProvMeta(nombre) {
+    if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    var found = proveedoresMeta.find(function(p){ return p.nombre === nombre; });
+    if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
   }
 
   var pedidosFiltrados = pedidos.filter(function(p) {
@@ -253,12 +277,6 @@ function HistorialPedidos({ proveedoresMeta }) {
     return pasaSede && pasaArt;
   });
 
-  function getProvMeta(nombre) {
-    if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
-    var found = proveedoresMeta.find(function(p){ return p.nombre === nombre; });
-    if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
-    return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
-  }
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4" style={{background:'#1a3c6e'}}>
@@ -336,7 +354,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                           lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
                           notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
                           nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'', minMaxData:{} });
-                        }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
+                      }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> PDF
                       </button>
                     </div>
@@ -427,7 +445,8 @@ function HistorialPedidos({ proveedoresMeta }) {
     </div>
   );
 }
-// ─── Componente principal SheetsOrderForm ───────────────────────────────────
+
+// ─── SheetsOrderForm (componente principal) ───────────────────────────────────
 export default function SheetsOrderForm() {
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
@@ -460,34 +479,67 @@ export default function SheetsOrderForm() {
     (async function() {
       try {
         setLoading(true);
-        var res = await Promise.allSettled([getProveedorSheetNames(), getSedes(), getProveedores(), getMinMax()]);
+        // Carga paralela de datos basicos
+        var res = await Promise.allSettled([
+          getProveedorSheetNames(),
+          getSedes(),
+          getProveedores(),
+          getMinMax(),
+          getAllDatos()
+        ]);
         if (cancelRef.current) return;
+
         setProveedoresNombres(res[0].status==='fulfilled' ? res[0].value||[] : []);
         var sds = res[1].status==='fulfilled' ? res[1].value||[] : [];
         setSedes(sds.map(function(s){
           return typeof s==='string'
-            ? {nombre:s,direccion:'',horaEntrega:'',telefono:''}
-            : {nombre:s.nombre||s,direccion:s.direccion||'',horaEntrega:s.horaEntrega||s.horario||'',telefono:s.telefono||''};
+            ? {nombre:s, direccion:'', horaEntrega:'', telefono:''}
+            : {nombre:s.nombre||s, direccion:s.direccion||'', horaEntrega:s.horaEntrega||s.horario||'', telefono:s.telefono||''};
         }));
-        if (res[2].status==='fulfilled') setProveedoresMeta(res[2].value||[]);
+
+        // Cargar proveedoresMeta: primero desde getAllDatos (mas completo), luego fallback a getProveedores
+        var allDatosResult = res[4].status==='fulfilled' ? res[4].value : null;
+        if (allDatosResult && allDatosResult.proveedores && allDatosResult.proveedores.length > 0) {
+          setProveedoresMeta(allDatosResult.proveedores.map(function(p, idx){
+            return {
+              id: 'prov-' + idx,
+              nombre: p.nombre||'',
+              nit: p.nit||'',
+              telefono: p.telefono||'',   // columna F
+              correo: p.correo||'',        // columna G
+              asesor: p.asesor||'',
+              contacto: p.contacto||p.asesor||'', // columna H
+              medioPago: ''
+            };
+          }));
+        } else if (res[2].status==='fulfilled') {
+          setProveedoresMeta(res[2].value||[]);
+        }
+
         if (res[3].status==='fulfilled') setMinMax(res[3].value||{});
-        try {
-          var ra = await fetch(ENDPOINT+'?action=getDatos',{redirect:'follow'});
-          var da = await ra.json();
-          if(da.articulosPorProveedor && !cancelRef.current){
-            var arts=[];
-            Object.values(da.articulosPorProveedor).forEach(function(rows){
-              (rows||[]).forEach(function(row){
-                if(row.subArticulo&&row.articulo){
-                  arts.push({articulo:String(row.subArticulo||''),proveedor:String(row.articulo||''),unidad:String(row.unidad||''),codigo:String(row.codigo||'')});
-                }
-              });
+
+        // Cargar todos los articulos para busqueda
+        if (allDatosResult && allDatosResult.articulosPorProveedor && !cancelRef.current) {
+          var arts = [];
+          Object.values(allDatosResult.articulosPorProveedor).forEach(function(rows){
+            (rows||[]).forEach(function(row){
+              if(row.subArticulo && row.articulo){
+                arts.push({
+                  articulo: String(row.subArticulo||''),
+                  proveedor: String(row.articulo||''),
+                  unidad: String(row.unidad||''),
+                  codigo: String(row.codigo||'')
+                });
+              }
             });
-            setTodosArticulos(arts);
-          }
-        } catch(ea){ console.warn('arts load:',ea.message); }
-      } catch(e) { if (!cancelRef.current) setErrorGlobal('Error Drive: ' + e.message); }
-      finally { if (!cancelRef.current) setLoading(false); }
+          });
+          setTodosArticulos(arts);
+        }
+      } catch(e) {
+        if (!cancelRef.current) setErrorGlobal('Error Drive: ' + (e.message||'Error de conexion'));
+      } finally {
+        if (!cancelRef.current) setLoading(false);
+      }
     })();
     return function() { cancelRef.current = true; };
   }, []);
@@ -501,13 +553,19 @@ export default function SheetsOrderForm() {
     (async function() {
       setLoadingProductos(true); setProductos([]); setCantidades({}); setSearchTerm(''); setSelectedSubfamilia('');
       try {
-        var res = await Promise.allSettled([getProductosByProveedor(selectedProveedor), getSubfamiliasByProveedor(selectedProveedor)]);
+        var res = await Promise.allSettled([
+          getProductosByProveedor(selectedProveedor),
+          getSubfamiliasByProveedor(selectedProveedor)
+        ]);
         if (cancelled) return;
         setProductos(res[0].status==='fulfilled' ? res[0].value||[] : []);
         setSubfamilias(res[1].status==='fulfilled' ? res[1].value||[] : []);
         setProveedorTitulo(selectedProveedor);
-      } catch(e) { if (!cancelled) setErrorGlobal('Error articulos: ' + e.message); }
-      finally { if (!cancelled) setLoadingProductos(false); }
+      } catch(e) {
+        if (!cancelled) setErrorGlobal('Error articulos: ' + (e.message||'Error'));
+      } finally {
+        if (!cancelled) setLoadingProductos(false);
+      }
     })();
     return function() { cancelled = true; };
   }, [selectedProveedor]);
@@ -523,18 +581,28 @@ export default function SheetsOrderForm() {
   });
 
   var lineasSeleccionadas = productos
-    .filter(function(p){ return (parseFloat(cantidades[p.codigo])||0)>0; })
+    .filter(function(p){ return (parseFloat(cantidades[p.codigo])||0) > 0; })
     .map(function(p){
       return { codigo:p.codigo, articulo:p.articulo, unidad:p.unidad||'', cantidad:parseFloat(cantidades[p.codigo])||0, valorUnitario:0 };
     });
 
   var sedeObj = sedes.find(function(s){ return s.nombre===selectedSede; }) || null;
   var provMeta = proveedoresMeta.find(function(p){ return p.nombre === selectedProveedor; }) || null;
+
   async function handleGuardar(descargarPDF) {
     if (!responsable.trim()) { alert('Ingresa tu nombre.'); return; }
     if (!selectedSede) { alert('Selecciona una sede.'); return; }
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
     if (lineasSeleccionadas.length===0) { alert('Agrega al menos un articulo.'); return; }
+
+    // Validar datos del proveedor F-G-H antes de generar PDF
+    if (descargarPDF !== false) {
+      if (!provMeta || !validarProveedorFGH(provMeta)) {
+        setErrorGlobal('Datos del proveedor incompletos en la base (columnas F-G-H). Corrige antes de generar el pedido.');
+        return;
+      }
+    }
+
     setSaving(true); setErrorGlobal(''); setSuccess(false);
 
     var snap = {
@@ -542,9 +610,9 @@ export default function SheetsOrderForm() {
       resp: responsable, correo, medioPago,
       dir: sedeObj?sedeObj.direccion:'', hor: sedeObj?sedeObj.horaEntrega:'', tel: sedeObj?sedeObj.telefono:'',
       provNit: provMeta?provMeta.nit||'---':'---',
-      provTel: provMeta?provMeta.telefono||'---':'---',
-      provCorreo: provMeta?provMeta.correo||'---':'---',
-      provContacto: provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',
+      provTel: provMeta?provMeta.telefono||'---':'---',    // F
+      provCorreo: provMeta?provMeta.correo||'---':'---',   // G
+      provContacto: provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---', // H
       orden: Math.floor(Date.now()/1000), fecha: new Date().toISOString().split('T')[0]
     };
 
@@ -589,29 +657,35 @@ export default function SheetsOrderForm() {
   function handleSoloPDF() {
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
     if (lineasSeleccionadas.length===0) { alert('Agrega articulos primero.'); return; }
-  // Validar datos proveedor desde Drive (columnas F-G-H)
-  var _ptf = provMeta ? (provMeta.telefono||provMeta.correo||provMeta.contacto||provMeta.asesor||'') : '';
-  if (!_ptf) { setErrorGlobal('Datos del proveedor incompletos en la base (columnas F-G-H). Completa la informacion del proveedor en el Drive antes de generar el pedido.'); return; }
+    // Validar datos del proveedor desde Drive (columnas F=telefono, G=correo, H=contacto)
+    if (!provMeta || !validarProveedorFGH(provMeta)) {
+      setErrorGlobal('Datos del proveedor incompletos en la base (columnas F-G-H). Corrige antes de generar el pedido.');
+      return;
+    }
     try {
       generarPDF({
-        sede:selectedSede, sedeDireccion:sedeObj?sedeObj.direccion:'',
-        sedeTelefono:sedeObj?sedeObj.telefono:'', sedeHorario:sedeObj?sedeObj.horaEntrega:'',
-        encargado:responsable||'Sin especificar', proveedorNombre:selectedProveedor,
+        sede:selectedSede,
+        sedeDireccion:sedeObj?sedeObj.direccion:'',
+        sedeTelefono:sedeObj?sedeObj.telefono:'',
+        sedeHorario:sedeObj?sedeObj.horaEntrega:'',
+        encargado:responsable||'Sin especificar',
+        proveedorNombre:selectedProveedor,
         provNit:provMeta?provMeta.nit||'---':'---',
-        provTel:provMeta?provMeta.telefono||'---':'---',
-        provCorreo:provMeta?provMeta.correo||'---':'---',
-        provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',
+        provTel:provMeta?provMeta.telefono||'---':'---',        // F
+        provCorreo:provMeta?provMeta.correo||'---':'---',       // G
+        provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---', // H
         lineas:lineasSeleccionadas, notas, medioPago:medioPago||'contado',
         numeroOrden:Math.floor(Date.now()/1000), minMaxData:minMax
       });
     } catch(e) { console.error('[SoloPDF]', e); alert('Error PDF: ' + e.message); }
-  }
+}
 
   if (loading) return (
     <div className="flex items-center justify-center min-h-64 gap-3 text-slate-500">
       <RefreshCw className="w-5 h-5 animate-spin"/><span className="text-sm font-medium">Cargando datos desde Drive...</span>
     </div>
   );
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-5">
 
@@ -661,6 +735,7 @@ export default function SheetsOrderForm() {
           </div>
         </div>
       </div>
+
       {/* 2. Proveedor */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -680,20 +755,23 @@ export default function SheetsOrderForm() {
                   {proveedoresNombres.filter(function(n){ return n.toLowerCase().includes(provSearch.toLowerCase()); }).length === 0
                     ? <div className="px-4 py-3 text-sm text-slate-400">Sin resultados</div>
                     : proveedoresNombres.filter(function(n){ return n.toLowerCase().includes(provSearch.toLowerCase()); }).map(function(n){
-                        return (<button key={n} onMouseDown={function(e){e.preventDefault(); setSelectedProveedor(n); setProvSearch('');}}
-                          className="w-full text-left px-4 py-2.5 text-sm hover:bg-cyan-50 hover:text-cyan-700 border-b border-slate-100 last:border-0 transition-colors">{n}</button>);
-                      })
+                      return (<button key={n} onMouseDown={function(e){e.preventDefault(); setSelectedProveedor(n); setProvSearch('');}}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-cyan-50 hover:text-cyan-700 border-b border-slate-100 last:border-0 transition-colors">{n}</button>);
+                    })
                   }
                 </div>
               )}
             </div>
             {selectedProveedor && <div className="mt-1.5 text-xs text-cyan-700 font-semibold px-1">&#10003; {selectedProveedor}</div>}
-            {provMeta && (provMeta.nit || provMeta.telefono) && (
+            {provMeta && (provMeta.nit || provMeta.telefono || provMeta.correo) && (
               <div className="mt-2 text-xs text-slate-500 space-y-0.5 pl-1 bg-slate-50 rounded-lg p-2 border border-slate-100">
                 {provMeta.nit && <p><span className="font-semibold text-slate-600">NIT:</span> {provMeta.nit}</p>}
-                {provMeta.telefono && <p><span className="font-semibold text-slate-600">Tel:</span> {provMeta.telefono}</p>}
-                {provMeta.correo && <p><span className="font-semibold text-slate-600">Correo:</span> {provMeta.correo}</p>}
-                {(provMeta.contacto||provMeta.asesor) && <p><span className="font-semibold text-slate-600">Contacto:</span> {provMeta.contacto||provMeta.asesor}</p>}
+                {provMeta.telefono && <p><span className="font-semibold text-slate-600">Tel (F):</span> {provMeta.telefono}</p>}
+                {provMeta.correo && <p><span className="font-semibold text-slate-600">Correo (G):</span> {provMeta.correo}</p>}
+                {(provMeta.contacto||provMeta.asesor) && <p><span className="font-semibold text-slate-600">Contacto (H):</span> {provMeta.contacto||provMeta.asesor}</p>}
+                {!validarProveedorFGH(provMeta) && (
+                  <p className="text-red-600 font-semibold mt-1">Datos F-G-H incompletos en la base</p>
+                )}
               </div>
             )}
           </div>
@@ -729,6 +807,7 @@ export default function SheetsOrderForm() {
           </div>
         </div>
       </div>
+
       {/* 3. Productos */}
       {selectedProveedor && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
@@ -824,6 +903,7 @@ export default function SheetsOrderForm() {
           )}
         </div>
       )}
+
       {/* 4. Medio de Pago */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2">
@@ -879,4 +959,4 @@ export default function SheetsOrderForm() {
 
     </div>
   );
-}
+                  }
