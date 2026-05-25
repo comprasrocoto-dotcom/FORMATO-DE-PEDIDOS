@@ -185,6 +185,20 @@ function generarPDF(params) {
   var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g,'_').substring(0,20);
   doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
     }
+function generarCSV(pedido) {
+  var arts = (pedido.articulos || []).filter(function(a) { return a.codigo && (parseFloat(a.cantidad) || 0) > 0; });
+  if (arts.length === 0) { alert('Este pedido no tiene informacion para exportar.'); return; }
+  var lines = ['codigo,cantidad'];
+  arts.forEach(function(a) { lines.push(String(a.codigo) + ',' + String(parseFloat(a.cantidad) || 0)); });
+  var csv = lines.join('\n');
+  var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  var url = URL.createObjectURL(blob);
+  var link = document.createElement('a');
+  link.href = url;
+  link.download = 'pedido_' + pedido.nOrden + '.csv';
+  link.click();
+  setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+}
 // ─── HistorialPedidos ─────────────────────────────────────────────────────────
 function HistorialPedidos({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
@@ -340,6 +354,10 @@ function HistorialPedidos({ proveedoresMeta }) {
                           nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'' });
                       }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> PDF
+                      </button>
+                      <button onClick={function(e){ e.stopPropagation(); generarCSV(p); }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#0f6b3a'}}>
+                        <Download className="w-3.5 h-3.5"/> CSV
                       </button>
                     </div>
                     <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
