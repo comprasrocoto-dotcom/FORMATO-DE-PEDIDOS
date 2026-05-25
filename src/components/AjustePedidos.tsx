@@ -190,7 +190,18 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
 
   // Auto-descarga PDF cuando se selecciona el pedido
   useEffect(function() {
-    handleDescargarPDF();
+    // Esperar a que jsPDF este disponible antes de descargar
+    var intentos = 0;
+    var maxIntentos = 20;
+    var intervalo = setInterval(function() {
+      var jsPDFDisponible = !!(window.jspdf && window.jspdf.jsPDF) || !!window.jsPDF;
+      if (jsPDFDisponible || intentos >= maxIntentos) {
+        clearInterval(intervalo);
+        if (jsPDFDisponible) handleDescargarPDF();
+      }
+      intentos++;
+    }, 150);
+    return function() { clearInterval(intervalo); };
   }, []);
 
   return (
