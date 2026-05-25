@@ -177,10 +177,6 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
 
   function handleDescargarPDF() {
-    if (!validarProveedorFGH(pm)) {
-      if (onPDFError) onPDFError('Datos del proveedor incompletos en la base (columnas F-G-H). Corrige antes de generar el pedido.');
-      return;
-    }
     generarPDFAjuste({
       sede: g.sede, encargado: g.responsable,
       proveedorNombre: g.proveedor,
@@ -191,6 +187,11 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
       medioPago: g.medioPago||'contado', numeroOrden: g.nOrden,
     });
   }
+
+  // Auto-descarga PDF cuando se selecciona el pedido
+  useEffect(function() {
+    handleDescargarPDF();
+  }, []);
 
   return (
     <div className="px-4 pb-4 bg-slate-50/50">
