@@ -187,23 +187,7 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
       medioPago: g.medioPago||'contado', numeroOrden: g.nOrden,
     });
   }
-
-  // Auto-descarga PDF cuando se selecciona el pedido
-  useEffect(function() {
-    // Esperar a que jsPDF este disponible antes de descargar
-    var intentos = 0;
-    var maxIntentos = 20;
-    var intervalo = setInterval(function() {
-      var jsPDFDisponible = !!(window.jspdf && window.jspdf.jsPDF) || !!window.jsPDF;
-      if (jsPDFDisponible || intentos >= maxIntentos) {
-        clearInterval(intervalo);
-        if (jsPDFDisponible) handleDescargarPDF();
-      }
-      intentos++;
-    }, 150);
-    return function() { clearInterval(intervalo); };
-  }, []);
-
+  
   return (
     <div className="px-4 pb-4 bg-slate-50/50">
       {/* Info del pedido */}
