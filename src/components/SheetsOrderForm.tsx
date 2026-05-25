@@ -623,12 +623,11 @@ export default function SheetsOrderForm() {
                 {provMeta.nit&&<p><span className="font-semibold text-slate-600">NIT:</span> {provMeta.nit}</p>}
                 {provMeta.telefono&&<p><span className="font-semibold text-slate-600">Tel:</span> {provMeta.telefono}</p>}
                 {provMeta.correo&&<p><span className="font-semibold text-slate-600">Correo:</span> {provMeta.correo}</p>}
-                {(provMeta.contacto||provMeta.asesor)&&<p><span className="font-semibold text-slate-600">Contacto:</span> {provMeta.contacto||provMeta.asesor}</p>}
-                div>
+                {(provMeta.contacto||provMeta.asesor)&&<p><span className="font-semibold text-slate-600">Contacto:</span> {provMeta.contacto||provMeta.asesor}</p>}</div>
+          
             )}
           </div>
           <div className="flex-1 max-w-md">
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1.5">Buscar articulo por proveedor</div>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none z-10"/>
               <input type="text" value={busqArticulo} onChange={function(e){setBusqArticulo(e.target.value);}} placeholder="Nombre del articulo..." className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-cyan-500"/>
