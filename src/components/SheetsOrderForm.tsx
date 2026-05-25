@@ -188,8 +188,8 @@ function generarPDF(params) {
 function generarCSV(pedido) {
   var arts = (pedido.articulos || []).filter(function(a) { return a.codigo && (parseFloat(a.cantidad) || 0) > 0; });
   if (arts.length === 0) { alert('Este pedido no tiene informacion para exportar.'); return; }
-  var lines = ['codigo,cantidad'];
-  arts.forEach(function(a) { lines.push(String(a.codigo) + ',' + String(parseFloat(a.cantidad) || 0)); });
+  var lines = ['codigo;cantidad'];
+  arts.forEach(function(a) { lines.push(String(a.codigo) + ';' + String(parseFloat(a.cantidad) || 0)); });
   var csv = lines.join('\n');
   var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   var url = URL.createObjectURL(blob);
