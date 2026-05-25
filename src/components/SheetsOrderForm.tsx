@@ -531,9 +531,6 @@ export default function SheetsOrderForm() {
     if (!selectedSede) { alert('Selecciona una sede.'); return; }
     if (!selectedProveedor) { alert('Selecciona un proveedor.'); return; }
     if (lineasSeleccionadas.length===0) { alert('Agrega al menos un articulo.'); return; }
-    if (descargarPDF !== false && (!provMeta || !validarProveedorFGH(provMeta))) {
-      setErrorGlobal('Datos del proveedor incompletos en la base (columnas F-G-H). Corrige antes de generar el pedido.'); return;
-    }
     setSaving(true); setErrorGlobal(''); setSuccess(false);
     var snap = {
       lineas:lineasSeleccionadas.slice(),notas,sede:selectedSede,prov:selectedProveedor,
@@ -570,7 +567,6 @@ export default function SheetsOrderForm() {
   function handleSoloPDF() {
     if(!selectedProveedor){alert('Selecciona un proveedor.');return;}
     if(lineasSeleccionadas.length===0){alert('Agrega articulos primero.');return;}
-    if(!provMeta||!validarProveedorFGH(provMeta)){setErrorGlobal('Datos del proveedor incompletos en la base (columnas F-G-H). Corrige antes de generar el pedido.');return;}
     try{
       generarPDF({sede:selectedSede,sedeDireccion:sedeObj?sedeObj.direccion:'',sedeTelefono:sedeObj?sedeObj.telefono:'',sedeHorario:sedeObj?sedeObj.horaEntrega:'',encargado:responsable||'Sin especificar',proveedorNombre:selectedProveedor,provNit:provMeta?provMeta.nit||'---':'---',provTel:provMeta?provMeta.telefono||'---':'---',provCorreo:provMeta?provMeta.correo||'---':'---',provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',lineas:lineasSeleccionadas,notas,medioPago:medioPago||'contado',numeroOrden:Math.floor(Date.now()/1000)});
     }catch(e){console.error('[SoloPDF]',e);alert('Error PDF: '+e.message);}
@@ -628,8 +624,7 @@ export default function SheetsOrderForm() {
                 {provMeta.telefono&&<p><span className="font-semibold text-slate-600">Tel:</span> {provMeta.telefono}</p>}
                 {provMeta.correo&&<p><span className="font-semibold text-slate-600">Correo:</span> {provMeta.correo}</p>}
                 {(provMeta.contacto||provMeta.asesor)&&<p><span className="font-semibold text-slate-600">Contacto:</span> {provMeta.contacto||provMeta.asesor}</p>}
-                {!validarProveedorFGH(provMeta)&&<p className="text-red-600 font-semibold mt-1">Datos F-G-H incompletos en la base</p>}
-              </div>
+                div>
             )}
           </div>
           <div className="flex-1 max-w-md">
