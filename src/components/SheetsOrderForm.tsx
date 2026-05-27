@@ -1,13 +1,14 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v15 - Busqueda por ID de pedido en Historial
- * - Elimina columnas Min/Max de tabla productos
- * - Valida columnas F(telefono) G(correo) H(contacto) antes de PDF
- * - Carga proveedoresMeta desde Drive via getAllDatos para datos completos
+ * SheetsOrderForm.tsx v16 - Historial Documentado
+ * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
+ * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
+ * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
+ * - Nuevo módulo HistorialDocumentado exportado para uso en App.tsx
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download,
-  AlertCircle, CheckCircle, Search, Filter, FileText, Edit3 } from 'lucide-react';
+AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
 import {
   getProveedorSheetNames,
   getProveedores,
@@ -17,6 +18,7 @@ import {
   appendPedido,
   invalidarCache,
   actualizarFactura,
+  actualizarNumeroPedidoSistema,
   getAllDatos,
 } from '../services/googleSheets';
 
@@ -59,6 +61,7 @@ function generarPDF(params) {
   var nroFactura = params.nroFactura || '';
   var tipoFactura = params.tipoFactura || '';
   var obsFactura = params.obsFactura || '';
+  var numeroPedidoSistema = params.numeroPedidoSistema || '';
   var fechaHoy = new Date().toISOString().slice(0, 10);
 
   var activas = lineas.filter(function(l) { return (parseFloat(l.cantidad) || 0) > 0; });
@@ -79,6 +82,10 @@ function generarPDF(params) {
   if (medioPago) {
     doc.setFontSize(7);
     doc.text('Medio de Pago: ' + medioPago.charAt(0).toUpperCase() + medioPago.slice(1), ancho - margen, y + 4, { align: 'right' });
+  }
+  if (numeroPedidoSistema) {
+    doc.setFontSize(7);
+    doc.text('N. Pedido Sistema: ' + numeroPedidoSistema, ancho - margen, y + 8, { align: 'right' });
   }
   y += 10;
 
@@ -111,7 +118,6 @@ function generarPDF(params) {
   });
   y = Math.max(y, yR) + 5;
 
-  // PDF tabla sin Min/Max: Articulo, Unidad, Cantidad, Total
   var cW = [70, 25, 25, 30];
   var cX = [margen];
   for (var ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
@@ -174,18 +180,20 @@ function generarPDF(params) {
     y += 22;
   }
 
-  if (nroFactura || tipoFactura || obsFactura) {
+  if (nroFactura || tipoFactura || obsFactura || numeroPedidoSistema) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(azul[0], azul[1], azul[2]);
-    doc.text('Informacion de Factura:', margen, y); y += 5;
+    doc.text('Informacion de Factura y Documento:', margen, y); y += 5;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(negro[0], negro[1], negro[2]);
     if (nroFactura) { doc.text('N. Factura: ' + nroFactura, margen, y); y += 5; }
     if (tipoFactura) { doc.text('Tipo: ' + tipoFactura, margen, y); y += 5; }
     if (obsFactura) { doc.text('Obs. Factura: ' + obsFactura, margen, y); y += 5; }
+    if (numeroPedidoSistema) { doc.text('N. Pedido Sistema: ' + numeroPedidoSistema, margen, y); y += 5; }
   }
 
   var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g,'_').substring(0,20);
   doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
-    }
+}
+
 function generarCSV(pedido) {
   var arts = (pedido.articulos || []).filter(function(a) { return a.codigo && (parseFloat(a.cantidad) || 0) > 0; });
   if (arts.length === 0) { alert('Este pedido no tiene informacion para exportar.'); return; }
@@ -200,329 +208,617 @@ function generarCSV(pedido) {
   link.click();
   setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
+
 // ─── HistorialPedidos ─────────────────────────────────────────────────────────
 function HistorialPedidos({ proveedoresMeta }) {
-var [sedeFiltro, setSedeFiltro] = useState('');
-var [articuloBusq, setArticuloBusq] = useState('');
-var [cargando, setCargando] = useState(false);
-var [pedidos, setPedidos] = useState([]);
-var [sedesDisp, setSedesDisp] = useState([]);
-var [err, setErr] = useState('');
-var [expandido, setExpandido] = useState(null);
-var [editandoFactura, setEditandoFactura] = useState(null);
-var [facturaData, setFacturaData] = useState({});
-var [idBusq, setIdBusq] = useState('');
-var [idResultado, setIdResultado] = useState(null);
-var [idBuscando, setIdBuscando] = useState(false);
-var [idErr, setIdErr] = useState('');
+  var [sedeFiltro, setSedeFiltro] = useState('');
+  var [articuloBusq, setArticuloBusq] = useState('');
+  var [cargando, setCargando] = useState(false);
+  var [pedidos, setPedidos] = useState([]);
+  var [sedesDisp, setSedesDisp] = useState([]);
+  var [err, setErr] = useState('');
+  var [expandido, setExpandido] = useState(null);
+  var [editandoFactura, setEditandoFactura] = useState(null);
+  var [facturaData, setFacturaData] = useState({});
+  var [idBusq, setIdBusq] = useState('');
+  var [idResultado, setIdResultado] = useState(null);
+  var [idBuscando, setIdBuscando] = useState(false);
+  var [idErr, setIdErr] = useState('');
+  var [editandoNPS, setEditandoNPS] = useState(null);
+  var [npsData, setNpsData] = useState({});
+  var [guardandoNPS, setGuardandoNPS] = useState(false);
 
-useEffect(function() { cargarHistorial(); }, []);
+  useEffect(function() { cargarHistorial(); }, []);
 
-useEffect(function() {
-  if (!idBusq.trim()) { setIdResultado(null); setIdErr(''); return; }
-  var id = idBusq.trim();
-  setIdBuscando(true); setIdResultado(null); setIdErr('');
-  (async function() {
+  useEffect(function() {
+    if (!idBusq.trim()) { setIdResultado(null); setIdErr(''); return; }
+    var id = idBusq.trim();
+    setIdBuscando(true); setIdResultado(null); setIdErr('');
+    (async function() {
+      try {
+        var res = await fetch(ENDPOINT + '?action=getHistorial', { redirect: 'follow' });
+        if (!res.ok) { setIdErr('Error HTTP ' + res.status); return; }
+        var data = await res.json();
+        if (!data.ok) { setIdErr(data.error || 'Error consultando historial.'); return; }
+        var rows = (data.rows || []).filter(function(r) { return Array.isArray(r) && String(r[0]||'') === id; });
+        if (rows.length === 0) { setIdResultado([]); return; }
+        setIdResultado(rows);
+      } catch(e) { setIdErr('Error: ' + (e.message||'Error de red')); }
+      finally { setIdBuscando(false); }
+    })();
+  }, [idBusq]);
+
+  async function cargarHistorial() {
+    setCargando(true); setErr(''); setPedidos([]);
     try {
       var res = await fetch(ENDPOINT + '?action=getHistorial', { redirect: 'follow' });
-      if (!res.ok) { setIdErr('Error HTTP ' + res.status); return; }
+      if (!res.ok) { setErr('Error HTTP ' + res.status); return; }
       var data = await res.json();
-      if (!data.ok) { setIdErr(data.error || 'Error consultando historial.'); return; }
-      var rows = (data.rows || []).filter(function(r) { return Array.isArray(r) && String(r[0]||'') === id; });
-      if (rows.length === 0) { setIdResultado([]); return; }
-      setIdResultado(rows);
-    } catch(e) { setIdErr('Error: ' + (e.message||'Error de red')); }
-    finally { setIdBuscando(false); }
-  })();
-}, [idBusq]);
+      if (!data.ok) { setErr(data.error || 'Error cargando historial.'); return; }
+      var rows = data.rows || [];
+      var mapa = {};
+      rows.forEach(function(r) {
+        if (!Array.isArray(r)) return;
+        var nOrden = String(r[0] || '');
+        if (!nOrden) return;
+        if (!mapa[nOrden]) {
+          mapa[nOrden] = {
+            nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
+            sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
+            responsable: String(r[9]||'---'), medioPago: String(r[11]||'contado'),
+            observaciones: String(r[10]||''),
+            nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
+            numeroPedidoSistema: String(r[16]||''),
+            articulos: []
+          };
+        }
+        if (r[5] || r[4]) {
+          mapa[nOrden].articulos.push({
+            codigo: String(r[4]||''), articulo: String(r[5]||''),
+            unidad: String(r[6]||''), cantidad: String(r[7]||''),
+          });
+        }
+      });
+      var lista = Object.values(mapa).reverse();
+      var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
+      setSedesDisp(sds);
+      // Solo pedidos SIN número de pedido sistema asignado
+      setPedidos(lista.filter(function(p) { return !p.numeroPedidoSistema || p.numeroPedidoSistema.trim() === '' || p.numeroPedidoSistema === '---'; }));
+    } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
+    finally { setCargando(false); }
+  }
 
-async function cargarHistorial() {
-setCargando(true); setErr(''); setPedidos([]);
-try {
-var res = await fetch(ENDPOINT + '?action=getHistorial', { redirect: 'follow' });
-if (!res.ok) { setErr('Error HTTP ' + res.status); return; }
-var data = await res.json();
-if (!data.ok) { setErr(data.error || 'Error cargando historial.'); return; }
-var rows = data.rows || [];
-var mapa = {};
-rows.forEach(function(r) {
-if (!Array.isArray(r)) return;
-var nOrden = String(r[0] || '');
-if (!nOrden) return;
-if (!mapa[nOrden]) {
-mapa[nOrden] = {
-nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
-sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
-responsable: String(r[9]||'---'), medioPago: String(r[11]||'contado'),
-observaciones: String(r[10]||''),
-nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
-articulos: []
-};
+  async function guardarFactura(nOrden) {
+    var fd = facturaData[nOrden] || {};
+    try {
+      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'' });
+      setEditandoFactura(null);
+      await cargarHistorial();
+    } catch(e) { alert('Error guardando factura: ' + (e.message||'Error')); }
+  }
+
+  async function guardarNumeroPedidoSistema(nOrden) {
+    var nps = (npsData[nOrden] || '').trim();
+    if (!nps) { alert('Ingresa el Número de Pedido (Sistema) para continuar.'); return; }
+    setGuardandoNPS(true);
+    try {
+      var result = await actualizarNumeroPedidoSistema({ nOrden, numeroPedidoSistema: nps });
+      if (!result.ok) {
+        alert('Error guardando: ' + (result.error || 'Error desconocido'));
+        return;
+      }
+      setEditandoNPS(null);
+      // Recargar historial - el pedido desaparecerá de aquí y aparecerá en Historial Documentado
+      await cargarHistorial();
+      alert('✅ Pedido #' + nOrden + ' documentado exitosamente.\nAhora aparece en el módulo "Historial Documentado".');
+    } catch(e) { alert('Error: ' + (e.message||'Error de red')); }
+    finally { setGuardandoNPS(false); }
+  }
+
+  function getProvMeta(nombre) {
+    if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    var found = proveedoresMeta.find(function(p){ return p.nombre === nombre; });
+    if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
+  }
+
+  var pedidosFiltrados = pedidos.filter(function(p) {
+    var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
+    var pasaArt = !articuloBusq || p.articulos.some(function(a) {
+      return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
+    });
+    return pasaSede && pasaArt;
+  });
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4" style={{background:'#1a3c6e'}}>
+        <div className="flex items-center gap-3">
+          <Search className="w-5 h-5 text-blue-300"/>
+          <div>
+            <div className="text-white font-bold text-sm">Historial de Pedidos</div>
+            <div className="text-blue-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' ordenes pendientes de documentar'}</div>
+          </div>
+        </div>
+        <button onClick={cargarHistorial} disabled={cargando}
+          className="flex items-center gap-1.5 text-xs text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+          <RefreshCw className={"w-3.5 h-3.5 " + (cargando?'animate-spin':'')}/>{cargando?'Cargando...':'Actualizar'}
+        </button>
+      </div>
+      <div className="p-4 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select value={sedeFiltro} onChange={function(e){setSedeFiltro(e.target.value);}}
+            className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500">
+            <option value="">Todas las sedes</option>
+            {sedesDisp.map(function(s){ return (<option key={s} value={s}>{s}</option>); })}
+          </select>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
+            <input type="text" value={articuloBusq} onChange={function(e){setArticuloBusq(e.target.value);}}
+              placeholder="Buscar por articulo o codigo..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+          </div>
+        </div>
+        {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500 mt-1">{pedidosFiltrados.length} resultado(s)</div>}
+      </div>
+
+      {/* Buscador por ID de pedido */}
+      <div className="p-4 border-b border-slate-100">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
+          <input
+            type="text"
+            value={idBusq}
+            onChange={function(e){ setIdBusq(e.target.value); }}
+            onKeyDown={function(e){ if(e.key==='Enter'){ var v=e.target.value.trim(); setIdBusq(v); } }}
+            placeholder="Buscar pedido por ID (columna A del Drive)..."
+            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"
+          />
+        </div>
+        {idBuscando && <div className="text-xs text-slate-400 mt-2 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin"/> Buscando en Drive...</div>}
+        {idErr && <div className="text-xs text-red-600 mt-2">{idErr}</div>}
+        {idResultado !== null && !idBuscando && (
+          <div className="mt-3">
+            {idResultado.length === 0 ? (
+              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-sm">
+                <AlertCircle className="w-4 h-4 flex-shrink-0"/>
+                No existe ningun pedido con este ID en la base del Drive.
+              </div>
+            ) : (
+              <div className="rounded-xl overflow-hidden border border-slate-200">
+                <table className="w-full text-xs">
+                  <thead><tr style={{background:'#1a3c6e'}}>
+                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Fecha</th>
+                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Sede</th>
+                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Proveedor</th>
+                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Cod. Barras</th>
+                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Insumo / Articulo</th>
+                    <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
+                    <th className="py-2 px-3 text-center text-white font-bold uppercase w-16">Cant.</th>
+                  </tr></thead>
+                  <tbody>
+                    {idResultado.map(function(r, i) {
+                      var fecha = String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---');
+                      return (
+                        <tr key={i} className={'border-b border-slate-100 ' + (i%2===0?'bg-white':'bg-slate-50')}>
+                          <td className="py-1.5 px-3 text-slate-600">{fecha}</td>
+                          <td className="py-1.5 px-3 text-slate-600">{String(r[2]||'---')}</td>
+                          <td className="py-1.5 px-3 font-medium text-slate-800">{String(r[3]||'---')}</td>
+                          <td className="py-1.5 px-3 font-mono text-slate-500">{String(r[4]||'---')}</td>
+                          <td className="py-1.5 px-3 font-medium text-slate-800">{String(r[5]||'---')}</td>
+                          <td className="py-1.5 px-3 text-center text-slate-500">{String(r[6]||'---')}</td>
+                          <td className="py-1.5 px-3 text-center font-bold text-blue-800">{String(r[7]||'---')}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
+      {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial...</div>}
+      {!cargando && pedidos.length === 0 && !err && <div className="p-8 text-center text-slate-400 text-sm">No hay pedidos pendientes. Todos los pedidos han sido documentados.</div>}
+      {!cargando && pedidosFiltrados.length > 0 && (
+        <div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
+          {pedidosFiltrados.map(function(p) {
+            var isOpen = expandido === p.nOrden;
+            var isEditFac = editandoFactura === p.nOrden;
+            var isEditNPS = editandoNPS === p.nOrden;
+            var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura||'contado', obsFactura: p.obsFactura };
+            var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase())||(a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
+            var pm = getProvMeta(p.proveedor);
+            return (
+              <div key={p.nOrden}>
+                <button onClick={function(){ setExpandido(isOpen?null:p.nOrden); }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold" style={{background:'#1a3c6e'}}>
+                      {(p.sede||'X').charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
+                      <div className="text-xs text-slate-500">{p.sede} · {p.fecha} · {p.articulos.length} art.
+                        {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
+                        {p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="px-4 pb-4 bg-slate-50/50">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl bg-white border border-slate-100 text-xs flex-1">
+                        {[{l:'Orden',v:'#'+p.nOrden},{l:'Fecha',v:p.fecha},{l:'Sede',v:p.sede},{l:'Responsable',v:p.responsable},{l:'Medio Pago',v:p.medioPago||'---'}].map(function(x){
+                          return (<div key={x.l}><div className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">{x.l}</div><div className="font-semibold text-slate-700">{x.v}</div></div>);
+                        })}
+                      </div>
+                      <button onClick={function(e){ e.stopPropagation();
+                        generarPDF({ sede:p.sede, sedeDireccion:'---', sedeTelefono:'---', sedeHorario:'---', encargado:p.responsable,
+                          proveedorNombre:p.proveedor, provNit:pm.nit, provTel:pm.telefono, provCorreo:pm.correo, provContacto:pm.contacto,
+                          lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
+                          notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
+                          nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'',
+                          numeroPedidoSistema:p.numeroPedidoSistema||'' });
+                      }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
+                        <Download className="w-3.5 h-3.5"/> PDF
+                      </button>
+                      <button onClick={function(e){ e.stopPropagation(); generarCSV(p); }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#0f6b3a'}}>
+                        <Download className="w-3.5 h-3.5"/> CSV
+                      </button>
+                    </div>
+                    <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
+                      <table className="w-full text-xs">
+                        <thead><tr style={{background:'#1a3c6e'}}>
+                          <th className="py-2 px-3 text-left text-white font-bold uppercase">Codigo</th>
+                          <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
+                          <th className="py-2 px-3 text-center text-white font-bold uppercase w-16">Cant.</th>
+                          <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
+                        </tr></thead>
+                        <tbody>
+                          {artsVis.map(function(a,i){
+                            return (<tr key={i} className={'border-b border-slate-100 '+(i%2===0?'bg-white':'bg-slate-50')}>
+                              <td className="py-1.5 px-3 font-mono text-slate-500">{a.codigo}</td>
+                              <td className="py-1.5 px-3 font-medium text-slate-800">{a.articulo}</td>
+                              <td className="py-1.5 px-3 text-center font-bold text-blue-800">{a.cantidad}</td>
+                              <td className="py-1.5 px-3 text-center text-slate-500">{a.unidad||'---'}</td>
+                            </tr>);
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Datos de Factura */}
+                    <div className="rounded-xl border border-slate-200 bg-white p-3 mb-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-blue-600"/>
+                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Datos de Factura</span>
+                        </div>
+                        {!isEditFac && (
+                          <button onClick={function(){
+                            setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||''}; return n; });
+                            setEditandoFactura(p.nOrden);
+                          }} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
+                            <Edit3 className="w-3 h-3"/> Editar
+                          </button>
+                        )}
+                      </div>
+                      {!isEditFac ? (
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">N. Factura</div><div className="text-slate-700">{p.nroFactura||'---'}</div></div>
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Tipo</div><div className="text-slate-700">{p.tipoFactura||'---'}</div></div>
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Observacion</div><div className="text-slate-700">{p.obsFactura||'---'}</div></div>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">N. Factura</label>
+                              <input type="text" value={fd.nroFactura||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{nroFactura:e.target.value}); return n; }); }}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500" placeholder="Ej: FAC-001"/>
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tipo</label>
+                              <select value={fd.tipoFactura||'contado'} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }}
+                                className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500">
+                                <option value="contado">Contado</option>
+                                <option value="credito">Credito</option>
+                              </select>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Observacion de Factura</label>
+                            <input type="text" value={fd.obsFactura||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }}
+                              className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
+                              placeholder="Ej: Pedido incompleto, diferencia en cantidades..."/>
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={function(){ guardarFactura(p.nOrden); }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{background:'#1a3c6e'}}>Guardar</button>
+                            <button onClick={function(){ setEditandoFactura(null); }}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Número de Pedido Sistema - NUEVO CAMPO */}
+                    <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Archive className="w-4 h-4 text-amber-600"/>
+                          <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Número de Pedido (Sistema)</span>
+                          <span className="text-[10px] text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">Al asignar, pasa a Historial Documentado</span>
+                        </div>
+                        {!isEditNPS && !p.numeroPedidoSistema && (
+                          <button onClick={function(){
+                            setNpsData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=''; return n; });
+                            setEditandoNPS(p.nOrden);
+                          }} className="flex items-center gap-1 text-xs text-amber-700 hover:text-amber-900 font-semibold border border-amber-300 rounded-lg px-2 py-1">
+                            <Edit3 className="w-3 h-3"/> Asignar
+                          </button>
+                        )}
+                      </div>
+                      {!isEditNPS ? (
+                        <div className="text-xs text-amber-700">
+                          {p.numeroPedidoSistema && p.numeroPedidoSistema !== '---'
+                            ? <span className="font-bold text-green-700">✅ {p.numeroPedidoSistema}</span>
+                            : <span className="text-amber-600 italic">Sin asignar — Este pedido aún no ha sido documentado</span>}
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-[10px] font-bold text-amber-700 uppercase block mb-1">Número de Pedido en el Sistema *</label>
+                            <input type="text" value={npsData[p.nOrden]||''} onChange={function(e){ setNpsData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=e.target.value; return n; }); }}
+                              className="w-full px-2 py-1.5 bg-white border-2 border-amber-300 rounded-lg text-xs focus:outline-none focus:border-amber-500 font-mono"
+                              placeholder="Ej: PED-2024-001, ORD-123, etc."
+                              disabled={guardandoNPS}
+                              onKeyDown={function(e){ if(e.key==='Enter') guardarNumeroPedidoSistema(p.nOrden); }}
+                            />
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <button onClick={function(){ guardarNumeroPedidoSistema(p.nOrden); }}
+                              disabled={guardandoNPS || !(npsData[p.nOrden]||'').trim()}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50" style={{background:'#92400e'}}>
+                              {guardandoNPS ? <RefreshCw className="w-3 h-3 animate-spin"/> : <Archive className="w-3 h-3"/>}
+                              {guardandoNPS ? 'Guardando...' : 'Guardar y Documentar'}
+                            </button>
+                            <button onClick={function(){ setEditandoNPS(null); }}
+                              disabled={guardandoNPS}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50">Cancelar</button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
-if (r[5] || r[4]) {
-mapa[nOrden].articulos.push({
-codigo: String(r[4]||''), articulo: String(r[5]||''),
-unidad: String(r[6]||''), cantidad: String(r[7]||''),
-});
-}
-});
-var lista = Object.values(mapa).reverse();
-var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
-setSedesDisp(sds);
-setPedidos(lista);
-} catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
-finally { setCargando(false); }
-}
 
-async function guardarFactura(nOrden) {
-var fd = facturaData[nOrden] || {};
-try {
-await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'' });
-setEditandoFactura(null);
-await cargarHistorial();
-} catch(e) { alert('Error guardando factura: ' + (e.message||'Error')); }
-}
+// ─── HistorialDocumentado ─────────────────────────────────────────────────────
+export function HistorialDocumentado({ proveedoresMeta }) {
+  var [sedeFiltro, setSedeFiltro] = useState('');
+  var [articuloBusq, setArticuloBusq] = useState('');
+  var [cargando, setCargando] = useState(false);
+  var [pedidos, setPedidos] = useState([]);
+  var [sedesDisp, setSedesDisp] = useState([]);
+  var [err, setErr] = useState('');
+  var [expandido, setExpandido] = useState(null);
 
-function getProvMeta(nombre) {
-if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
-var found = proveedoresMeta.find(function(p){ return p.nombre === nombre; });
-if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
-return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
-}
+  useEffect(function() { cargarDocumentados(); }, []);
 
-var pedidosFiltrados = pedidos.filter(function(p) {
-var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
-var pasaArt = !articuloBusq || p.articulos.some(function(a) {
-return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
-});
-return pasaSede && pasaArt;
-});
+  async function cargarDocumentados() {
+    setCargando(true); setErr(''); setPedidos([]);
+    try {
+      var res = await fetch(ENDPOINT + '?action=getHistorial', { redirect: 'follow' });
+      if (!res.ok) { setErr('Error HTTP ' + res.status); return; }
+      var data = await res.json();
+      if (!data.ok) { setErr(data.error || 'Error cargando historial.'); return; }
+      var rows = data.rows || [];
+      var mapa = {};
+      rows.forEach(function(r) {
+        if (!Array.isArray(r)) return;
+        var nOrden = String(r[0] || '');
+        if (!nOrden) return;
+        if (!mapa[nOrden]) {
+          mapa[nOrden] = {
+            nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
+            sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
+            responsable: String(r[9]||'---'), medioPago: String(r[11]||'contado'),
+            observaciones: String(r[10]||''),
+            nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
+            numeroPedidoSistema: String(r[16]||''),
+            articulos: []
+          };
+        }
+        if (r[5] || r[4]) {
+          mapa[nOrden].articulos.push({
+            codigo: String(r[4]||''), articulo: String(r[5]||''),
+            unidad: String(r[6]||''), cantidad: String(r[7]||''),
+          });
+        }
+      });
+      var lista = Object.values(mapa).reverse();
+      // Solo pedidos CON número de pedido sistema asignado
+      var documentados = lista.filter(function(p) { return p.numeroPedidoSistema && p.numeroPedidoSistema.trim() !== '' && p.numeroPedidoSistema !== '---'; });
+      var sds = [...new Set(documentados.map(function(p){ return p.sede; }))].filter(Boolean).sort();
+      setSedesDisp(sds);
+      setPedidos(documentados);
+    } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
+    finally { setCargando(false); }
+  }
 
-return (
-<div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-<div className="flex items-center justify-between px-5 py-4" style={{background:'#1a3c6e'}}>
-<div className="flex items-center gap-3">
-<Search className="w-5 h-5 text-blue-300"/>
-<div>
-<div className="text-white font-bold text-sm">Historial de Pedidos</div>
-<div className="text-blue-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' ordenes registradas'}</div>
-</div>
-</div>
-<button onClick={cargarHistorial} disabled={cargando}
-className="flex items-center gap-1.5 text-xs text-blue-200 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
-<RefreshCw className={"w-3.5 h-3.5 " + (cargando?'animate-spin':'')}/>{cargando?'Cargando...':'Actualizar'}
-</button>
-</div>
-<div className="p-4 border-b border-slate-100">
-<div className="flex flex-col sm:flex-row gap-2">
-<select value={sedeFiltro} onChange={function(e){setSedeFiltro(e.target.value);}}
-className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500">
-<option value="">Todas las sedes</option>
-{sedesDisp.map(function(s){ return (<option key={s} value={s}>{s}</option>); })}
-</select>
-<div className="relative flex-1">
-<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
-<input type="text" value={articuloBusq} onChange={function(e){setArticuloBusq(e.target.value);}}
-placeholder="Buscar por articulo o codigo..."
-className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
-</div>
-</div>
-{(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500 mt-1">{pedidosFiltrados.length} resultado(s)</div>}
-</div>
+  function getProvMeta(nombre) {
+    if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    var found = proveedoresMeta.find(function(p){ return p.nombre === nombre; });
+    if (!found) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
+    return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
+  }
 
-{/* Buscador por ID de pedido */}
-<div className="p-4 border-b border-slate-100">
-<div className="relative">
-<Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
-<input
-type="text"
-value={idBusq}
-onChange={function(e){ setIdBusq(e.target.value); }}
-onKeyDown={function(e){ if(e.key==='Enter'){ var v=e.target.value.trim(); setIdBusq(v); } }}
-placeholder="Buscar pedido por ID (columna A del Drive)..."
-className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"
-/>
-</div>
-{idBuscando && <div className="text-xs text-slate-400 mt-2 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin"/> Buscando en Drive...</div>}
-{idErr && <div className="text-xs text-red-600 mt-2">{idErr}</div>}
-{idResultado !== null && !idBuscando && (
-<div className="mt-3">
-{idResultado.length === 0 ? (
-<div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-sm">
-<AlertCircle className="w-4 h-4 flex-shrink-0"/>
-No existe ningun pedido con este ID en la base del Drive.
-</div>
-) : (
-<div className="rounded-xl overflow-hidden border border-slate-200">
-<table className="w-full text-xs">
-<thead><tr style={{background:'#1a3c6e'}}>
-<th className="py-2 px-3 text-left text-white font-bold uppercase">Fecha</th>
-<th className="py-2 px-3 text-left text-white font-bold uppercase">Sede</th>
-<th className="py-2 px-3 text-left text-white font-bold uppercase">Proveedor</th>
-<th className="py-2 px-3 text-left text-white font-bold uppercase">Cod. Barras</th>
-<th className="py-2 px-3 text-left text-white font-bold uppercase">Insumo / Articulo</th>
-<th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
-<th className="py-2 px-3 text-center text-white font-bold uppercase w-16">Cant.</th>
-</tr></thead>
-<tbody>
-{idResultado.map(function(r, i) {
-var fecha = String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---');
-return (
-<tr key={i} className={'border-b border-slate-100 ' + (i%2===0?'bg-white':'bg-slate-50')}>
-<td className="py-1.5 px-3 text-slate-600">{fecha}</td>
-<td className="py-1.5 px-3 text-slate-600">{String(r[2]||'---')}</td>
-<td className="py-1.5 px-3 font-medium text-slate-800">{String(r[3]||'---')}</td>
-<td className="py-1.5 px-3 font-mono text-slate-500">{String(r[4]||'---')}</td>
-<td className="py-1.5 px-3 font-medium text-slate-800">{String(r[5]||'---')}</td>
-<td className="py-1.5 px-3 text-center text-slate-500">{String(r[6]||'---')}</td>
-<td className="py-1.5 px-3 text-center font-bold text-blue-800">{String(r[7]||'---')}</td>
-</tr>
-);
-})}
-</tbody>
-</table>
-</div>
-)}
-</div>
-)}
-</div>
+  var pedidosFiltrados = pedidos.filter(function(p) {
+    var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
+    var pasaArt = !articuloBusq || p.articulos.some(function(a) {
+      return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
+    });
+    return pasaSede && pasaArt;
+  });
 
-{err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
-{cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial...</div>}
-{!cargando && pedidos.length === 0 && !err && <div className="p-8 text-center text-slate-400 text-sm">No hay pedidos registrados aun.</div>}
-{!cargando && pedidosFiltrados.length > 0 && (
-<div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
-{pedidosFiltrados.map(function(p) {
-var isOpen = expandido === p.nOrden;
-var isEditFac = editandoFactura === p.nOrden;
-var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura||'contado', obsFactura: p.obsFactura };
-var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase())||(a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
-var pm = getProvMeta(p.proveedor);
-return (
-<div key={p.nOrden}>
-<button onClick={function(){ setExpandido(isOpen?null:p.nOrden); }}
-className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
-<div className="flex items-center gap-3 min-w-0">
-<div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold" style={{background:'#1a3c6e'}}>
-{(p.sede||'X').charAt(0)}
-</div>
-<div className="min-w-0">
-<div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
-<div className="text-xs text-slate-500">{p.sede} · {p.fecha} · {p.articulos.length} art.
-{p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
-{p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
-</div>
-</div>
-</div>
-<div className="flex items-center gap-2 flex-shrink-0">
-<span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
-<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
-</div>
-</button>
-{isOpen && (
-<div className="px-4 pb-4 bg-slate-50/50">
-<div className="flex items-start justify-between gap-3 mb-3">
-<div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl bg-white border border-slate-100 text-xs flex-1">
-{[{l:'Orden',v:'#'+p.nOrden},{l:'Fecha',v:p.fecha},{l:'Sede',v:p.sede},{l:'Responsable',v:p.responsable},{l:'Medio Pago',v:p.medioPago||'---'}].map(function(x){
-return (<div key={x.l}><div className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">{x.l}</div><div className="font-semibold text-slate-700">{x.v}</div></div>);
-})}
-</div>
-<button onClick={function(e){ e.stopPropagation();
-generarPDF({ sede:p.sede, sedeDireccion:'---', sedeTelefono:'---', sedeHorario:'---', encargado:p.responsable,
-proveedorNombre:p.proveedor, provNit:pm.nit, provTel:pm.telefono, provCorreo:pm.correo, provContacto:pm.contacto,
-lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
-notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
-nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'' });
-}} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
-<Download className="w-3.5 h-3.5"/> PDF
-</button>
-<button onClick={function(e){ e.stopPropagation(); generarCSV(p); }}
-className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#0f6b3a'}}>
-<Download className="w-3.5 h-3.5"/> CSV
-</button>
-</div>
-<div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
-<table className="w-full text-xs">
-<thead><tr style={{background:'#1a3c6e'}}>
-<th className="py-2 px-3 text-left text-white font-bold uppercase">Codigo</th>
-<th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
-<th className="py-2 px-3 text-center text-white font-bold uppercase w-16">Cant.</th>
-<th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
-</tr></thead>
-<tbody>
-{artsVis.map(function(a,i){
-return (<tr key={i} className={'border-b border-slate-100 '+(i%2===0?'bg-white':'bg-slate-50')}>
-<td className="py-1.5 px-3 font-mono text-slate-500">{a.codigo}</td>
-<td className="py-1.5 px-3 font-medium text-slate-800">{a.articulo}</td>
-<td className="py-1.5 px-3 text-center font-bold text-blue-800">{a.cantidad}</td>
-<td className="py-1.5 px-3 text-center text-slate-500">{a.unidad||'---'}</td>
-</tr>);
-})}
-</tbody>
-</table>
-</div>
-<div className="rounded-xl border border-slate-200 bg-white p-3">
-<div className="flex items-center justify-between mb-2">
-<div className="flex items-center gap-2">
-<FileText className="w-4 h-4 text-blue-600"/>
-<span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Datos de Factura</span>
-</div>
-{!isEditFac && (
-<button onClick={function(){
-setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||''}; return n; });
-setEditandoFactura(p.nOrden);
-}} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
-<Edit3 className="w-3 h-3"/> Editar
-</button>
-)}
-</div>
-{!isEditFac ? (
-<div className="grid grid-cols-3 gap-3 text-xs">
-<div><div className="font-bold text-slate-400 uppercase mb-0.5">N. Factura</div><div className="text-slate-700">{p.nroFactura||'---'}</div></div>
-<div><div className="font-bold text-slate-400 uppercase mb-0.5">Tipo</div><div className="text-slate-700">{p.tipoFactura||'---'}</div></div>
-<div><div className="font-bold text-slate-400 uppercase mb-0.5">Observacion</div><div className="text-slate-700">{p.obsFactura||'---'}</div></div>
-</div>
-) : (
-<div className="space-y-2">
-<div className="grid grid-cols-2 gap-2">
-<div>
-<label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">N. Factura</label>
-<input type="text" value={fd.nroFactura||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{nroFactura:e.target.value}); return n; }); }}
-className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500" placeholder="Ej: FAC-001"/>
-</div>
-<div>
-<label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tipo</label>
-<select value={fd.tipoFactura||'contado'} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }}
-className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500">
-<option value="contado">Contado</option>
-<option value="credito">Credito</option>
-</select>
-</div>
-</div>
-<div>
-<label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Observacion de Factura</label>
-<input type="text" value={fd.obsFactura||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }}
-className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
-placeholder="Ej: Pedido incompleto, diferencia en cantidades..."/>
-</div>
-<div className="flex gap-2 pt-1">
-<button onClick={function(){ guardarFactura(p.nOrden); }}
-className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{background:'#1a3c6e'}}>Guardar</button>
-<button onClick={function(){ setEditandoFactura(null); }}
-className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200">Cancelar</button>
-</div>
-</div>
-)}
-</div>
-</div>
-)}
-</div>
-);
-})}
-</div>
-)}
-</div>
-);
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-4" style={{background:'#0f6b3a'}}>
+        <div className="flex items-center gap-3">
+          <Archive className="w-5 h-5 text-green-300"/>
+          <div>
+            <div className="text-white font-bold text-sm">Historial Documentado</div>
+            <div className="text-green-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' pedidos con número de sistema asignado'}</div>
+          </div>
+        </div>
+        <button onClick={cargarDocumentados} disabled={cargando}
+          className="flex items-center gap-1.5 text-xs text-green-200 hover:text-white bg-white/10 hover:bg-white/20 rounded-lg px-3 py-1.5 transition-all disabled:opacity-50">
+          <RefreshCw className={"w-3.5 h-3.5 " + (cargando?'animate-spin':'')}/>{cargando?'Cargando...':'Actualizar'}
+        </button>
+      </div>
+      <div className="p-4 border-b border-slate-100">
+        <div className="flex flex-col sm:flex-row gap-2">
+          <select value={sedeFiltro} onChange={function(e){setSedeFiltro(e.target.value);}}
+            className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500">
+            <option value="">Todas las sedes</option>
+            {sedesDisp.map(function(s){ return (<option key={s} value={s}>{s}</option>); })}
+          </select>
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
+            <input type="text" value={articuloBusq} onChange={function(e){setArticuloBusq(e.target.value);}}
+              placeholder="Buscar por articulo, codigo o N. pedido sistema..."
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500"/>
+          </div>
+        </div>
+        {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500 mt-1">{pedidosFiltrados.length} resultado(s)</div>}
+      </div>
+
+      {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
+      {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial documentado...</div>}
+      {!cargando && pedidos.length === 0 && !err && (
+        <div className="p-8 text-center text-slate-400 text-sm">
+          <Archive className="w-8 h-8 mx-auto mb-2 text-slate-300"/>
+          No hay pedidos documentados aun.\n Asigna un "Número de Pedido (Sistema)" en el Historial de Pedidos para que aparezcan aquí.
+        </div>
+      )}
+      {!cargando && pedidosFiltrados.length > 0 && (
+        <div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
+          {pedidosFiltrados.map(function(p) {
+            var isOpen = expandido === p.nOrden;
+            var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase())||(a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
+            var pm = getProvMeta(p.proveedor);
+            return (
+              <div key={p.nOrden}>
+                <button onClick={function(){ setExpandido(isOpen?null:p.nOrden); }}
+                  className="w-full text-left px-4 py-3 hover:bg-slate-50 transition-colors flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 text-white text-xs font-bold" style={{background:'#0f6b3a'}}>
+                      {(p.sede||'X').charAt(0)}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
+                      <div className="text-xs text-slate-500">{p.sede} · {p.fecha} · {p.articulos.length} art.
+                        {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
+                        {p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
+                        {p.numeroPedidoSistema && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800 border border-green-300">📄 {p.numeroPedidoSistema}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0f6b3a" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
+                  </div>
+                </button>
+                {isOpen && (
+                  <div className="px-4 pb-4 bg-slate-50/50">
+                    {/* Número de Pedido Sistema - Destacado */}
+                    <div className="rounded-xl border-2 border-green-300 bg-green-50 p-3 mb-3">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Archive className="w-4 h-4 text-green-700"/>
+                        <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Número de Pedido (Sistema)</span>
+                      </div>
+                      <div className="text-lg font-bold text-green-800 font-mono">{p.numeroPedidoSistema}</div>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 rounded-xl bg-white border border-slate-100 text-xs flex-1">
+                        {[{l:'Orden',v:'#'+p.nOrden},{l:'Fecha',v:p.fecha},{l:'Sede',v:p.sede},{l:'Responsable',v:p.responsable},{l:'Medio Pago',v:p.medioPago||'---'}].map(function(x){
+                          return (<div key={x.l}><div className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">{x.l}</div><div className="font-semibold text-slate-700">{x.v}</div></div>);
+                        })}
+                      </div>
+                      <button onClick={function(e){ e.stopPropagation();
+                        generarPDF({ sede:p.sede, sedeDireccion:'---', sedeTelefono:'---', sedeHorario:'---', encargado:p.responsable,
+                          proveedorNombre:p.proveedor, provNit:pm.nit, provTel:pm.telefono, provCorreo:pm.correo, provContacto:pm.contacto,
+                          lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
+                          notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
+                          nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'',
+                          numeroPedidoSistema:p.numeroPedidoSistema||'' });
+                      }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#0f6b3a'}}>
+                        <Download className="w-3.5 h-3.5"/> PDF
+                      </button>
+                      <button onClick={function(e){ e.stopPropagation(); generarCSV(p); }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
+                        <Download className="w-3.5 h-3.5"/> CSV
+                      </button>
+                    </div>
+                    <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
+                      <table className="w-full text-xs">
+                        <thead><tr style={{background:'#0f6b3a'}}>
+                          <th className="py-2 px-3 text-left text-white font-bold uppercase">Codigo</th>
+                          <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
+                          <th className="py-2 px-3 text-center text-white font-bold uppercase w-16">Cant.</th>
+                          <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
+                        </tr></thead>
+                        <tbody>
+                          {artsVis.map(function(a,i){
+                            return (<tr key={i} className={'border-b border-slate-100 '+(i%2===0?'bg-white':'bg-slate-50')}>
+                              <td className="py-1.5 px-3 font-mono text-slate-500">{a.codigo}</td>
+                              <td className="py-1.5 px-3 font-medium text-slate-800">{a.articulo}</td>
+                              <td className="py-1.5 px-3 text-center font-bold text-green-800">{a.cantidad}</td>
+                              <td className="py-1.5 px-3 text-center text-slate-500">{a.unidad||'---'}</td>
+                            </tr>);
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {(p.nroFactura || p.tipoFactura || p.obsFactura) && (
+                      <div className="rounded-xl border border-slate-200 bg-white p-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <FileText className="w-4 h-4 text-blue-600"/>
+                          <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">Datos de Factura</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">N. Factura</div><div className="text-slate-700">{p.nroFactura||'---'}</div></div>
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Tipo</div><div className="text-slate-700">{p.tipoFactura||'---'}</div></div>
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Observacion</div><div className="text-slate-700">{p.obsFactura||'---'}</div></div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── SheetsOrderForm ──────────────────────────────────────────────────────────
@@ -615,7 +911,7 @@ export default function SheetsOrderForm() {
 
   var productosFiltrados = productos.filter(function(p) {
     return (!searchTerm||(p.articulo||'').toLowerCase().includes(searchTerm.toLowerCase())||(p.codigo||'').toLowerCase().includes(searchTerm.toLowerCase())) &&
-      (!selectedSubfamilia||p.subfamilia===selectedSubfamilia);
+           (!selectedSubfamilia||p.subfamilia===selectedSubfamilia);
   });
 
   var lineasSeleccionadas = productos
@@ -722,8 +1018,8 @@ export default function SheetsOrderForm() {
                 {provMeta.nit&&<p><span className="font-semibold text-slate-600">NIT:</span> {provMeta.nit}</p>}
                 {provMeta.telefono&&<p><span className="font-semibold text-slate-600">Tel:</span> {provMeta.telefono}</p>}
                 {provMeta.correo&&<p><span className="font-semibold text-slate-600">Correo:</span> {provMeta.correo}</p>}
-                {(provMeta.contacto||provMeta.asesor)&&<p><span className="font-semibold text-slate-600">Contacto:</span> {provMeta.contacto||provMeta.asesor}</p>}</div>
-          
+                {(provMeta.contacto||provMeta.asesor)&&<p><span className="font-semibold text-slate-600">Contacto:</span> {provMeta.contacto||provMeta.asesor}</p>}
+              </div>
             )}
           </div>
           <div className="flex-1 max-w-md">
@@ -746,7 +1042,7 @@ export default function SheetsOrderForm() {
         </div>
       </div>
 
-      {/* 3. Productos - SIN columnas Min/Max */}
+      {/* 3. Productos */}
       {selectedProveedor&&(
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center gap-2 mb-4">
@@ -849,11 +1145,11 @@ export default function SheetsOrderForm() {
         </div>
       </div>
 
-      {/* 6. Historial */}
+      {/* 6. Historial de Pedidos */}
       <div>
         <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-3 flex items-center gap-2"><Search className="w-4 h-4 text-cyan-500"/> 6. Historial de Pedidos</h2>
         <HistorialPedidos proveedoresMeta={proveedoresMeta}/>
       </div>
     </div>
   );
-    }
+}
