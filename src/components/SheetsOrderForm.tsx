@@ -310,7 +310,6 @@ function HistorialPedidos({ proveedoresMeta }) {
       setEditandoNPS(null);
       // Recargar historial - el pedido desaparecerá de aquí y aparecerá en Historial Documentado
       await cargarHistorial();
-      alert('✅ Pedido #' + nOrden + ' documentado exitosamente.\nAhora aparece en el módulo "Historial Documentado".');
     } catch(e) { alert('Error: ' + (e.message||'Error de red')); }
     finally { setGuardandoNPS(false); }
   }
