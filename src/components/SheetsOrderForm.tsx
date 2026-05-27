@@ -715,7 +715,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
       {!cargando && pedidos.length === 0 && !err && (
         <div className="p-8 text-center text-slate-400 text-sm">
           <Archive className="w-8 h-8 mx-auto mb-2 text-slate-300"/>
-          No hay pedidos documentados aun.\n Asigna un "Número de Pedido (Sistema)" en el Historial de Pedidos para que aparezcan aquí.
+          No hay pedidos documentados aun. Asigna un Número de Pedido (Sistema) en el Historial de Pedidos para que aparezcan aquí.
         </div>
       )}
       {!cargando && pedidosFiltrados.length > 0 && (
