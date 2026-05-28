@@ -588,26 +588,41 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                           return (<div key={x.l}><div className="font-bold uppercase tracking-wider text-slate-400 mb-0.5">{x.l}</div><div className="font-semibold text-slate-700">{x.v}</div></div>);
                         })}
                       </div>
-                      <button onClick={function(e){ e.stopPropagation();
+                      <button onClick={function(e){ 
+                        e.stopPropagation();
+                        
+                        // Buscamos los metadatos en la lista global que recibe el componente
+                        var pmHistorial = (proveedoresMeta || []).find(function(prov) {
+                          return String(prov.nombre || '').trim().toLowerCase() === String(p.proveedor || '').trim().toLowerCase();
+                        }) || {};
+
                         generarPDF({ 
-                          sede: p.sede, 
+                          sede: p.sede || '---', 
                           sedeDireccion: p.sedeDireccion || '---', 
                           sedeTelefono: p.sedeTelefono || '---', 
                           sedeHorario: p.sedeHorario || '---', 
-                          encargado: p.responsable,
-                          proveedorNombre: p.proveedor, 
-                          provNit: pm.nit, 
-                          provTel: pm.telefono, 
-                          provCorreo: pm.correo, 
-                          provContacto: pm.contacto,
-                          lineas: p.articulos.map(function(a){ return {articulo:a.articulo, unidad:a.unidad||'', cantidad:parsearTextoANumero(a.cantidad), valorUnitario: parseFloat(a.valorUnitario || 0), codigo:a.codigo||''}; }),
-                          notas: p.observaciones||'', 
-                          medioPago: p.medioPago||'contado', 
+                          encargado: p.responsable || '---',
+                          proveedorNombre: p.proveedor || '', 
+                          provNit: pmHistorial.nit || '---', 
+                          provTel: pmHistorial.telefono || pmHistorial.tel || '---', 
+                          provCorreo: pmHistorial.correo || pmHistorial.email || '---', 
+                          provContacto: pmHistorial.contacto || pmHistorial.asesor || '---',
+                          lineas: p.articulos.map(function(a){ 
+                            return {
+                              articulo: a.articulo || '',
+                              unidad: a.unidad || '', 
+                              cantidad: parsearTextoANumero ? parsearTextoANumero(a.cantidad) : (parseFloat(a.cantidad) || 0), 
+                              valorUnitario: parseFloat(a.valorUnitario || 0), 
+                              codigo: a.codigo || ''
+                            }; 
+                          }),
+                          notas: p.observaciones || '', 
+                          medioPago: p.medioPago || 'contado', 
                           numeroOrden: p.nOrden,
-                          nroFactura: p.nroFactura||'', 
-                          tipoFactura: p.tipoFactura||'', 
-                          obsFactura: p.obsFactura||'',
-                          numeroPedidoSistema: p.numeroPedidoSistema||'' 
+                          nroFactura: p.nroFactura || '', 
+                          tipoFactura: p.tipoFactura || '', 
+                          obsFactura: p.obsFactura || '',
+                          numeroPedidoSistema: p.numeroPedidoSistema || '' 
                         });
                       }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> PDF
