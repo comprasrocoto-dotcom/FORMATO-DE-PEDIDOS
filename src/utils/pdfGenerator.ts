@@ -14,8 +14,7 @@ const loadJsPDF = () => {
       return;
     }
     const s = document.createElement('script');
-    s.src = '[link removed]
-```df/2.5.1/jspdf.umd.min.js';
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
     s.onload = () => {
       _jsPDFClass = window.jspdf ? window.jspdf.jsPDF : window.jsPDF;
       resolve(_jsPDFClass);
