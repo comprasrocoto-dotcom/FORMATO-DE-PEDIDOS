@@ -904,8 +904,15 @@ export default function SheetsOrderForm() {
   }, [selectedProveedor]);
 
   function handleCantidad(codigo, val) {
-    var parsed = parseFloat(String(val).replace(',','.'));
-    setCantidades(function(p){ return Object.assign({},p,{[codigo]: isNaN(parsed)||parsed<0 ? 0 : parsed}); });
+  // Cambia la lógica para permitir una conversión más flexible
+  var strVal = String(val).replace(',', '.'); // Reemplaza coma por punto para el parseo
+  var parsed = parseFloat(strVal);
+  
+  setCantidades(function(p){ 
+    return Object.assign({}, p, {
+      [codigo]: isNaN(parsed) || parsed < 0 ? 0 : parsed 
+    }); 
+  });
   }
 
   var productosFiltrados = productos.filter(function(p) {
@@ -1087,7 +1094,15 @@ export default function SheetsOrderForm() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
                             <button onClick={function(){handleCantidad(p.codigo,Math.max(0,qty-1));}} className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold flex items-center justify-center text-slate-600 text-base">-</button>
-                            <input type="number" min="0" step="0.01" value={qty||''} onChange={function(e){handleCantidad(p.codigo,e.target.value);}} placeholder="0" className="w-16 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500"/>
+                            <input 
+                            type="number" 
+                            min="0" 
+                            step="0.001" // Cambia de 0.01 a 0.001 para permitir mayor precisión
+                            value={qty || ''} 
+                            onChange={function(e){ handleCantidad(p.codigo, e.target.value); }} 
+                            placeholder="0" 
+                            className="w-16 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500"
+                            />
                             <button onClick={function(){handleCantidad(p.codigo,qty+1);}} className="w-7 h-7 rounded-lg bg-cyan-500 hover:bg-cyan-600 font-bold text-white flex items-center justify-center text-base">+</button>
                           </div>
                         </td>
@@ -1108,7 +1123,7 @@ export default function SheetsOrderForm() {
                 </div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between text-xs font-bold text-slate-800">
                   <span>Total art.</span>
-                  <span className="text-cyan-600">{lineasSeleccionadas.reduce(function(s,l){return s+(parseFloat(l.cantidad)||0);},0).toFixed(2).replace(/.00$/,'')}</span>
+                  <span className="text-cyan-600">{lineasSeleccionadas.reduce(function(s,l){return s+(parseFloat(l.cantidad)||0);},0).toFixed(3).replace(/\.?0+$/, '')}</span>
                 </div>
               </div>
             </div>
