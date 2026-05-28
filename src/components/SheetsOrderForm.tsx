@@ -903,14 +903,22 @@ export default function SheetsOrderForm() {
     return function() { cancelled = true; };
   }, [selectedProveedor]);
 
+  // Función auxiliar para convertir el texto "1,250.005" al número real 1250.005
+  function parsearTextoANumero(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  // Eliminamos las comas de miles para que parseFloat entienda el string
+  var numeroLimpio = String(val).replace(/,/g, '');
+  var parsed = parseFloat(numeroLimpio);
+  return isNaN(parsed) || parsed < 0 ? 0 : parsed;
+  }
+
   function handleCantidad(codigo, val) {
-  // Cambia la lógica para permitir una conversión más flexible
-  var strVal = String(val).replace(',', '.'); // Reemplaza coma por punto para el parseo
-  var parsed = parseFloat(strVal);
+  // Permitimos que el usuario escriba libremente números, puntos y comas
+  var strVal = String(val).replace(/[^0-9.,]/g, '');
   
   setCantidades(function(p){ 
     return Object.assign({}, p, {
-      [codigo]: isNaN(parsed) || parsed < 0 ? 0 : parsed 
+      [codigo]: strVal 
     }); 
   });
   }
@@ -921,8 +929,8 @@ export default function SheetsOrderForm() {
   });
 
   var lineasSeleccionadas = productos
-    .filter(function(p){ return (parseFloat(cantidades[p.codigo])||0)>0; })
-    .map(function(p){ return {codigo:p.codigo,articulo:p.articulo,unidad:p.unidad||'',cantidad:parseFloat(cantidades[p.codigo])||0,valorUnitario:0}; });
+  .filter(function(p){return parsearTextoANumero(cantidades[p.codigo]) > 0;})
+  .map(function(p){ return {codigo: p.codigo, articulo: p.articulo, unidad: p.unidad || '', cantidad: parsearTextoANumero(cantidades[p.codigo]), valorUnitario: 0};});
 
   var sedeObj = sedes.find(function(s){ return s.nombre===selectedSede; }) || null;
   var provMeta = proveedoresMeta.find(function(p){ return p.nombre===selectedProveedor; }) || null;
@@ -1085,18 +1093,31 @@ export default function SheetsOrderForm() {
                 </tr></thead>
                 <tbody>
                   {productosFiltrados.map(function(p,idx){
-                    var qty=parseFloat(cantidades[p.codigo])||0;
-                    return(
-                      <tr key={p.codigo||idx} className={'border-b border-slate-100 transition-colors '+(qty>0?'bg-emerald-50':idx%2===0?'bg-white':'bg-slate-50/50')}>
+                  // Conservamos el texto tal cual lo escribe el usuario (ej: "1,200.")
+                  var textoCantidad = cantidades[p.codigo] !== undefined ? cantidades[p.codigo] : '';
+                  // Convertimos temporalmente a número matemático sólo para aplicar los estilos de fila activa (verde)
+                  var qtyParsed = parsearTextoANumero(textoCantidad);
+              
+                  return(
+                    <tr key={p.codigo||idx} className={'border-b border-slate-100 transition-colors '+(qtyParsed>0?'bg-emerald-50':idx%2===0?'bg-white':'bg-slate-50/50')}>
                         <td className="py-3 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
                         <td className="py-3 px-4 font-medium text-slate-800">{p.articulo}</td>
                         <td className="py-3 px-4 text-center text-slate-500 text-xs hidden md:table-cell">{p.unidad||'---'}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
-                            <button onClick={function(){handleCantidad(p.codigo,Math.max(0,qty-1));}} className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold flex items-center justify-center text-slate-600 text-base">-</button>
-                            <input type="number" min="0" step="0.001" // Permite precisión de milésimas value={qty || ''} onChange={function(e){ handleCantidad(p.codigo, e.target.value); }} placeholder="0" className="w-16 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500" />
-                            <button onClick={function(){handleCantidad(p.codigo,qty+1);}} className="w-7 h-7 rounded-lg bg-cyan-500 hover:bg-cyan-600 font-bold text-white flex items-center justify-center text-base">+</button>
-                          </div>
+                            {/* El botón "-" resta 1 al valor numérico parseado y lo devuelve como string */}
+                            <button type="button" onClick={function(){handleCantidad(p.codigo, String(Math.max(0, qtyParsed - 1)));}} className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold flex items-center justify-center text-slate-600 text-base">-</button>
+                            <input 
+                            type="text" 
+                            inputMode="decimal" // Fuerza la aparición del teclado numérico con punto/coma en dispositivos móviles
+                            value={textoCantidad} 
+                            onChange={function(e){ handleCantidad(p.codigo, e.target.value); }} 
+                            placeholder="0" 
+                            className="w-20 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500" 
+                            />
+                            {/* El botón "+" suma 1 al valor numérico parseado y lo devuelve como string */}
+                            <button type="button" onClick={function(){handleCantidad(p.codigo, String(qtyParsed + 1));}} className="w-7 h-7 rounded-lg bg-cyan-500 hover:bg-cyan-600 font-bold text-white flex items-center justify-center text-base">+</button>
+                            </div>
                         </td>
                       </tr>
                     );
@@ -1111,12 +1132,24 @@ export default function SheetsOrderForm() {
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 min-w-52">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Resumen</p>
                 <div className="space-y-1 mb-3">
-                  {lineasSeleccionadas.map(function(l){return(<div key={l.codigo} className="flex justify-between text-xs text-slate-700"><span className="truncate max-w-36">{l.articulo}</span><span className="font-bold ml-2 text-cyan-700">x{l.cantidad}</span></div>);})}
+                  {lineasSeleccionadas.map(function(l){
+                    return(
+                    <div key={l.codigo} className="flex justify-between text-xs text-slate-700">
+                      <span className="truncate max-w-36">{l.articulo}</span>
+                      {/* Muestra la cantidad respetando el formato decimal con hasta 3 decimales si existen */}
+                      <span className="font-bold ml-2 text-cyan-700">x{l.cantidad.toLocaleString('es-CO', { maximumFractionDigits: 3 })}</span>
+                    </div>
+                    );
+                  })}
                 </div>
-                <div className="border-t border-slate-200 pt-2 flex justify-between text-xs font-bold text-slate-800">
-                  <span>Total art.</span>
-                  <span className="text-cyan-600"> {lineasSeleccionadas.reduce(function(s,l){ return s + (parseFloat(l.cantidad) || 0);}, 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</span>
-                </div>
+<div className="border-t border-slate-200 pt-2 flex justify-between text-xs font-bold text-slate-800">
+  <span>Total art.</span>
+  <span className="text-cyan-600">
+    {lineasSeleccionadas.reduce(function(s, l){ 
+      return s + l.cantidad; 
+    }, 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}
+  </span>
+</div>
               </div>
             </div>
           )}
