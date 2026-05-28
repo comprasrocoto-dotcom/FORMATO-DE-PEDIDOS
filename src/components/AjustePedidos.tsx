@@ -46,25 +46,35 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
 
   function handleDescargarPDF() {
-  generarPDF({ // Cambiado de generarPDFAjuste a generarPDF
-    sede: g.sede,
-    sedeDireccion: '---',
-    encargado: g.responsable,
-    proveedorNombre: g.proveedor,
-    provNit: pm.nit,
-    provTel: pm.telefono,
-    provCorreo: pm.correo,
-    provContacto: pm.contacto,
-
-    lineas: lineas.map(function(l){ return { articulo: l.articulo||'', unidad: l.unidad||'', cantidad: Number(l.cantidad)||0, valorUnitario: 0, codigo: l.codigo||'' }; }),
-    notas: lineas[0] ? lineas[0].observaciones||'' : '',
-    medioPago: g.medioPago||'contado',
-    numeroOrden: g.nOrden,
-    nroFactura: g.nroFactura||'',
-    tipoFactura: g.tipoFactura||'',
-    obsFactura: g.obsFactura||'',
-    numeroPedidoSistema: g.numeroPedidoSistema || '' // Añade esta línea
-  });
+    generarPDF({
+      sede: g.sede,
+      sedeDireccion: g.sedeDireccion || '---',
+      sedeTelefono: g.sedeTelefono || '---',
+      sedeHorario: g.sedeHorario || '---',
+      encargado: g.responsable || '---',
+      proveedorNombre: g.proveedor,
+      provNit: pm.nit,
+      provTel: pm.telefono,
+      provCorreo: pm.correo,
+      provContacto: pm.contacto,
+      // Pasamos las líneas conservando los valores numéricos limpios
+      lineas: lineas.map(function(l){ 
+        return { 
+          articulo: l.articulo || '', 
+          unidad: l.unidad || '', 
+          cantidad: parseFloat(String(l.cantidad || 0)) || 0, 
+          valorUnitario: parseFloat(String(l.valorUnitario || 0)) || 0, 
+          codigo: l.codigo || '' 
+        }; 
+      }),
+      notas: lineas[0] ? lineas[0].observaciones || '' : '',
+      medioPago: g.medioPago || 'contado',
+      numeroOrden: g.nOrden,
+      nroFactura: g.nroFactura || '',
+      tipoFactura: g.tipoFactura || '',
+      obsFactura: g.obsFactura || '',
+      numeroPedidoSistema: g.numeroPedidoSistema || ''
+    });
   }
   
   return (
