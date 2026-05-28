@@ -589,13 +589,27 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                         })}
                       </div>
                       <button onClick={function(e){ e.stopPropagation();
-                        generarPDF({ sede:p.sede, sedeDireccion:'---', sedeTelefono:'---', sedeHorario:'---', encargado:p.responsable,
-                          proveedorNombre:p.proveedor, provNit:pm.nit, provTel:pm.telefono, provCorreo:pm.correo, provContacto:pm.contacto,
-                          lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
-                          notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
-                          nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'',
-                          numeroPedidoSistema:p.numeroPedidoSistema||'' });
-                      }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#0f6b3a'}}>
+                        generarPDF({ 
+                          sede: p.sede, 
+                          sedeDireccion: p.sedeDireccion || '---', 
+                          sedeTelefono: p.sedeTelefono || '---', 
+                          sedeHorario: p.sedeHorario || '---', 
+                          encargado: p.responsable,
+                          proveedorNombre: p.proveedor, 
+                          provNit: pm.nit, 
+                          provTel: pm.telefono, 
+                          provCorreo: pm.correo, 
+                          provContacto: pm.contacto,
+                          lineas: p.articulos.map(function(a){ return {articulo:a.articulo, unidad:a.unidad||'', cantidad:parsearTextoANumero(a.cantidad), valorUnitario: parseFloat(a.valorUnitario || 0), codigo:a.codigo||''}; }),
+                          notas: p.observaciones||'', 
+                          medioPago: p.medioPago||'contado', 
+                          numeroOrden: p.nOrden,
+                          nroFactura: p.nroFactura||'', 
+                          tipoFactura: p.tipoFactura||'', 
+                          obsFactura: p.obsFactura||'',
+                          numeroPedidoSistema: p.numeroPedidoSistema||'' 
+                        });
+                      }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> PDF
                       </button>
                       <button onClick={function(e){ e.stopPropagation(); generarCSV(p); }}
@@ -808,7 +822,28 @@ export default function SheetsOrderForm() {
       if(errores>0) setErrorGlobal(errores+' linea(s) no guardadas en Drive.');
       if(descargarPDF!==false){
         setTimeout(function(){
-          try{ generarPDF({sede:snap.sede,sedeDireccion:snap.dir,sedeTelefono:snap.tel,sedeHorario:snap.hor,encargado:snap.resp,proveedorNombre:snap.prov,provNit:snap.provNit,provTel:snap.provTel,provCorreo:snap.provCorreo,provContacto:snap.provContacto,lineas:snap.lineas,notas:snap.notas,medioPago:snap.medioPago,numeroOrden:snap.orden}); }
+          try{ 
+            generarPDF({
+              sede: snap.sede,
+              sedeDireccion: snap.dir || '---',
+              sedeTelefono: snap.tel || '---',
+              sedeHorario: snap.hor || '---',
+              encargado: snap.resp,
+              proveedorNombre: snap.prov,
+              provNit: snap.provNit,
+              provTel: snap.provTel,
+              provCorreo: snap.provCorreo,
+              provContacto: snap.provContacto,
+              lineas: snap.lineas,
+              notas: snap.notas,
+              medioPago: snap.medioPago,
+              numeroOrden: snap.orden,
+              nroFactura: '',
+              tipoFactura: '',
+              obsFactura: '',
+              numeroPedidoSistema: ''
+            }); 
+          }
           catch(e3){console.error('[PDF]',e3);alert('Pedido guardado. Error PDF: '+e3.message);}
         },0);
       }
@@ -820,7 +855,26 @@ export default function SheetsOrderForm() {
     if(!selectedProveedor){alert('Selecciona un proveedor.');return;}
     if(lineasSeleccionadas.length===0){alert('Agrega articulos primero.');return;}
     try{
-      generarPDF({sede:selectedSede,sedeDireccion:sedeObj?sedeObj.direccion:'',sedeTelefono:sedeObj?sedeObj.telefono:'',sedeHorario:sedeObj?sedeObj.horaEntrega:'',encargado:responsable||'Sin especificar',proveedorNombre:selectedProveedor,provNit:provMeta?provMeta.nit||'---':'---',provTel:provMeta?provMeta.telefono||'---':'---',provCorreo:provMeta?provMeta.correo||'---':'---',provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',lineas:lineasSeleccionadas,notas,medioPago:medioPago||'contado',numeroOrden:Math.floor(Date.now()/1000)});
+      generarPDF({
+        sede: selectedSede,
+        sedeDireccion: sedeObj ? sedeObj.direccion : '---',
+        sedeTelefono: sedeObj ? sedeObj.telefono : '---',
+        sedeHorario: sedeObj ? sedeObj.horaEntrega : '---',
+        encargado: responsable || 'Sin especificar',
+        proveedorNombre: selectedProveedor,
+        provNit: provMeta ? provMeta.nit || '---' : '---',
+        provTel: provMeta ? provMeta.telefono || '---' : '---',
+        provCorreo: provMeta ? provMeta.correo || '---' : '---',
+        provContacto: provMeta ? (provMeta.contacto || provMeta.asesor || '---') : '---',
+        lineas: lineasSeleccionadas,
+        notas: notas,
+        medioPago: medioPago || 'contado',
+        numeroOrden: Math.floor(Date.now()/1000),
+        nroFactura: '',
+        tipoFactura: '',
+        obsFactura: '',
+        numeroPedidoSistema: ''
+      });
     }catch(e){console.error('[SoloPDF]',e);alert('Error PDF: '+e.message);}
   }
 
