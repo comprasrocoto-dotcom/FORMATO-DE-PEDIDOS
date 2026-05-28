@@ -147,7 +147,7 @@ function generarPDF(params) {
     if (l) {
       var cant = parseFloat(l.cantidad) || 0;
       var t2 = (l.valorUnitario || 0) * cant;
-      var cantStr = cant % 1 === 0 ? String(cant) : cant.toFixed(2);
+      var cantStr = cant % 1 === 0 ? String(cant) : cant.toString();
       var vals = [
         (l.articulo||'').substring(0,35),
         (l.unidad||'---').substring(0,10),
@@ -1094,15 +1094,7 @@ export default function SheetsOrderForm() {
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
                             <button onClick={function(){handleCantidad(p.codigo,Math.max(0,qty-1));}} className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold flex items-center justify-center text-slate-600 text-base">-</button>
-                            <input 
-                            type="number" 
-                            min="0" 
-                            step="0.001" // Cambia de 0.01 a 0.001 para permitir mayor precisión
-                            value={qty || ''} 
-                            onChange={function(e){ handleCantidad(p.codigo, e.target.value); }} 
-                            placeholder="0" 
-                            className="w-16 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500"
-                            />
+                            <input type="number" min="0" step="0.001" // Permite precisión de milésimas value={qty || ''} onChange={function(e){ handleCantidad(p.codigo, e.target.value); }} placeholder="0" className="w-16 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500" />
                             <button onClick={function(){handleCantidad(p.codigo,qty+1);}} className="w-7 h-7 rounded-lg bg-cyan-500 hover:bg-cyan-600 font-bold text-white flex items-center justify-center text-base">+</button>
                           </div>
                         </td>
@@ -1119,11 +1111,11 @@ export default function SheetsOrderForm() {
               <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 min-w-52">
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Resumen</p>
                 <div className="space-y-1 mb-3">
-                  {lineasSeleccionadas.map(function(l){return(<div key={l.codigo} className="flex justify-between text-xs text-slate-700"><span className="truncate max-w-36">{l.articulo}</span><span className="font-bold ml-2 text-cyan-700">x{l.cantidad%1===0?l.cantidad:l.cantidad.toFixed(2)}</span></div>);})}
+                  {lineasSeleccionadas.map(function(l){return(<div key={l.codigo} className="flex justify-between text-xs text-slate-700"><span className="truncate max-w-36">{l.articulo}</span><span className="font-bold ml-2 text-cyan-700">x{l.cantidad}</span></div>);})}
                 </div>
                 <div className="border-t border-slate-200 pt-2 flex justify-between text-xs font-bold text-slate-800">
                   <span>Total art.</span>
-                  <span className="text-cyan-600">{lineasSeleccionadas.reduce(function(s,l){return s+(parseFloat(l.cantidad)||0);},0).toFixed(3).replace(/\.?0+$/, '')}</span>
+                  <span className="text-cyan-600"> {lineasSeleccionadas.reduce(function(s,l){ return s + (parseFloat(l.cantidad) || 0);}, 0).toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 3 })}</span>
                 </div>
               </div>
             </div>
