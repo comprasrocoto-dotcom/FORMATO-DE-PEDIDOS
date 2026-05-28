@@ -13,166 +13,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download } from 'lucide-react';
 import { actualizarPedido, getProveedores, getAllDatos } from '../services/googleSheets';
+import { generarPDF } from '../utils/pdfGenerator';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// ─── jsPDF loader ─────────────────────────────────────────────────────────────
-var _jsPDFClass = null;
-(function() {
-  var s = document.createElement('script');
-  s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
-  s.onload = function() { _jsPDFClass = window.jspdf ? window.jspdf.jsPDF : window.jsPDF; };
-  document.head.appendChild(s);
-})();
-
-function generarPDFAjuste(params) {
-var JsPDF = _jsPDFClass || (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-if (!JsPDF) { alert('PDF no disponible. Espera 2s e intenta de nuevo.'); return; }
-
-var sede = params.sede || '';
-var sedeDireccion = params.sedeDireccion || '---';
-var sedeTelefono = params.sedeTelefono || '---';
-var sedeHorario = params.sedeHorario || '---';
-var encargado = params.encargado || '';
-var proveedorNombre = params.proveedorNombre || '';
-var provNit = params.provNit || '---';
-var provTel = params.provTel || '---';
-var provCorreo = params.provCorreo || '---';
-var provContacto = params.provContacto || '---';
-var lineas = params.lineas || [];
-var notas = params.notas || '';
-var medioPago = params.medioPago || 'contado';
-var numeroOrden = params.numeroOrden || '';
-var nroFactura = params.nroFactura || '';
-var tipoFactura = params.tipoFactura || '';
-var obsFactura = params.obsFactura || '';
-var fechaHoy = new Date().toISOString().slice(0, 10);
-
-var activas = lineas.filter(function(l) { return (parseFloat(l.cantidad) || 0) > 0; });
-var total = activas.reduce(function(s, l) { return s + ((l.valorUnitario || 0) * (parseFloat(l.cantidad) || 0)); }, 0);
-
-var doc = new JsPDF({ unit: 'mm', format: 'letter', orientation: 'portrait' });
-var azul = [26, 60, 110];
-var negro = [30, 30, 30];
-var blanco = [255, 255, 255];
-var cielo = [0, 112, 192];
-var ancho = 215.9;
-var margen = 15;
-var col2 = ancho / 2 + 5;
-var y = 15;
-
-doc.setFontSize(8); doc.setTextColor(120, 120, 120);
-doc.text('Pedido #' + numeroOrden + ' ' + fechaHoy, ancho - margen, y, { align: 'right' });
-if (medioPago) {
-doc.setFontSize(7);
-doc.text('Medio de Pago: ' + medioPago.charAt(0).toUpperCase() + medioPago.slice(1), ancho - margen, y + 4, { align: 'right' });
-}
-y += 10;
-
-var infoLeft = [
-['Sede', sede], ['Direccion', sedeDireccion],
-['Telefono Sede', sedeTelefono], ['Horario', sedeHorario], ['Encargado', encargado],
-];
-var infoRight = [
-['Proveedor', proveedorNombre], ['NIT', provNit],
-['Tel. Proveedor', provTel], ['Contacto', provContacto], ['Correo', provCorreo],
-];
-
-var yStart = y;
-infoLeft.forEach(function(f) {
-doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
-doc.setTextColor(cielo[0], cielo[1], cielo[2]);
-doc.text(f[0] + ':', margen, y);
-doc.setFont('helvetica', 'normal'); doc.setTextColor(negro[0], negro[1], negro[2]);
-doc.text(doc.splitTextToSize(String(f[1]), 70), margen + 40, y);
-y += 6;
-});
-var yR = yStart;
-infoRight.forEach(function(f) {
-doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
-doc.setTextColor(cielo[0], cielo[1], cielo[2]);
-doc.text(f[0] + ':', col2, yR);
-doc.setFont('helvetica', 'normal'); doc.setTextColor(negro[0], negro[1], negro[2]);
-doc.text(doc.splitTextToSize(String(f[1]), 65), col2 + 36, yR);
-yR += 6;
-});
-y = Math.max(y, yR) + 5;
-
-// Tabla: Articulo, Unidad, Cantidad, Total
-var cW = [70, 25, 25, 30];
-var cX = [margen];
-for (var ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
-var rH = 7;
-var aligns = ['left', 'center', 'center', 'right'];
-var headers = ['Articulo', 'Unidad', 'Cantidad', 'Total'];
-
-doc.setFillColor(azul[0], azul[1], azul[2]);
-doc.rect(margen, y, ancho - 2 * margen, rH, 'F');
-doc.setTextColor(blanco[0], blanco[1], blanco[2]);
-doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
-headers.forEach(function(h, i) {
-var xT = aligns[i]==='right' ? cX[i]+cW[i]-2 : aligns[i]==='center' ? cX[i]+cW[i]/2 : cX[i]+2;
-doc.text(h, xT, y + 4.5, { align: aligns[i] });
-});
-y += rH;
-
-doc.setFont('helvetica', 'normal');
-var minF = Math.max(activas.length, 8);
-for (var ri = 0; ri < minF; ri++) {
-var l = activas[ri];
-var bg = ri % 2 === 0 ? [255,255,255] : [248,249,252];
-doc.setFillColor(bg[0], bg[1], bg[2]);
-doc.rect(margen, y, ancho - 2*margen, rH, 'F');
-doc.setDrawColor(208, 215, 232);
-doc.rect(margen, y, ancho - 2*margen, rH, 'S');
-if (l) {
-var cant = parseFloat(l.cantidad) || 0;
-var t2 = (l.valorUnitario || 0) * cant;
-var cantStr = cant % 1 === 0 ? String(cant) : cant.toFixed(2);
-var vals = [
-(l.articulo||'').substring(0,35),
-(l.unidad||'---').substring(0,10),
-cantStr,
-'$ ' + Number(t2).toLocaleString('es-CO'),
-];
-doc.setTextColor(negro[0], negro[1], negro[2]); doc.setFontSize(7.5);
-vals.forEach(function(v, i) {
-var xT2 = aligns[i]==='right' ? cX[i]+cW[i]-2 : aligns[i]==='center' ? cX[i]+cW[i]/2 : cX[i]+2;
-doc.text(v, xT2, y + 4.5, { align: aligns[i] });
-});
-}
-y += rH;
-}
-
-y += 2;
-doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-doc.setTextColor(azul[0], azul[1], azul[2]);
-doc.text('Total:', cX[2], y + 4, { align: 'left' });
-doc.text('$ ' + Number(total).toLocaleString('es-CO') + ',00', cX[3]+cW[3]-2, y + 4, { align: 'right' });
-y += 10;
-
-if (notas) {
-doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(negro[0], negro[1], negro[2]);
-doc.text('Observacion del Pedido:', margen, y); y += 4;
-doc.setDrawColor(150, 150, 150);
-doc.rect(margen, y, ancho - 2*margen, 18, 'S');
-doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(80, 80, 80);
-doc.text(doc.splitTextToSize(notas, ancho - 2*margen - 4), margen + 2, y + 4);
-y += 22;
-}
-
-if (nroFactura || tipoFactura || obsFactura) {
-doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5); doc.setTextColor(azul[0], azul[1], azul[2]);
-doc.text('Informacion de Factura:', margen, y); y += 5;
-doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(negro[0], negro[1], negro[2]);
-if (nroFactura) { doc.text('N. Factura: ' + nroFactura, margen, y); y += 5; }
-if (tipoFactura) { doc.text('Tipo: ' + tipoFactura, margen, y); y += 5; }
-if (obsFactura) { doc.text('Obs. Factura: ' + obsFactura, margen, y); y += 5; }
-}
-
-var slug = proveedorNombre.replace(/[^A-Za-z0-9]/g,'_').substring(0,20);
-doc.save('Pedido-' + numeroOrden + '_' + slug + '_' + fechaHoy + '.pdf');
-}
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function getProvMeta(proveedoresMeta, nombre) {
   if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
@@ -202,17 +46,25 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
 
   function handleDescargarPDF() {
-    generarPDFAjuste({
-      sede: g.sede, sedeDireccion: '---', sedeTelefono: '---', sedeHorario: '---',
-      encargado: g.responsable,
-      proveedorNombre: g.proveedor,
-      provNit: pm.nit, provTel: pm.telefono,
-      provCorreo: pm.correo, provContacto: pm.contacto,
-      lineas: lineas.map(function(l){ return { articulo: l.articulo||'', unidad: l.unidad||'', cantidad: Number(l.cantidad)||0, valorUnitario: 0, codigo: l.codigo||'' }; }),
-      notas: lineas[0] ? lineas[0].observaciones||'' : '',
-      medioPago: g.medioPago||'contado', numeroOrden: g.nOrden,
-      nroFactura: g.nroFactura||'', tipoFactura: g.tipoFactura||'', obsFactura: g.obsFactura||'',
-    });
+  generarPDF({ // Cambiado de generarPDFAjuste a generarPDF
+    sede: g.sede,
+    sedeDireccion: '---',
+    encargado: g.responsable,
+    proveedorNombre: g.proveedor,
+    provNit: pm.nit,
+    provTel: pm.telefono,
+    provCorreo: pm.correo,
+    provContacto: pm.contacto,
+
+    lineas: lineas.map(function(l){ return { articulo: l.articulo||'', unidad: l.unidad||'', cantidad: Number(l.cantidad)||0, valorUnitario: 0, codigo: l.codigo||'' }; }),
+    notas: lineas[0] ? lineas[0].observaciones||'' : '',
+    medioPago: g.medioPago||'contado',
+    numeroOrden: g.nOrden,
+    nroFactura: g.nroFactura||'',
+    tipoFactura: g.tipoFactura||'',
+    obsFactura: g.obsFactura||'',
+    numeroPedidoSistema: g.numeroPedidoSistema || '' // Añade esta línea
+  });
   }
   
   return (
