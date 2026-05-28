@@ -46,23 +46,30 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
 
   function handleDescargarPDF() {
+    // Buscamos los metadatos del proveedor de forma robusta ignorando mayúsculas/minúsculas
+    var pmActual = (proveedoresMeta || []).find(function(p) {
+      return String(p.nombre || '').trim().toLowerCase() === String(g.proveedor || '').trim().toLowerCase();
+    }) || {};
+
     generarPDF({
-      sede: g.sede,
-      sedeDireccion: g.sedeDireccion || '---',
-      sedeTelefono: g.sedeTelefono || '---',
-      sedeHorario: g.sedeHorario || '---',
+      sede: g.sede || '---',
+      sedeDireccion: g.sedeDireccion || pmActual.sedeDireccion || '---',
+      sedeTelefono: g.sedeTelefono || pmActual.sedeTelefono || '---',
+      sedeHorario: g.sedeHorario || pmActual.sedeHorario || '---',
       encargado: g.responsable || '---',
-      proveedorNombre: g.proveedor,
-      provNit: pm.nit,
-      provTel: pm.telefono,
-      provCorreo: pm.correo,
-      provContacto: pm.contacto,
-      // Pasamos las líneas conservando los valores numéricos limpios
+      proveedorNombre: g.proveedor || '',
+      // Mapeamos soportando ambas estructuras del useEffect
+      provNit: pmActual.nit || '---',
+      provTel: pmActual.telefono || pmActual.tel || '---',
+      provCorreo: pmActual.correo || pmActual.email || '---',
+      provContacto: pmActual.contacto || pmActual.asesor || '---',
+      
       lineas: lineas.map(function(l){ 
         return { 
           articulo: l.articulo || '', 
           unidad: l.unidad || '', 
           cantidad: parseFloat(String(l.cantidad || 0)) || 0, 
+          // Pasamos el valor real si existe para que no multiplique por cero
           valorUnitario: parseFloat(String(l.valorUnitario || 0)) || 0, 
           codigo: l.codigo || '' 
         }; 
