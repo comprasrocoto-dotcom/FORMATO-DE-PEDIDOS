@@ -913,14 +913,30 @@ export default function SheetsOrderForm() {
   }
 
   function handleCantidad(codigo, val) {
-  // Permitimos que el usuario escriba libremente números, puntos y comas
-  var strVal = String(val).replace(/[^0-9.,]/g, '');
-  
-  setCantidades(function(p){ 
-    return Object.assign({}, p, {
-      [codigo]: strVal 
-    }); 
-  });
+    // 1. Permite solo números, puntos y comas iniciales
+    var strVal = String(val).replace(/[^0-9.,]/g, '');
+
+    // 2. Asegurar que haya máximo UN solo punto decimal
+    var partes = strVal.split('.');
+    if (partes.length > 2) {
+      // Si escriben "0.01.01", conservamos el primer punto y unimos el resto de números sin puntos
+      strVal = partes[0] + '.' + partes.slice(1).join('').replace(/\./g, '');
+    }
+
+    // 3. Asegurar que NO existan comas de miles después del punto decimal
+    if (strVal.includes('.')) {
+      var partesPunto = strVal.split('.');
+      // Limpiamos cualquier coma que el usuario intente poner en los decimales
+      partesPunto[1] = partesPunto[1].replace(/,/g, ''); 
+      strVal = partesPunto.join('.');
+    }
+
+    // Guardamos el valor estrictamente validado
+    setCantidades(function(p){ 
+      return Object.assign({}, p, {
+        [codigo]: strVal 
+      }); 
+    });
   }
 
   var productosFiltrados = productos.filter(function(p) {
