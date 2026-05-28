@@ -108,9 +108,16 @@ export async function generarPDF(params) {
     doc.setDrawColor(208, 215, 232); doc.rect(margen, y, ancho - 2 * margen, rH, 'S');
     if (l) {
       const cant = parseFloat(l.cantidad) || 0;
-      const cantStr = cant % 1 === 0 ? String(cant) : cant.toString();
-
-      const vals = [(l.articulo || '').substring(0, 35), (l.unidad || '---').substring(0, 10), cantStr, `$ ${Number((l.valorUnitario || 0) * cant).toLocaleString('es-CO')}`];
+      // Formateamos la cantidad con formato local colombiano (comas y puntos bien puestos)
+      const cantStr = cant.toLocaleString('es-CO', { maximumFractionDigits: 3 });
+      const tienePrecio = (l.valorUnitario || 0) > 0;
+  
+      const vals = [
+        (l.articulo || '').substring(0, 35),
+        (l.unidad || '---').substring(0, 10),
+        cantStr,
+        tienePrecio ? `$ ${Number(l.valorUnitario * cant).toLocaleString('es-CO')}` : '---' // Evita llenar el PDF de ceros falsos
+        ];
       doc.setTextColor(...negro); doc.setFontSize(7.5);
       vals.forEach((v, i) => {
         const xT2 = aligns[i] === 'right' ? cX[i] + cW[i] - 2 : aligns[i] === 'center' ? cX[i] + cW[i] / 2 : cX[i] + 2;
