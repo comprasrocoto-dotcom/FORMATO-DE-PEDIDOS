@@ -1,7 +1,7 @@
 // @ts-nocheck
-// rebuild: v9-min-max-proveedor
+// rebuild: v10-min-max-sede-fix
 /**
- * googleSheets.ts v9
+ * googleSheets.ts v10
  * - Agrega actualizarNumeroPedidoSistema para asignar número de pedido del sistema
  * - Usado para mover pedidos de Historial de Pedidos a Historial Documentado
  * - v9: Agrega getProductosConMinMax para cargar productos con mínimo/máximo por proveedor
@@ -216,13 +216,16 @@ export async function actualizarPedido(ajuste: AjustePedidoRow): Promise<{ ok: b
       } catch(err: any) { return { ok:false, error:err.message }; }
 }
 
-export async function getProductosConMinMax(proveedorNombre: string): Promise<MinMaxProducto[]> {
+export async function getProductosConMinMax(proveedorNombre: string, sede?: string): Promise<MinMaxProducto[]> {
   try {
     const datos = await fetchAllDatos();
     const artPorHoja = datos.articulosPorProveedor || {};
     const minMaxMap = datos.minMaxMap || {};
     const productos: any[] = [];
     const seen = new Set<string>();
+    // Normalizar sede para la clave de búsqueda: "HOT WINGS", "MALANGA", "ROCOTO", etc.
+    // La clave en minMaxMap es "SEDE_UPPER|ARTICULO_UPPER"
+    const sedeUpper = (sede || '').trim().toUpperCase();
     Object.keys(artPorHoja).forEach(function(hoja) {
       (artPorHoja[hoja] || []).forEach(function(row: any) {
         if (!esFilaValida(row)) return;
@@ -232,7 +235,18 @@ export async function getProductosConMinMax(proveedorNombre: string): Promise<Mi
         const art = (row.subArticulo || '').trim();
         if (!cod || seen.has(cod)) return;
         seen.add(cod);
-        const mm = minMaxMap[cod] || minMaxMap[art] || {};
+        // Clave compuesta: "HOT WINGS|TOCINETA PREMIUM X KILO"
+        const artUpper = art.toUpperCase();
+        let mm: any = {};
+        if (sedeUpper && minMaxMap[sedeUpper + '|' + artUpper]) {
+          mm = minMaxMap[sedeUpper + '|' + artUpper];
+        } else {
+          // Fallback: buscar en cualquier sede si no se proporcionó sede
+          const fallbackKey = Object.keys(minMaxMap).find(function(k) {
+            return k.toUpperCase().endsWith('|' + artUpper);
+          });
+          if (fallbackKey) mm = minMaxMap[fallbackKey];
+        }
         productos.push({
           codigo: cod,
           articulo: art,
