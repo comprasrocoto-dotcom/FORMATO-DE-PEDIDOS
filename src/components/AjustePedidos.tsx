@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v5
+ * AjustePedidos.tsx v6
  * Fix: PDF ahora usa la misma estructura que generarPDF en SheetsOrderForm
  * - Mismos campos (Sede, Direccion, Telefono Sede, Horario, Encargado / Proveedor, NIT, Tel, Contacto, Correo)
  * - Misma tabla (Articulo, Unidad, Cantidad, Total)
@@ -132,13 +132,10 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
             <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-32">Cantidad</th>
-            <th className="py-2 px-3 text-center text-white font-bold uppercase w-14 hidden sm:table-cell">Mín.</th>
-            <th className="py-2 px-3 text-center text-white font-bold uppercase w-14 hidden sm:table-cell">Máx.</th>
-            <th className="py-2 px-3 text-center text-white font-bold uppercase w-10" title="Semáforo">🚦</th>
-          </tr></thead>
+            tr></thead>
           <tbody>
             {lineas.length === 0 && (
-              <tr><td colSpan={7} className="py-4 text-center text-slate-400 text-xs">Sin artículos en este pedido.</td></tr>
+              <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Sin artículos en este pedido.</td></tr>
             )}
             {lineas.map(function(l, i){
               var codigo = l.codigo || ('linea_' + i);
@@ -174,21 +171,6 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
                       <span className="font-bold text-blue-800">{cantOriginal % 1 === 0 ? cantOriginal : cantOriginal.toFixed(2)}</span>
                     )}
                   </td>
-                  {(function(){
-                    var sem = getSemaforoLinea(l);
-                    var entry = (minMaxConvertido || {})[(g.sede||'').trim().toUpperCase()+'|'+(l.articulo||'').trim().toUpperCase()];
-                    return (<>
-                      <td className="py-1.5 px-3 text-center hidden sm:table-cell text-slate-500">{entry ? (entry.minimo || '---') : '---'}</td>
-                      <td className="py-1.5 px-3 text-center hidden sm:table-cell text-slate-500">{entry ? (entry.maximo || '---') : '---'}</td>
-                      <td className="py-1.5 px-3 text-center">
-                        {sem ? (
-                          <span className={"text-xs font-bold px-1 py-0.5 rounded " + sem.color} title={sem.label}>{sem.emoji}</span>
-                        ) : (
-                          <span className="text-slate-300 text-xs">—</span>
-                        )}
-                      </td>
-                    </>);
-                  })()}
                 </tr>
               );
             })}
