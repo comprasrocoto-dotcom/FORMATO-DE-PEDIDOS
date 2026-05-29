@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v18 - Edicion HistorialDocumentado + Semaforos + Filtros
+ * SheetsOrderForm.tsx v19 - Semaforos coloreados (ff4d4d/ffea00/00c853) ambos modulos + Fix getSemaforoHD 3 campos
  * - Agrega campo "NÃÂºmero de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automÃÂ¡ticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN nÃÂºmero de pedido sistema
@@ -259,7 +259,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
-                      <span className="text-base leading-none" title={getSemaforoHP(p)}>{getSemaforoHP(p)}</span>
+                      <span title={getSemaforoHP(p)} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'22px',height:'22px',borderRadius:'50%',fontWeight:700,fontSize:'14px',background:getColorSemaforo(getSemaforoHP(p)),boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}>{getSemaforoHP(p)}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
                 </button>
@@ -425,10 +425,18 @@ function HistorialPedidos({ proveedoresMeta }) {
 // Semaforo para HistorialDocumentado
 function getSemaforoHD(p) {
   var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
+  var hasDoc = !!(p.obsFactura && String(p.obsFactura).trim() && p.obsFactura !== '---');
   var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasNPS) return 'ð¢';
-  if (hasFact || hasNPS) return 'ð¡';
-  return 'ð´';
+  if (hasFact && hasDoc && hasNPS) return '🟢';
+  if (hasFact || hasDoc || hasNPS) return '🟡';
+  return '🔴';
+}
+
+// Helper: color de fondo para semaforo visual
+function getColorSemaforo(em) {
+  if (em === '🟢') return '#00c853';
+  if (em === '🟡') return '#ffea00';
+  return '#ff4d4d';
 }
 
 export function HistorialDocumentado({ proveedoresMeta }) {
@@ -620,7 +628,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span> <span title="Estado: ð¢ Completo | ð¡ Parcial | ð´ Pendiente" className="ml-1 text-base leading-none">{getSemaforoHD(p)}</span>
+                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span> <span title={getSemaforoHD(p)} style={{display:'inline-flex',alignItems:'center',justifyContent:'center',width:'22px',height:'22px',borderRadius:'50%',fontWeight:700,fontSize:'14px',background:getColorSemaforo(getSemaforoHD(p)),boxShadow:'0 1px 3px rgba(0,0,0,0.2)'}}>{getSemaforoHD(p)}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0f6b3a" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
                 </button>
@@ -701,7 +709,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                        </select>
                      </div>
                      <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">NÂ° Doc. Ingreso</label>
-                       <input type="text" value={editDataDoc[p.nOrden]?.numeroPedidoSistema!==undefined?editDataDoc[p.nOrden].numeroPedidoSistema:p.numeroPedidoSistema||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{numeroPedidoSistema:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: 2024-001"/>
+                       <input type="text" value={editDataDoc[p.nOrden]?.obsFactura!==undefined?editDataDoc[p.nOrden].obsFactura:p.obsFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: 2024-001"/>
                      </div>
                      <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Obs. Factura</label>
                        <input type="text" value={editDataDoc[p.nOrden]?.obsFactura!==undefined?editDataDoc[p.nOrden].obsFactura:p.obsFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Observaciones"/>
