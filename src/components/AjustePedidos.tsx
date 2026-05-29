@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v4
+ * AjustePedidos.tsx v5
  * Fix: PDF ahora usa la misma estructura que generarPDF en SheetsOrderForm
  * - Mismos campos (Sede, Direccion, Telefono Sede, Horario, Encargado / Proveedor, NIT, Tel, Contacto, Correo)
  * - Misma tabla (Articulo, Unidad, Cantidad, Total)
@@ -227,6 +227,34 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
 }
 
 // âââ Componente principal âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Semaforo de orden basado en min/max de articulos ---
+function getSemaforoOrden(g, minMaxConv) {
+    var lineas = g.lineas || [];
+    var tieneRojo = false;
+    var tieneAmarillo = false;
+    var tieneVerde = false;
+    var tieneDato = false;
+    var sedeKey = (g.sede || '').trim().toUpperCase();
+    for (var i = 0; i < lineas.length; i++) {
+          var linea = lineas[i];
+          var artKey = (linea.articulo || '').trim().toUpperCase();
+          var key = sedeKey + '|' + artKey;
+          var entry = (minMaxConv || {})[key];
+          if (!entry) continue;
+          var cant = parseFloat(String(linea.cantidad || 0)) || 0;
+          var minVal = parseFloat(String(entry.minimo));
+          var maxVal = parseFloat(String(entry.maximo));
+          if (isNaN(minVal) && isNaN(maxVal)) continue;
+          tieneDato = true;
+          if (!isNaN(minVal) && cant < minVal) { tieneRojo = true; break; }
+          if (!isNaN(maxVal) && cant > maxVal) tieneVerde = true;
+          else tieneAmarillo = true;
+    }
+    if (!tieneDato) return null;
+    if (tieneRojo) return '🔴';
+    if (tieneAmarillo) return '🟡';
+    return '🟢';
+}
 function getSemaforoAP(g) {
   var tieneFactura = g.nroFactura && g.nroFactura.trim() !== '';
   var tieneNPS = g.numeroPedidoSistema && g.numeroPedidoSistema.trim() !== '';
@@ -498,7 +526,7 @@ export default function AjustePedidos() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-xs text-slate-400 font-mono hidden sm:block">#{g.nOrden}</span>
-                      <span className="text-base leading-none" title={"SemÃ¡foro: " + getSemaforoAP(g)}>{getSemaforoAP(g)}</span>
+                                            <span className="text-base leading-none" title={"Semaforo: " + (getSemaforoOrden(g, minMaxConvertido)||'')}>{getSemaforoOrden(g, minMaxConvertido)}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                   </button>
