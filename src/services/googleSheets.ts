@@ -222,11 +222,9 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
   try {
     const datos = await fetchAllDatos();
     const artPorHoja = datos.articulosPorProveedor || {};
-    // Preferir minMaxConvertidoMap (ya tiene conversion aplicada por el servidor)
-    // Si no esta disponible, aplicar conversion cliente con unidadMedidaMap
-    const minMaxConvertidoMap = datos.minMaxConvertidoMap || null;
-    const minMaxMap = datos.minMaxMap || {};
-    const unidadMedidaMap = datos.unidadMedidaMap || {};
+    // Usar minMaxConvertidoMap del servidor: valores ya divididos por el factor de conversion
+    // (inventario / factor = unidades de compra). El servidor lo construye en Apps Script.
+    const minMaxConvertidoMap = datos.minMaxConvertidoMap || {};
 
     const productos: any[] = [];
     const seen = new Set<string>();
@@ -242,38 +240,18 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
         if (!cod || seen.has(cod)) return;
         seen.add(cod);
 
-        // Busqueda EXACTA "SEDE|ARTICULO" - sin fallback a otras sedes
+        // Clave exacta: "SEDE|ARTICULO" — sin fallback a otras sedes ni productos similares
         const exactKey = sedeUpper ? (sedeUpper + '|' + art.toUpperCase()) : '';
 
         let minimo = '';
         let maximo = '';
 
-        if (exactKey) {
-          if (minMaxConvertidoMap && minMaxConvertidoMap[exactKey]) {
-            // Usar valores ya convertidos por el servidor
-            minimo = String(minMaxConvertidoMap[exactKey].minimo || '');
-            maximo = String(minMaxConvertidoMap[exactKey].maximo || '');
-          } else if (minMaxMap[exactKey]) {
-            // Fallback: aplicar conversion de unidades usando unidadMedidaMap
-            // Usar unidadInv (unidad de inventario) guardada en el minMaxMap por el servidor
-            const unidadInv = (minMaxMap[exactKey].unidadInv || row.unidad || '').trim().toUpperCase();
-            const factor = unidadMedidaMap[unidadInv] && unidadMedidaMap[unidadInv] !== 1
-              ? unidadMedidaMap[unidadInv]
-              : null;
-            const rawMin = parseFloat(String(minMaxMap[exactKey].minimo || '')) || 0;
-            const rawMax = parseFloat(String(minMaxMap[exactKey].maximo || '')) || 0;
-            if (factor && rawMin > 0) {
-              minimo = String(Math.round((rawMin / factor) * 100) / 100);
-            } else if (rawMin > 0) {
-              minimo = String(rawMin);
-            }
-            if (factor && rawMax > 0) {
-              maximo = String(Math.round((rawMax / factor) * 100) / 100);
-            } else if (rawMax > 0) {
-              maximo = String(rawMax);
-            }
-          }
+        if (exactKey && minMaxConvertidoMap[exactKey]) {
+          // Valores ya convertidos a unidad de compra por el servidor
+          minimo = String(minMaxConvertidoMap[exactKey].minimo ?? '');
+          maximo = String(minMaxConvertidoMap[exactKey].maximo ?? '');
         }
+        // Si no existe coincidencia exacta sede+producto -> se deja vacío (---)
 
         productos.push({
           codigo: cod,
