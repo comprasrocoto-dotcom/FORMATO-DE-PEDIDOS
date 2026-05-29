@@ -102,41 +102,67 @@ function actualizarNumeroPedidoSistema(payload) {
 // var lastRow = sheet.getLastRow();
 // var data = sheet.getRange(1, 1, lastRow, 17).getValues(); // 17 columnas = hasta Q
 //
-// Esto garantiza que r[16] (columna Q) siempre esté presente en los rows.
+// Esto garantiza que r[16] (columna Q) siempre está presente en los rows.
 // ============================================================
 
 
 // ============================================================
-// CAMBIO REQUERIDO v9: Agregar minMaxMap a la funcion getDatos()
+// CAMBIO REQUERIDO v10: Corrección del minMaxMap en getDatos()
 // ============================================================
-// En tu funcion getDatos() existente dentro del Apps Script,
-// AGREGA estas lineas ANTES del return final del objeto result:
 //
-//   // ── Leer hoja Maximos y Minimos ──────────────────────────
+// PROBLEMA DETECTADO (v9 → v10): La hoja de mínimos/máximos NO tiene
+// código de producto en la columna A. Su estructura real es:
+//   Col A (0) = AlmacéN (nombre de la sede, ej: "HOT WINGS", "MALANGA")
+//   Col B (1) = Artículo (nombre del producto, ej: "TOCINETA PREMIUM X KILO")
+//   Col C (2) = SubArtículo (unidad de medida, ej: "GRAMOS")
+//   Col D (3) = Suma de Variación Stock
+//   Col E (4) = Margen de Error
+//   Col F (5) = Mínimo sugerido  <-- DATO REQUERIDO
+//   Col G (6) = Máximo sugerido  <-- DATO REQUERIDO
+//
+// El mínimo y máximo DEPENDEN DE LA SEDE: Hotwings tiene 1.066 g,
+// Malanga tiene 930 g para el mismo artículo. Por eso se requiere
+// una clave compuesta: "SEDE|ARTICULO".
+//
+// NOMBRE REAL de la hoja: puede ser "MAXIMO Y MINIMOS" (sin tilde).
+// Si en tu Apps Script usas un nombre diferente, ajústalo abajo.
+//
+// REEMPLAZA el bloque minMaxMap en getDatos() con este código:
+//
+//   // ── Leer hoja MAXIMO Y MINIMOS ─────────────────────────
 //   var minMaxMap = {};
-//   var mmSheet = ss.getSheetByName('Maximos y Minimos');
+//   var mmSheet = null;
+//   var allSheets = ss.getSheets();
+//   for (var si = 0; si < allSheets.length; si++) {
+//     var sn = allSheets[si].getName().toUpperCase()
+//              .replace(/[ÁÀÂÃ]/g,'A').replace(/[áàâã]/g,'A')
+//              .replace(/[ÉÈÊ]/g,'E').replace(/[éèê]/g,'E')
+//              .replace(/[ÍÌÎ]/g,'I').replace(/[íìî]/g,'I')
+//              .replace(/[ÓÒÔÕ]/g,'O').replace(/[óòôõ]/g,'O')
+//              .replace(/[ÚÙÛ]/g,'U').replace(/[úùû]/g,'U');
+//     if (sn === 'MAXIMO Y MINIMOS' || sn === 'MAXIMOS Y MINIMOS') {
+//       mmSheet = allSheets[si]; break;
+//     }
+//   }
 //   if (mmSheet) {
 //     var mmData = mmSheet.getDataRange().getValues();
 //     for (var r = 1; r < mmData.length; r++) {
-//       var cod = String(mmData[r][0] || '').trim();
-//       if (cod) {
-//         minMaxMap[cod] = {
-//           minimo: (mmData[r][5] !== '' && mmData[r][5] !== undefined) ? mmData[r][5] : '',
-//           maximo: (mmData[r][6] !== '' && mmData[r][6] !== undefined) ? mmData[r][6] : ''
-//         };
-//       }
+//       var sede  = String(mmData[r][0] || '').trim().toUpperCase();
+//       var art   = String(mmData[r][1] || '').trim().toUpperCase();
+//       var minVal = mmData[r][5]; // Columna F = Mínimo
+//       var maxVal = mmData[r][6]; // Columna G = Máximo
+//       if (!sede || !art) continue;
+//       // Clave compuesta: "HOT WINGS|TOCINETA PREMIUM X KILO"
+//       var key = sede + '|' + art;
+//       minMaxMap[key] = {
+//         minimo: (minVal !== '' && minVal !== undefined && minVal !== null) ? minVal : '',
+//         maximo: (maxVal !== '' && maxVal !== undefined && maxVal !== null) ? maxVal : ''
+//       };
 //     }
 //   }
 //   result.minMaxMap = minMaxMap;
-//   // ─────────────────────────────────────────────────────────
+//   // ────────────────────────────────────────────────────────
 //
-// ESTRUCTURA de la hoja "Maximos y Minimos":
-//   Col A (0) = Codigo del producto
-//   Col B..E  = (otros datos que ya existen)
-//   Col F (5) = Minimo sugerido  <-- ESTE ES EL DATO
-//   Col G (6) = Maximo sugerido  <-- ESTE ES EL DATO
-//
-// NOTA: La app lee datos.minMaxMap (retornado por getDatos).
-//       Si la hoja se llama diferente, ajusta el nombre arriba.
+// IMPORTANTE: Después de este cambio re-desplegar el Apps Script
+// como nueva versión: Deploy → Manage deployments → New version.
 // ============================================================
-
