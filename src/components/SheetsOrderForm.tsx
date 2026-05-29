@@ -89,7 +89,7 @@ function HistorialPedidos({ proveedoresMeta }) {
   }, [idBusq]);
 
   async function cargarHistorial() {
-    setCargando(true); setErr(''); setPedidos([]);
+    setCargando(true); setErr('');
     try {
       var res = await fetch(ENDPOINT + '?action=getHistorial', { redirect: 'follow' });
       if (!res.ok) { setErr('Error HTTP ' + res.status); return; }
@@ -150,7 +150,7 @@ function HistorialPedidos({ proveedoresMeta }) {
       }
       setEditandoNPS(null);
       // Recargar historial - el pedido desaparecerÃ¡ de aquÃ­ y aparecerÃ¡ en Historial Documentado
-      await cargarHistorial();
+      setTimeout(function(){ cargarHistorial(); }, 50);
     } catch(e) { alert('Error: ' + (e.message||'Error de red')); }
     finally { setGuardandoNPS(false); }
   }
