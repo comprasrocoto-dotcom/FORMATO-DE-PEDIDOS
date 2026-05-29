@@ -1,9 +1,10 @@
 // @ts-nocheck
-// rebuild: v8-numero-pedido-sistema
+// rebuild: v9-min-max-proveedor
 /**
- * googleSheets.ts v8
+ * googleSheets.ts v9
  * - Agrega actualizarNumeroPedidoSistema para asignar número de pedido del sistema
  * - Usado para mover pedidos de Historial de Pedidos a Historial Documentado
+ * - v9: Agrega getProductosConMinMax para cargar productos con mínimo/máximo por proveedor
  */
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
@@ -30,6 +31,16 @@ export interface ProductoSheet {
       unidad: string;
       proveedorNombre: string;
 }
+export interface MinMaxProducto {
+  codigo: string;
+  articulo: string;
+  unidad: string;
+  proveedorNombre: string;
+  subfamilia: string;
+  minimo: string;
+  maximo: string;
+}
+
 
 export interface SedeSheet {
       nombre: string;
@@ -204,3 +215,36 @@ export async function actualizarPedido(ajuste: AjustePedidoRow): Promise<{ ok: b
               return { ok:true };
       } catch(err: any) { return { ok:false, error:err.message }; }
 }
+
+export async function getProductosConMinMax(proveedorNombre: string): Promise<MinMaxProducto[]> {
+  try {
+    const datos = await fetchAllDatos();
+    const artPorHoja = datos.articulosPorProveedor || {};
+    const minMaxMap = datos.minMaxMap || {};
+    const productos: any[] = [];
+    const seen = new Set<string>();
+    Object.keys(artPorHoja).forEach(function(hoja) {
+      (artPorHoja[hoja] || []).forEach(function(row: any) {
+        if (!esFilaValida(row)) return;
+        const prov = (row.articulo || '').trim();
+        if (prov !== proveedorNombre) return;
+        const cod = (row.codigo || '').trim();
+        const art = (row.subArticulo || '').trim();
+        if (!cod || seen.has(cod)) return;
+        seen.add(cod);
+        const mm = minMaxMap[cod] || minMaxMap[art] || {};
+        productos.push({
+          codigo: cod,
+          articulo: art,
+          subfamilia: (row.subfamilia || '').trim(),
+          unidad: (row.unidad || '').trim(),
+          proveedorNombre: prov,
+          minimo: mm.minimo !== undefined && mm.minimo !== '' ? String(mm.minimo) : '',
+          maximo: mm.maximo !== undefined && mm.maximo !== '' ? String(mm.maximo) : ''
+        });
+      });
+    });
+    return productos;
+  } catch(e) { console.error('[getProductosConMinMax]', e); return []; }
+}
+
