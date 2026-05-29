@@ -1,7 +1,7 @@
 // @ts-nocheck
-// rebuild: v10-min-max-sede-fix
+// rebuild: v11-exact-sede-articulo-no-fallback
 /**
- * googleSheets.ts v10
+ * googleSheets.ts v11
  * - Agrega actualizarNumeroPedidoSistema para asignar número de pedido del sistema
  * - Usado para mover pedidos de Historial de Pedidos a Historial Documentado
  * - v9: Agrega getProductosConMinMax para cargar productos con mínimo/máximo por proveedor
@@ -223,9 +223,19 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
     const minMaxMap = datos.minMaxMap || {};
     const productos: any[] = [];
     const seen = new Set<string>();
-    // Normalizar sede para la clave de búsqueda: "HOT WINGS", "MALANGA", "ROCOTO", etc.
-    // La clave en minMaxMap es "SEDE_UPPER|ARTICULO_UPPER"
+    // Normalizar sede: la clave en minMaxMap es "SEDE_UPPER|ARTICULO_UPPER"
+    // Coincidencia EXACTA: no se hace fallback a otras sedes ni a nombres parecidos
     const sedeUpper = (sede || '').trim().toUpperCase();
+
+    // Formatea número con máximo 2 decimales, 0 si es entero
+    function formatNum(val: any): string {
+      if (val === undefined || val === null || val === '') return '';
+      const n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '.'));
+      if (isNaN(n)) return '';
+      if (Number.isInteger(n)) return String(n);
+      return n.toFixed(2).replace(/\.?0+$/, '');
+    }
+
     Object.keys(artPorHoja).forEach(function(hoja) {
       (artPorHoja[hoja] || []).forEach(function(row: any) {
         if (!esFilaValida(row)) return;
@@ -235,17 +245,12 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
         const art = (row.subArticulo || '').trim();
         if (!cod || seen.has(cod)) return;
         seen.add(cod);
-        // Clave compuesta: "HOT WINGS|TOCINETA PREMIUM X KILO"
-        const artUpper = art.toUpperCase();
+        // Búsqueda EXACTA por "SEDE|ARTICULO_EN_MAYUSCULAS" — sin fallback
+        // Si la clave no existe: ese artículo no tiene min/max para esa sede → vacío
         let mm: any = {};
-        if (sedeUpper && minMaxMap[sedeUpper + '|' + artUpper]) {
-          mm = minMaxMap[sedeUpper + '|' + artUpper];
-        } else {
-          // Fallback: buscar en cualquier sede si no se proporcionó sede
-          const fallbackKey = Object.keys(minMaxMap).find(function(k) {
-            return k.toUpperCase().endsWith('|' + artUpper);
-          });
-          if (fallbackKey) mm = minMaxMap[fallbackKey];
+        if (sedeUpper) {
+          const exactKey = sedeUpper + '|' + art.toUpperCase();
+          mm = minMaxMap[exactKey] || {};
         }
         productos.push({
           codigo: cod,
@@ -253,8 +258,8 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
           subfamilia: (row.subfamilia || '').trim(),
           unidad: (row.unidad || '').trim(),
           proveedorNombre: prov,
-          minimo: mm.minimo !== undefined && mm.minimo !== '' ? String(mm.minimo) : '',
-          maximo: mm.maximo !== undefined && mm.maximo !== '' ? String(mm.maximo) : ''
+          minimo: formatNum(mm.minimo),
+          maximo: formatNum(mm.maximo)
         });
       });
     });
