@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v19 - Semaforos coloreados (ff4d4d/ffea00/00c853) ambos modulos + Fix getSemaforoHD 3 campos
+ * SheetsOrderForm.tsx v20 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -8,7 +8,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
-import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
+import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getProductosConMinMax,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
@@ -839,7 +839,7 @@ export default function SheetsOrderForm() {
     (async function() {
       setLoadingProductos(true); setProductos([]); setCantidades({}); setSearchTerm(''); setSelectedSubfamilia('');
       try {
-        var res = await Promise.allSettled([getProductosByProveedor(selectedProveedor), getSubfamiliasByProveedor(selectedProveedor)]);
+        var res = await Promise.allSettled([getProductosConMinMax(selectedProveedor), getSubfamiliasByProveedor(selectedProveedor)]);
         if (cancelled) return;
         setProductos(res[0].status==='fulfilled' ? res[0].value||[] : []);
         setSubfamilias(res[1].status==='fulfilled' ? res[1].value||[] : []);
@@ -893,7 +893,7 @@ export default function SheetsOrderForm() {
 
   var lineasSeleccionadas = productos
   .filter(function(p){return parsearTextoANumero(cantidades[p.codigo]) > 0;})
-  .map(function(p){ return {codigo: p.codigo, articulo: p.articulo, unidad: p.unidad || '', cantidad: parsearTextoANumero(cantidades[p.codigo]), valorUnitario: 0};});
+  .map(function(p){ return {codigo: p.codigo, articulo: p.articulo, unidad: p.unidad || '', cantidad: parsearTextoANumero(cantidades[p.codigo]), valorUnitario: 0, minimo: p.minimo || '', maximo: p.maximo || ''};});
 
   var sedeObj = sedes.find(function(s){ return s.nombre===selectedSede; }) || null;
   var provMeta = proveedoresMeta.find(function(p){ return p.nombre===selectedProveedor; }) || null;
@@ -1092,7 +1092,9 @@ export default function SheetsOrderForm() {
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold w-24">Codigo</th>
                   <th className="py-3 px-4 text-left text-[10px] uppercase tracking-wider font-bold">Articulo</th>
                   <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-20 hidden md:table-cell">Unidad</th>
-                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-40">Cantidad</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Min.</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-16 hidden lg:table-cell">Max.</th>
+                  <th className="py-3 px-4 text-center text-[10px] uppercase tracking-wider font-bold w-36">Cantidad</th>
                 </tr></thead>
                 <tbody>
                   {productosFiltrados.map(function(p,idx){
@@ -1106,6 +1108,8 @@ export default function SheetsOrderForm() {
                         <td className="py-3 px-4 font-mono text-xs text-slate-500">{p.codigo}</td>
                         <td className="py-3 px-4 font-medium text-slate-800">{p.articulo}</td>
                         <td className="py-3 px-4 text-center text-slate-500 text-xs hidden md:table-cell">{p.unidad||'---'}</td>
+                        <td className="py-3 px-4 text-center text-xs text-slate-500 hidden lg:table-cell">{p.minimo||'---'}</td>
+                        <td className="py-3 px-4 text-center text-xs text-slate-500 hidden lg:table-cell">{p.maximo||'---'}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
                             {/* El botón "-" resta 1 al valor numérico parseado y lo devuelve como string */}
