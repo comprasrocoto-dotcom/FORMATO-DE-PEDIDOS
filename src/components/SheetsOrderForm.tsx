@@ -1,10 +1,10 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v17 - Historial Documentado
- * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
- * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
- * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
- * - Nuevo módulo HistorialDocumentado exportado para uso en App.tsx
+ * SheetsOrderForm.tsx v18 - Edicion HistorialDocumentado + Semaforos + Filtros
+ * - Agrega campo "NÃºmero de Pedido (Sistema)" en Historial de Pedidos
+ * - Pedidos con ese campo lleno se mueven automÃ¡ticamente a Historial Documentado
+ * - Historial de Pedidos solo muestra pedidos SIN nÃºmero de pedido sistema
+ * - Nuevo mÃ³dulo HistorialDocumentado exportado para uso en App.tsx
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
@@ -36,7 +36,7 @@ function generarCSV(pedido) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
-// ─── HistorialPedidos ─────────────────────────────────────────────────────────
+// âââ HistorialPedidos âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function HistorialPedidos({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
   var [articuloBusq, setArticuloBusq] = useState('');
@@ -45,6 +45,10 @@ function HistorialPedidos({ proveedoresMeta }) {
   var [sedesDisp, setSedesDisp] = useState([]);
   var [err, setErr] = useState('');
   var [expandido, setExpandido] = useState(null);
+  var [editandoDoc, setEditandoDoc] = useState(null);
+  var [editDataDoc, setEditDataDoc] = useState({});
+  var [guardandoDoc, setGuardandoDoc] = useState(false);
+  var [filtroEstadoDoc, setFiltroEstadoDoc] = useState('todos');
   var [editandoFactura, setEditandoFactura] = useState(null);
   var [facturaData, setFacturaData] = useState({});
   var [idBusq, setIdBusq] = useState('');
@@ -109,10 +113,24 @@ function HistorialPedidos({ proveedoresMeta }) {
       var lista = Object.values(mapa).reverse();
       var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
-      // Solo pedidos SIN número de pedido sistema asignado
+      // Solo pedidos SIN nÃºmero de pedido sistema asignado
       setPedidos(lista.filter(function(p) { return !p.numeroPedidoSistema || p.numeroPedidoSistema.trim() === '' || p.numeroPedidoSistema === '---'; }));
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
+  }
+
+  async function guardarEdicionDoc(nOrden) {
+    var d = editDataDoc[nOrden] || {};
+    if (Object.keys(d).length === 0) { alert('No hay cambios que guardar.'); return; }
+    setGuardandoDoc(true);
+    try {
+      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'' });
+      if (!r.ok) { alert('Error: ' + (r.error||''))); return; }
+      setEditandoDoc(null);
+      invalidarCache();
+      await cargarDocumentados();
+    } catch(e) { alert('Error: ' + e.message); }
+    finally { setGuardandoDoc(false); }
   }
 
   async function guardarFactura(nOrden) {
@@ -126,7 +144,7 @@ function HistorialPedidos({ proveedoresMeta }) {
 
   async function guardarNumeroPedidoSistema(nOrden) {
     var nps = (npsData[nOrden] || '').trim();
-    if (!nps) { alert('Ingresa el Número de Pedido (Sistema) para continuar.'); return; }
+    if (!nps) { alert('Ingresa el NÃºmero de Pedido (Sistema) para continuar.'); return; }
     setGuardandoNPS(true);
     try {
       var result = await actualizarNumeroPedidoSistema({ nOrden, numeroPedidoSistema: nps });
@@ -135,7 +153,7 @@ function HistorialPedidos({ proveedoresMeta }) {
         return;
       }
       setEditandoNPS(null);
-      // Recargar historial - el pedido desaparecerá de aquí y aparecerá en Historial Documentado
+      // Recargar historial - el pedido desaparecerÃ¡ de aquÃ­ y aparecerÃ¡ en Historial Documentado
       await cargarHistorial();
     } catch(e) { alert('Error: ' + (e.message||'Error de red')); }
     finally { setGuardandoNPS(false); }
@@ -267,7 +285,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
-                      <div className="text-xs text-slate-500">{p.sede} · {p.fecha} · {p.articulos.length} art.
+                      <div className="text-xs text-slate-500">{p.sede} Â· {p.fecha} Â· {p.articulos.length} art.
                         {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
                         {p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
                       </div>
@@ -377,12 +395,12 @@ function HistorialPedidos({ proveedoresMeta }) {
                       )}
                     </div>
 
-                    {/* Número de Pedido Sistema - NUEVO CAMPO */}
+                    {/* NÃºmero de Pedido Sistema - NUEVO CAMPO */}
                     <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Archive className="w-4 h-4 text-amber-600"/>
-                          <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">Número de Pedido (Sistema)</span>
+                          <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">NÃºmero de Pedido (Sistema)</span>
                           <span className="text-[10px] text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">Al asignar, pasa a Historial Documentado</span>
                         </div>
                         {!isEditNPS && !p.numeroPedidoSistema && (
@@ -397,13 +415,13 @@ function HistorialPedidos({ proveedoresMeta }) {
                       {!isEditNPS ? (
                         <div className="text-xs text-amber-700">
                           {p.numeroPedidoSistema && p.numeroPedidoSistema !== '---'
-                            ? <span className="font-bold text-green-700">✅ {p.numeroPedidoSistema}</span>
-                            : <span className="text-amber-600 italic">Sin asignar — Este pedido aún no ha sido documentado</span>}
+                            ? <span className="font-bold text-green-700">â {p.numeroPedidoSistema}</span>
+                            : <span className="text-amber-600 italic">Sin asignar â Este pedido aÃºn no ha sido documentado</span>}
                         </div>
                       ) : (
                         <div className="space-y-2">
                           <div>
-                            <label className="text-[10px] font-bold text-amber-700 uppercase block mb-1">Número de Pedido en el Sistema *</label>
+                            <label className="text-[10px] font-bold text-amber-700 uppercase block mb-1">NÃºmero de Pedido en el Sistema *</label>
                             <input type="text" value={npsData[p.nOrden]||''} onChange={function(e){ setNpsData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=e.target.value; return n; }); }}
                               className="w-full px-2 py-1.5 bg-white border-2 border-amber-300 rounded-lg text-xs focus:outline-none focus:border-amber-500 font-mono"
                               placeholder="Ej: PED-2024-001, ORD-123, etc."
@@ -436,7 +454,16 @@ function HistorialPedidos({ proveedoresMeta }) {
   );
 }
 
-// ─── HistorialDocumentado ─────────────────────────────────────────────────────
+// âââ HistorialDocumentado âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Semaforo para HistorialDocumentado
+function getSemaforoHD(p) {
+  var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
+  var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
+  if (hasFact && hasNPS) return '🟢';
+  if (hasFact || hasNPS) return '🟡';
+  return '🔴';
+}
+
 export function HistorialDocumentado({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
   var [articuloBusq, setArticuloBusq] = useState('');
@@ -480,7 +507,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         }
       });
       var lista = Object.values(mapa).reverse();
-      // Solo pedidos CON número de pedido sistema asignado
+      // Solo pedidos CON nÃºmero de pedido sistema asignado
       var documentados = lista.filter(function(p) { return p.numeroPedidoSistema && p.numeroPedidoSistema.trim() !== '' && p.numeroPedidoSistema !== '---'; });
       var sds = [...new Set(documentados.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
@@ -501,7 +528,8 @@ export function HistorialDocumentado({ proveedoresMeta }) {
     var pasaArt = !articuloBusq || p.articulos.some(function(a) {
       return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
     });
-    return pasaSede && pasaArt;
+    var pasaEstado = filtroEstadoDoc === 'todos' || getSemaforoHD(p) === (filtroEstadoDoc === 'pendientes' ? '🔴' : '🟢');
+    return pasaSede && pasaArt && pasaEstado;
   });
 
   return (
@@ -511,7 +539,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           <Archive className="w-5 h-5 text-green-300"/>
           <div>
             <div className="text-white font-bold text-sm">Historial Documentado</div>
-            <div className="text-green-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' pedidos con número de sistema asignado'}</div>
+            <div className="text-green-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' pedidos con nÃºmero de sistema asignado'}</div>
           </div>
         </div>
         <button onClick={cargarDocumentados} disabled={cargando}
@@ -541,12 +569,20 @@ export function HistorialDocumentado({ proveedoresMeta }) {
       {!cargando && pedidos.length === 0 && !err && (
         <div className="p-8 text-center text-slate-400 text-sm">
           <Archive className="w-8 h-8 mx-auto mb-2 text-slate-300"/>
-          No hay pedidos documentados aun. Asigna un Número de Pedido (Sistema) en el Historial de Pedidos para que aparezcan aquí.
+          No hay pedidos documentados aun. Asigna un NÃºmero de Pedido (Sistema) en el Historial de Pedidos para que aparezcan aquÃ­.
         </div>
       )}
       {!cargando && pedidosFiltrados.length > 0 && (
         <div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
-          {pedidosFiltrados.map(function(p) {
+          <div className="flex gap-2 mb-3 px-1">
+          {['todos','pendientes','completados'].map(function(f) {
+            return (<button key={f} onClick={function(){ setFiltroEstadoDoc(f); }}
+              className={"px-3 py-1 rounded-full text-xs font-semibold border transition " + (filtroEstadoDoc===f ? 'bg-green-700 text-white border-green-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100')}>
+              {f==='todos'?'Todos':f==='pendientes'?'🔴 Pendientes':'🟢 Completados'}
+            </button>);
+          })}
+        </div>
+        {pedidosFiltrados.map(function(p) {
             var isOpen = expandido === p.nOrden;
             var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase())||(a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
             var pm = getProvMeta(p.proveedor);
@@ -560,25 +596,25 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
-                      <div className="text-xs text-slate-500">{p.sede} · {p.fecha} · {p.articulos.length} art.
+                      <div className="text-xs text-slate-500">{p.sede} Â· {p.fecha} Â· {p.articulos.length} art.
                         {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
                         {p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
-                        {p.numeroPedidoSistema && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800 border border-green-300">📄 {p.numeroPedidoSistema}</span>}
+                        {p.numeroPedidoSistema && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800 border border-green-300">ð {p.numeroPedidoSistema}</span>}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
+                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span> <span title="Estado: 🟢 Completo | 🟡 Parcial | 🔴 Pendiente" className="ml-1 text-base leading-none">{getSemaforoHD(p)}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0f6b3a" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
                 </button>
                 {isOpen && (
                   <div className="px-4 pb-4 bg-slate-50/50">
-                    {/* Número de Pedido Sistema - Destacado */}
+                    {/* NÃºmero de Pedido Sistema - Destacado */}
                     <div className="rounded-xl border-2 border-green-300 bg-green-50 p-3 mb-3">
                       <div className="flex items-center gap-2 mb-1">
                         <Archive className="w-4 h-4 text-green-700"/>
-                        <span className="text-xs font-bold text-green-800 uppercase tracking-wider">Número de Pedido (Sistema)</span>
+                        <span className="text-xs font-bold text-green-800 uppercase tracking-wider">NÃºmero de Pedido (Sistema)</span>
                       </div>
                       <div className="text-lg font-bold text-green-800 font-mono">{p.numeroPedidoSistema}</div>
                     </div>
@@ -631,7 +667,32 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> CSV
                       </button>
+              <button onClick={function(e){ e.stopPropagation(); setEditandoDoc(p.nOrden); setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||''}; return n; }); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-90" style={{background:'#4f46e5'}}>
+                <Edit3 className="w-3 h-3"/> Editar
+              </button>
                     </div>
+              {editandoDoc === p.nOrden && (
+                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
+                  <div className="font-semibold text-xs text-indigo-700 uppercase tracking-wider mb-2">✏️ Editar Pedido #{p.nOrden}</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Factura</label>
+                      <input type="text" value={editDataDoc[p.nOrden]?.nroFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{nroFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: F-001"/>
+                    </div>
+                    <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Tipo Factura</label>
+                      <select value={editDataDoc[p.nOrden]?.tipoFactura||'contado'} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg">
+                        <option value="contado">Contado</option><option value="credito">Credito</option><option value="consignacion">Consignacion</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={function(){ guardarEdicionDoc(p.nOrden); }} disabled={guardandoDoc} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{background:'#4f46e5',opacity:guardandoDoc?0.6:1}}>
+                      <Save className="w-3 h-3 inline mr-1"/>{guardandoDoc?'Guardando...':"Guardar Cambios"}
+                    </button>
+                    <button onClick={function(){ setEditandoDoc(null); }} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-300">Cancelar</button>
+                  </div>
+                </div>
+              )}
                     <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
                       <table className="w-full text-xs">
                         <thead><tr style={{background:'#0f6b3a'}}>
@@ -676,7 +737,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
   );
 }
 
-// ─── SheetsOrderForm ──────────────────────────────────────────────────────────
+// âââ SheetsOrderForm ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 export default function SheetsOrderForm() {
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
@@ -759,7 +820,7 @@ export default function SheetsOrderForm() {
     return function() { cancelled = true; };
   }, [selectedProveedor]);
 
-  // Función auxiliar para convertir el texto "1,250.005" al número real 1250.005
+  // FunciÃ³n auxiliar para convertir el texto "1,250.005" al nÃºmero real 1250.005
   function parsearTextoANumero(val) {
   if (val === undefined || val === null || val === '') return 0;
   // Eliminamos las comas de miles para que parseFloat entienda el string
@@ -769,17 +830,17 @@ export default function SheetsOrderForm() {
   }
 
   function handleCantidad(codigo, val) {
-    // 1. Permite solo números, puntos y comas iniciales
+    // 1. Permite solo nÃºmeros, puntos y comas iniciales
     var strVal = String(val).replace(/[^0-9.,]/g, '');
 
-    // 2. Asegurar que haya máximo UN solo punto decimal
+    // 2. Asegurar que haya mÃ¡ximo UN solo punto decimal
     var partes = strVal.split('.');
     if (partes.length > 2) {
-      // Si escriben "0.01.01", conservamos el primer punto y unimos el resto de números sin puntos
+      // Si escriben "0.01.01", conservamos el primer punto y unimos el resto de nÃºmeros sin puntos
       strVal = partes[0] + '.' + partes.slice(1).join('').replace(/\./g, '');
     }
 
-    // 3. Asegurar que NO existan comas de miles después del punto decimal
+    // 3. Asegurar que NO existan comas de miles despuÃ©s del punto decimal
     if (strVal.includes('.')) {
       var partesPunto = strVal.split('.');
       // Limpiamos cualquier coma que el usuario intente poner en los decimales
@@ -1007,7 +1068,7 @@ export default function SheetsOrderForm() {
                   {productosFiltrados.map(function(p,idx){
                   // Conservamos el texto tal cual lo escribe el usuario (ej: "1,200.")
                   var textoCantidad = cantidades[p.codigo] !== undefined ? cantidades[p.codigo] : '';
-                  // Convertimos temporalmente a número matemático sólo para aplicar los estilos de fila activa (verde)
+                  // Convertimos temporalmente a nÃºmero matemÃ¡tico sÃ³lo para aplicar los estilos de fila activa (verde)
                   var qtyParsed = parsearTextoANumero(textoCantidad);
               
                   return(
@@ -1017,17 +1078,17 @@ export default function SheetsOrderForm() {
                         <td className="py-3 px-4 text-center text-slate-500 text-xs hidden md:table-cell">{p.unidad||'---'}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
-                            {/* El botón "-" resta 1 al valor numérico parseado y lo devuelve como string */}
+                            {/* El botÃ³n "-" resta 1 al valor numÃ©rico parseado y lo devuelve como string */}
                             <button type="button" onClick={function(){handleCantidad(p.codigo, String(Math.max(0, qtyParsed - 1)));}} className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold flex items-center justify-center text-slate-600 text-base">-</button>
                             <input 
                             type="text" 
-                            inputMode="decimal" // Fuerza la aparición del teclado numérico con punto/coma en dispositivos móviles
+                            inputMode="decimal" // Fuerza la apariciÃ³n del teclado numÃ©rico con punto/coma en dispositivos mÃ³viles
                             value={textoCantidad} 
                             onChange={function(e){ handleCantidad(p.codigo, e.target.value); }} 
                             placeholder="0" 
                             className="w-20 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500" 
                             />
-                            {/* El botón "+" suma 1 al valor numérico parseado y lo devuelve como string */}
+                            {/* El botÃ³n "+" suma 1 al valor numÃ©rico parseado y lo devuelve como string */}
                             <button type="button" onClick={function(){handleCantidad(p.codigo, String(qtyParsed + 1));}} className="w-7 h-7 rounded-lg bg-cyan-500 hover:bg-cyan-600 font-bold text-white flex items-center justify-center text-base">+</button>
                             </div>
                         </td>
