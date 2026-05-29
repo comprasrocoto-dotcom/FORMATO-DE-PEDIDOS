@@ -39,10 +39,11 @@ function generarCSV(pedido) {
 // SemÃ¡foro para HistorialPedidos
 function getSemaforoHP(p) {
   var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
+  var hasDoc = !!(p.obsFactura && String(p.obsFactura).trim() && p.obsFactura !== '---');
   var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasNPS) return 'ð¢';
-  if (hasFact || hasNPS) return 'ð¡';
-  return 'ð´';
+  if (hasFact && hasDoc && hasNPS) return '🟢';
+  if (hasFact || hasDoc || hasNPS) return '🟡';
+  return '🔴';
 }
 
 // Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ HistorialPedidos Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
