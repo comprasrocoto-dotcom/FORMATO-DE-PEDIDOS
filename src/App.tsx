@@ -28,7 +28,7 @@ export default function App() {
               </button>
               <button onClick={function(){setTab('documentado');}}
                 className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all " + (tab==='documentado'?'bg-white/20 text-white':'text-cyan-300 hover:text-white hover:bg-white/10')}>
-                <Archive className="w-3.5 h-3.5"/> Historial Documentado
+                <Archive className="w-3.5 h-3.5"/> Histórico de Pedidos
               </button>
               <button onClick={function(){setTab('ajuste');}}
                 className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all " + (tab==='ajuste'?'bg-white/20 text-white':'text-cyan-300 hover:text-white hover:bg-white/10')}>
