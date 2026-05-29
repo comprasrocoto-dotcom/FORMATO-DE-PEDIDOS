@@ -11,13 +11,13 @@
  * Fix: carga proveedoresMeta desde Drive con campos correos/telefono/contacto
  */
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download } from 'lucide-react';
+import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download, Search } from 'lucide-react';
 import { actualizarPedido, getProveedores, getAllDatos } from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// âââ Helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function getProvMeta(proveedoresMeta, nombre) {
   if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
   var found = (proveedoresMeta || []).find(function(p){ return p.nombre === nombre; });
@@ -38,7 +38,7 @@ function validarProveedorFGH(pm) {
   return !!(tel || cor || con);
 }
 
-// ─── DetalleOrden ─────────────────────────────────────────────────────────────
+// âââ DetalleOrden âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, onPDFError }) {
   var isEdit = editandoOrden === g.nOrden;
   var lineas = g.lineas || [];
@@ -46,7 +46,7 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
 
   function handleDescargarPDF() {
-    // Buscamos los metadatos del proveedor de forma robusta ignorando mayúsculas/minúsculas
+    // Buscamos los metadatos del proveedor de forma robusta ignorando mayÃºsculas/minÃºsculas
     var pmActual = (proveedoresMeta || []).find(function(p) {
       return String(p.nombre || '').trim().toLowerCase() === String(g.proveedor || '').trim().toLowerCase();
     }) || {};
@@ -93,7 +93,7 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
         })}
       </div>
 
-      {/* Campo modificado por — SIEMPRE presente en DOM, visible solo en isEdit */}
+      {/* Campo modificado por â SIEMPRE presente en DOM, visible solo en isEdit */}
       <div style={{display: isEdit ? 'block' : 'none'}} className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
@@ -120,7 +120,7 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
           </tr></thead>
           <tbody>
             {lineas.length === 0 && (
-              <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Sin artículos en este pedido.</td></tr>
+              <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Sin artÃ­culos en este pedido.</td></tr>
             )}
             {lineas.map(function(l, i){
               var codigo = l.codigo || ('linea_' + i);
@@ -193,12 +193,12 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   );
 }
 
-// ─── Componente principal ─────────────────────────────────────────────────────
+// âââ Componente principal âââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function getSemaforoAP(g) {
   var tieneFactura = g.nroFactura && g.nroFactura.trim() !== '';
   var tieneNPS = g.numeroPedidoSistema && g.numeroPedidoSistema.trim() !== '';
-  if (tieneFactura && tieneNPS) return '🟢';
-  return '🔴';
+  if (tieneFactura && tieneNPS) return 'ð¢';
+  return 'ð´';
 }
 
 export default function AjustePedidos() {
@@ -215,6 +215,9 @@ export default function AjustePedidos() {
   var [filtroSede, setFiltroSede] = useState('');
   var [filtroProveedor, setFiltroProveedor] = useState('');
   var [filtroEstadoAP, setFiltroEstadoAP] = useState('todos');
+  var [busqAP, setBusqAP] = useState('');
+  var [fechaDesdeAP, setFechaDesdeAP] = useState('');
+  var [fechaHastaAP, setFechaHastaAP] = useState('');
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
 
   useEffect(function(){
@@ -341,11 +344,18 @@ export default function AjustePedidos() {
   var provDisp = [...new Set(grupos.map(function(g){ return g.proveedor; }))].filter(Boolean).sort();
   var gruposFiltrados = grupos.filter(function(g){
     var pasaSede = !filtroSede || g.sede === filtroSede;
-    var pasaProv = !filtroProveedor || g.proveedor === filtroProveedor;
+    var q = busqAP.trim().toLowerCase();
+    var pasaBusq = !q || (
+      (g.proveedor||'').toLowerCase().includes(q) ||
+      (g.lineas||[]).some(function(l){ return (l.articulo||'').toLowerCase().includes(q)||(l.codigo||'').toLowerCase().includes(q); }) ||
+      (g.nroFactura||'').toLowerCase().includes(q) ||
+      (g.numeroPedidoSistema||'').toLowerCase().includes(q)
+    );
+    var pasaFecha = (!fechaDesdeAP || g.fecha >= fechaDesdeAP) && (!fechaHastaAP || g.fecha <= fechaHastaAP);
     var sem = getSemaforoAP(g);
     var pasaEstado = filtroEstadoAP === 'todos' || (filtroEstadoAP === 'pendientes' && sem === '🔴') || (filtroEstadoAP === 'completados' && sem === '🟢');
-    return pasaSede && pasaProv && pasaEstado;
-  });
+    return pasaSede && pasaBusq && pasaFecha && pasaEstado;
+  });;
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-5">
@@ -367,7 +377,7 @@ export default function AjustePedidos() {
 
         {/* Filtros */}
         <div className="p-4 border-b border-slate-100">
-          <div className="flex flex-col sm:flex-row gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 mb-2">
             <select value={filtroSede} onChange={function(e){setFiltroSede(e.target.value);}}
               className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500">
               <option value="">Todas las sedes</option>
@@ -379,10 +389,32 @@ export default function AjustePedidos() {
               {provDisp.map(function(p){ return <option key={p} value={p}>{p}</option>; })}
             </select>
           </div>
-          <div className="flex gap-2 mt-2">
+          <div className="flex flex-col sm:flex-row gap-2 mb-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
+              <input type="text" value={busqAP} onChange={function(e){setBusqAP(e.target.value);}}
+                placeholder="Buscar por proveedor, artículo, factura o N° sistema..."
+                className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+            </div>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 mb-2">
+            <div className="flex items-center gap-2 flex-1">
+              <label className="text-xs text-slate-500 whitespace-nowrap">Desde:</label>
+              <input type="date" value={fechaDesdeAP} onChange={function(e){setFechaDesdeAP(e.target.value);}}
+                className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+            </div>
+            <div className="flex items-center gap-2 flex-1">
+              <label className="text-xs text-slate-500 whitespace-nowrap">Hasta:</label>
+              <input type="date" value={fechaHastaAP} onChange={function(e){setFechaHastaAP(e.target.value);}}
+                className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+            </div>
+            {(fechaDesdeAP || fechaHastaAP) && <button onClick={function(){ setFechaDesdeAP(''); setFechaHastaAP(''); }} className="px-3 py-1.5 text-xs text-slate-500 hover:text-red-500 border border-slate-200 rounded-xl bg-white">✕ Limpiar</button>}
+          </div>
+          <div className="flex gap-2">
             <button onClick={function(){ setFiltroEstadoAP('todos'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoAP==='todos'?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>Todos</button>
             <button onClick={function(){ setFiltroEstadoAP('pendientes'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoAP==='pendientes'?'bg-red-600 text-white border-red-600':'bg-white text-slate-600 border-slate-200 hover:border-red-400')}>🔴 Pendientes</button>
             <button onClick={function(){ setFiltroEstadoAP('completados'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoAP==='completados'?'bg-green-600 text-white border-green-600':'bg-white text-slate-600 border-slate-200 hover:border-green-400')}>🟢 Completados</button>
+            {(filtroSede || filtroProveedor || busqAP || fechaDesdeAP || fechaHastaAP || filtroEstadoAP !== 'todos') && <span className="ml-auto text-xs text-slate-500 self-center">{gruposFiltrados.length} resultado(s)</span>}
           </div>
         </div>
 
@@ -421,7 +453,7 @@ export default function AjustePedidos() {
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-bold text-slate-800 truncate">{g.proveedor}</div>
-                        <div className="text-xs text-slate-500">{g.sede} · {g.fecha} · {(g.lineas||[]).length} art.
+                        <div className="text-xs text-slate-500">{g.sede} Â· {g.fecha} Â· {(g.lineas||[]).length} art.
                           <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold " + (g.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{g.medioPago}</span>
                           <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 inline-flex items-center gap-0.5"><Clock className="w-2.5 h-2.5"/> Pendiente</span>
                         </div>
@@ -429,7 +461,7 @@ export default function AjustePedidos() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-xs text-slate-400 font-mono hidden sm:block">#{g.nOrden}</span>
-                      <span className="text-base leading-none" title={"Semáforo: " + getSemaforoAP(g)}>{getSemaforoAP(g)}</span>
+                      <span className="text-base leading-none" title={"SemÃ¡foro: " + getSemaforoAP(g)}>{getSemaforoAP(g)}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                   </button>
