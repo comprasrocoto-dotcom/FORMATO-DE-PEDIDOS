@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v20 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
+ * SheetsOrderForm.tsx v21 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -839,7 +839,7 @@ export default function SheetsOrderForm() {
     (async function() {
       setLoadingProductos(true); setProductos([]); setCantidades({}); setSearchTerm(''); setSelectedSubfamilia('');
       try {
-        var res = await Promise.allSettled([getProductosConMinMax(selectedProveedor), getSubfamiliasByProveedor(selectedProveedor)]);
+        var res = await Promise.allSettled([getProductosConMinMax(selectedProveedor, selectedSede), getSubfamiliasByProveedor(selectedProveedor)]);
         if (cancelled) return;
         setProductos(res[0].status==='fulfilled' ? res[0].value||[] : []);
         setSubfamilias(res[1].status==='fulfilled' ? res[1].value||[] : []);
@@ -848,7 +848,7 @@ export default function SheetsOrderForm() {
       finally { if (!cancelled) setLoadingProductos(false); }
     })();
     return function() { cancelled = true; };
-  }, [selectedProveedor]);
+  }, [selectedProveedor, selectedSede]);
 
   // Función auxiliar para convertir el texto "1,250.005" al número real 1250.005
   function parsearTextoANumero(val) {
