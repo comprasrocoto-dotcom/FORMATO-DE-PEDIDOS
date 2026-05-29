@@ -148,9 +148,7 @@ function HistorialPedidos({ proveedoresMeta }) {
         alert('Error guardando: ' + (result.error || 'Error desconocido'));
         return;
       }
-      setEditandoNPS(null);
-      // Recargar historial - el pedido desaparecerÃ¡ de aquÃ­ y aparecerÃ¡ en Historial Documentado
-      setTimeout(function(){ cargarHistorial(); }, 50);
+      window.location.reload();
     } catch(e) { alert('Error: ' + (e.message||'Error de red')); }
     finally { setGuardandoNPS(false); }
   }
@@ -270,7 +268,7 @@ function HistorialPedidos({ proveedoresMeta }) {
       {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial...</div>}
       {!cargando && pedidos.length === 0 && !err && <div className="p-8 text-center text-slate-400 text-sm">No hay pedidos pendientes. Todos los pedidos han sido documentados.</div>}
       {!cargando && pedidosFiltrados.length > 0 && (
-        <div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
+        <div key={'list-' + pedidos.length} className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
           {pedidosFiltrados.map(function(p) {
             var isOpen = expandido === p.nOrden;
             var isEditFac = editandoFactura === p.nOrden;
