@@ -154,9 +154,11 @@ function actualizarNumeroPedidoSistema(payload) {
 //       if (!sede || !art) continue;
 //       // Clave compuesta: "HOT WINGS|TOCINETA PREMIUM X KILO"
 //       var key = sede + '|' + art;
+//       var subArt = String(mmData[r][2] || '').trim().toUpperCase(); // Col C = SubArtículo (unidad de inventario)
 //       minMaxMap[key] = {
 //         minimo: (minVal !== '' && minVal !== undefined && minVal !== null) ? minVal : '',
-//         maximo: (maxVal !== '' && maxVal !== undefined && maxVal !== null) ? maxVal : ''
+//         maximo: (maxVal !== '' && maxVal !== undefined && maxVal !== null) ? maxVal : '',
+//         unidadInv: subArt // unidad de inventario para conversión en el cliente
 //       };
 //     }
 //   }
