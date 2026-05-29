@@ -255,9 +255,10 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
             maximo = String(minMaxConvertidoMap[exactKey].maximo || '');
           } else if (minMaxMap[exactKey]) {
             // Fallback: aplicar conversion de unidades usando unidadMedidaMap
-            const unidad = (row.unidad || '').trim().toUpperCase();
-            const factor = unidadMedidaMap[unidad] && unidadMedidaMap[unidad] !== 1
-              ? unidadMedidaMap[unidad]
+            // Usar unidadInv (unidad de inventario) guardada en el minMaxMap por el servidor
+            const unidadInv = (minMaxMap[exactKey].unidadInv || row.unidad || '').trim().toUpperCase();
+            const factor = unidadMedidaMap[unidadInv] && unidadMedidaMap[unidadInv] !== 1
+              ? unidadMedidaMap[unidadInv]
               : null;
             const rawMin = parseFloat(String(minMaxMap[exactKey].minimo || '')) || 0;
             const rawMax = parseFloat(String(minMaxMap[exactKey].maximo || '')) || 0;
