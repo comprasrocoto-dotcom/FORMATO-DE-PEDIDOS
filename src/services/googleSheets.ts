@@ -1,13 +1,14 @@
 // @ts-nocheck
-// rebuild: v12-conversion-unidad-medida
+// rebuild: v13-fix-url-and-conversion
 /**
- * googleSheets.ts v12
- * - Agrega actualizarNumeroPedidoSistema para asignar número de pedido del sistema
- * - Usado para mover pedidos de Historial de Pedidos a Historial Documentado
- * - v9: Agrega getProductosConMinMax para cargar productos con mínimo/máximo por proveedor
+ * googleSheets.ts v13
+ * - FIX: Correccion de APPS_SCRIPT_URL (caracter I -> l)
+ * - FIX: Conversion de unidad mas robusta con extraccion del nombre del producto
+ * - v12: Agrega conversion de unidades de inventario a unidades de compra
+ * - v9: Agrega getProductosConMinMax para cargar productos con minimo/maximo por proveedor
  */
 
-const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTSclSTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
 let cachedDatos: any = null;
 let cacheTimestamp = 0;
@@ -221,15 +222,15 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
     const datos = await fetchAllDatos();
     const artPorHoja = datos.articulosPorProveedor || {};
     const minMaxMap = datos.minMaxMap || {};
-    // unidadMedidaMap: clave = nombre unidad MAYUSCULAS → factor de conversión
-    // factor = cuántas unidades de inventario = 1 unidad de compra
-    // Ej: "KILO" → 1000, "TARROX1.62L" → 1620, "UNIDADES" → 1
+    // unidadMedidaMap: clave = nombre unidad MAYUSCULAS -> factor de conversion
+    // factor = cuantas unidades de inventario = 1 unidad de compra
+    // Ej: "KILO" -> 1000, "TARROX1.62L" -> 1620, "UNIDADES" -> 1
     const unidadMedidaMap = datos.unidadMedidaMap || {};
     const productos: any[] = [];
     const seen = new Set<string>();
     const sedeUpper = (sede || '').trim().toUpperCase();
 
-    // Formatea número: máximo 2 decimales, 0 si es entero exacto
+    // Formatea numero: maximo 2 decimales, 0 si es entero exacto
     function formatNum(val: any): string {
       if (val === undefined || val === null || val === '') return '';
       const n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '.'));
@@ -238,13 +239,49 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
       return n.toFixed(2).replace(/\.?0+$/, '');
     }
 
-    // Convierte valor en unidades de inventario → unidades de compra (divide por factor)
+    // Convierte valor en unidades de inventario -> unidades de compra (divide por factor)
     function convertirUnidad(valorInv: any, factor: number): string {
       if (valorInv === undefined || valorInv === null || valorInv === '') return '';
       const v = typeof valorInv === 'number' ? valorInv : parseFloat(String(valorInv).replace(/,/g, '.'));
       if (isNaN(v) || !isFinite(v)) return '';
-      if (factor <= 0) return formatNum(v);
+      if (factor <= 1) return formatNum(v);
       return formatNum(v / factor);
+    }
+
+    // Busca factor de conversion en unidadMedidaMap
+    // Intenta: exacto -> normalizado -> extraccion del nombre del producto
+    function buscarFactor(unidad: string, articuloNombre: string): number {
+      const mapKeys = Object.keys(unidadMedidaMap);
+      
+      // Intento 1: coincidencia exacta con unidad de compra
+      if (unidad) {
+        const unidadUpper = unidad.toUpperCase();
+        if (unidadMedidaMap[unidadUpper] > 0) return unidadMedidaMap[unidadUpper];
+        
+        // Intento 2: normalizar (quitar espacios/puntos/guiones)
+        const unidadNorm = unidadUpper.replace(/[\s.\-_]/g, '');
+        const matchKey1 = mapKeys.find(function(k) {
+          return k.replace(/[\s.\-_]/g, '') === unidadNorm;
+        });
+        if (matchKey1 && unidadMedidaMap[matchKey1] > 0) return unidadMedidaMap[matchKey1];
+      }
+      
+      // Intento 3: extraer unidad del nombre del producto (ej: "AJO X KILO" -> "KILO")
+      if (articuloNombre) {
+        const artUp = articuloNombre.toUpperCase();
+        const xIdx = artUp.lastIndexOf(' X ');
+        if (xIdx >= 0) {
+          const suffix = artUp.substring(xIdx + 3).trim();
+          if (suffix && unidadMedidaMap[suffix] > 0) return unidadMedidaMap[suffix];
+          const suffixNorm = suffix.replace(/[\s.\-_]/g, '');
+          const matchKey2 = mapKeys.find(function(k) {
+            return k.replace(/[\s.\-_]/g, '') === suffixNorm;
+          });
+          if (matchKey2 && unidadMedidaMap[matchKey2] > 0) return unidadMedidaMap[matchKey2];
+        }
+      }
+      
+      return 0;
     }
 
     Object.keys(artPorHoja).forEach(function(hoja) {
@@ -257,26 +294,17 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
         if (!cod || seen.has(cod)) return;
         seen.add(cod);
 
-        // Búsqueda EXACTA "SEDE|ARTICULO" — sin fallback a otras sedes
+        // Busqueda EXACTA "SEDE|ARTICULO" - sin fallback a otras sedes
         let mm: any = {};
         if (sedeUpper) {
           const exactKey = sedeUpper + '|' + art.toUpperCase();
           mm = minMaxMap[exactKey] || {};
         }
 
-        // Factor de conversión según unidad de compra del producto
+        // Factor de conversion segun unidad de compra del producto
         const unidad = (row.unidad || '').trim();
-        const unidadUpper = unidad.toUpperCase();
-        let factor = unidadMedidaMap[unidadUpper] || 0;
-        if (!factor) {
-          // Coincidencia flexible: normalizar quitando espacios/puntos
-          const unidadNorm = unidadUpper.replace(/[\s.\-_]/g, '');
-          const matchKey = Object.keys(unidadMedidaMap).find(function(k) {
-            return k.replace(/[\s.\-_]/g, '') === unidadNorm;
-          });
-          if (matchKey) factor = unidadMedidaMap[matchKey];
-        }
-        const factorFinal = factor > 0 ? factor : 1;
+        const factor = buscarFactor(unidad, art);
+        const factorFinal = factor > 1 ? factor : 1;
 
         productos.push({
           codigo: cod,
@@ -293,4 +321,3 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
     return productos;
   } catch(e) { console.error('[getProductosConMinMax]', e); return []; }
 }
-
