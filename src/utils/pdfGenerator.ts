@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * Utility para generación unificada de PDFs de Pedidos
+ * Utility para generación unificada de PDFs de Pedidos en todos los botones de descarga PDF
  */
 
 let _jsPDFClass = null;
