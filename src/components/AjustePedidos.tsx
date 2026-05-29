@@ -39,7 +39,22 @@ function validarProveedorFGH(pm) {
 }
 
 // âââ DetalleOrden âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, onPDFError }) {
+function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, onPDFError }) {
+  // Semáforo por artículo: compara cantidad pedida vs mínimo y máximo convertidos
+  function getSemaforoLinea(linea) {
+    var sedeKey = (g.sede || '').trim().toUpperCase();
+    var artKey = (linea.articulo || '').trim().toUpperCase();
+    var key = sedeKey + '|' + artKey;
+    var entry = (minMaxConvertido || {})[key];
+    if (!entry) return null;
+    var cant = parseFloat(String(linea.cantidad || 0)) || 0;
+    var minVal = parseFloat(String(entry.minimo || ''));
+    var maxVal = parseFloat(String(entry.maximo || ''));
+    if (isNaN(minVal) && isNaN(maxVal)) return null;
+    if (!isNaN(minVal) && cant < minVal) return { emoji: '🔴', label: 'Bajo mínimo (' + entry.minimo + ')', color: 'text-red-600 bg-red-50' };
+    if (!isNaN(maxVal) && cant > maxVal) return { emoji: '🟢', label: 'Sobre máximo (' + entry.maximo + ')', color: 'text-green-600 bg-green-50' };
+    return { emoji: '🟡', label: 'Entre mínimo y máximo', color: 'text-yellow-600 bg-yellow-50' };
+  }
   var isEdit = editandoOrden === g.nOrden;
   var lineas = g.lineas || [];
 
@@ -117,10 +132,13 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
             <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-32">Cantidad</th>
+            <th className="py-2 px-3 text-center text-white font-bold uppercase w-14 hidden sm:table-cell">Mín.</th>
+            <th className="py-2 px-3 text-center text-white font-bold uppercase w-14 hidden sm:table-cell">Máx.</th>
+            <th className="py-2 px-3 text-center text-white font-bold uppercase w-10" title="Semáforo">🚦</th>
           </tr></thead>
           <tbody>
             {lineas.length === 0 && (
-              <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Sin artÃ­culos en este pedido.</td></tr>
+              <tr><td colSpan={7} className="py-4 text-center text-slate-400 text-xs">Sin artículos en este pedido.</td></tr>
             )}
             {lineas.map(function(l, i){
               var codigo = l.codigo || ('linea_' + i);
@@ -156,6 +174,21 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
                       <span className="font-bold text-blue-800">{cantOriginal % 1 === 0 ? cantOriginal : cantOriginal.toFixed(2)}</span>
                     )}
                   </td>
+                  {(function(){
+                    var sem = getSemaforoLinea(l);
+                    var entry = (minMaxConvertido || {})[(g.sede||'').trim().toUpperCase()+'|'+(l.articulo||'').trim().toUpperCase()];
+                    return (<>
+                      <td className="py-1.5 px-3 text-center hidden sm:table-cell text-slate-500">{entry ? (entry.minimo || '---') : '---'}</td>
+                      <td className="py-1.5 px-3 text-center hidden sm:table-cell text-slate-500">{entry ? (entry.maximo || '---') : '---'}</td>
+                      <td className="py-1.5 px-3 text-center">
+                        {sem ? (
+                          <span className={"text-xs font-bold px-1 py-0.5 rounded " + sem.color} title={sem.label}>{sem.emoji}</span>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
+                      </td>
+                    </>);
+                  })()}
                 </tr>
               );
             })}
@@ -219,6 +252,7 @@ export default function AjustePedidos() {
   var [fechaDesdeAP, setFechaDesdeAP] = useState('');
   var [fechaHastaAP, setFechaHastaAP] = useState('');
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
+  var [minMaxConvertido, setMinMaxConvertido] = useState({});
 
   useEffect(function(){
     cargarPendientes();
@@ -230,6 +264,9 @@ export default function AjustePedidos() {
     getAllDatos()
       .then(function(datos){
         var provMeta = datos && datos.proveedores;
+        if (datos && datos.minMaxConvertidoMap) {
+          setMinMaxConvertido(datos.minMaxConvertidoMap);
+        }
         if (provMeta && provMeta.length > 0) {
           setProveedoresMeta(provMeta.map(function(p, idx){
             return {
@@ -483,6 +520,7 @@ export default function AjustePedidos() {
                       guardarCambios={guardarCambios}
                       cancelarEdicion={cancelarEdicion}
                       proveedoresMeta={proveedoresMeta}
+                      minMaxConvertido={minMaxConvertido}
                       onPDFError={function(msg){ setErr(msg); }}
                     />
                   )}
