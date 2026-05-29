@@ -223,10 +223,11 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
     const datos = await fetchAllDatos();
     const artPorHoja = datos.articulosPorProveedor || {};
     // Preferir minMaxConvertidoMap (ya tiene conversion aplicada por el servidor)
-    // Si no esta disponible, caer en minMaxMap sin conversion
+    // Si no esta disponible, aplicar conversion cliente con unidadMedidaMap
     const minMaxConvertidoMap = datos.minMaxConvertidoMap || null;
     const minMaxMap = datos.minMaxMap || {};
-    
+    const unidadMedidaMap = datos.unidadMedidaMap || {};
+
     const productos: any[] = [];
     const seen = new Set<string>();
     const sedeUpper = (sede || '').trim().toUpperCase();
@@ -243,19 +244,33 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
 
         // Busqueda EXACTA "SEDE|ARTICULO" - sin fallback a otras sedes
         const exactKey = sedeUpper ? (sedeUpper + '|' + art.toUpperCase()) : '';
-        
+
         let minimo = '';
         let maximo = '';
-        
+
         if (exactKey) {
           if (minMaxConvertidoMap && minMaxConvertidoMap[exactKey]) {
             // Usar valores ya convertidos por el servidor
             minimo = String(minMaxConvertidoMap[exactKey].minimo || '');
             maximo = String(minMaxConvertidoMap[exactKey].maximo || '');
           } else if (minMaxMap[exactKey]) {
-            // Fallback: usar valores sin convertir (en unidades de inventario)
-            minimo = String(minMaxMap[exactKey].minimo || '');
-            maximo = String(minMaxMap[exactKey].maximo || '');
+            // Fallback: aplicar conversion de unidades usando unidadMedidaMap
+            const unidad = (row.unidad || '').trim().toUpperCase();
+            const factor = unidadMedidaMap[unidad] && unidadMedidaMap[unidad] !== 1
+              ? unidadMedidaMap[unidad]
+              : null;
+            const rawMin = parseFloat(String(minMaxMap[exactKey].minimo || '')) || 0;
+            const rawMax = parseFloat(String(minMaxMap[exactKey].maximo || '')) || 0;
+            if (factor && rawMin > 0) {
+              minimo = String(Math.round((rawMin / factor) * 100) / 100);
+            } else if (rawMin > 0) {
+              minimo = String(rawMin);
+            }
+            if (factor && rawMax > 0) {
+              maximo = String(Math.round((rawMax / factor) * 100) / 100);
+            } else if (rawMax > 0) {
+              maximo = String(rawMax);
+            }
           }
         }
 
