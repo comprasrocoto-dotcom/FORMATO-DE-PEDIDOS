@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
- * Utility para generacion unificada de PDFs de Pedidos v9
- * - Columnas: Articulo, Unidad, Cantidad, Min., Max., Obs.
+  * Utility para generacion unificada de PDFs de Pedidos v10
+  * - Columnas: Articulo, Unidad, Cantidad, Obs.
  * - Se elimino columna Total (no aplica en pedidos de compra)
  */
 
@@ -101,13 +101,13 @@ export async function generarPDF(params) {
   doc.setDrawColor(200, 210, 230); doc.line(margen, y - 2, ancho - margen, y - 2);
 
   // Tabla de productos
-  // Columnas: Articulo(65) | Unidad(22) | Cant.(20) | Min.(18) | Max.(18) | Obs.(19) = 162
-  const cW = [65, 22, 20, 18, 18, 19];
+  // Columnas: Articulo(65) | Unidad(22) | Cant.(20) | Obs.(55) = 162
+const cW = [65, 22, 20, 55];
   const cX = [margen];
   for (let ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
   const rH = 7;
-  const headers = ['Articulo', 'Unidad', 'Cant.', 'Min.', 'Max.', 'Obs.'];
-  const aligns  = ['left', 'center', 'center', 'center', 'center', 'left'];
+  const headers = ['Articulo', 'Unidad', 'Cant.', 'Obs.'];
+  const aligns  = ['left', 'center', 'center', 'left'];
 
   doc.setFillColor(...azul); doc.rect(margen, y, ancho - 2 * margen, rH, 'F');
   doc.setTextColor(...blanco); doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
@@ -125,16 +125,12 @@ export async function generarPDF(params) {
     if (l) {
       const cant = parseFloat(String(l.cantidad || '0').replace(/,/g, '')) || 0;
       const cantStr = cant > 0 ? cant.toLocaleString('es-CO', { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : '---';
-      const minimoStr = (l.minimo !== undefined && l.minimo !== null && String(l.minimo).trim() !== '') ? String(l.minimo) : '---';
-      const maximoStr = (l.maximo !== undefined && l.maximo !== null && String(l.maximo).trim() !== '') ? String(l.maximo) : '---';
       const obsStr = String(l.observaciones || l.obs || '').substring(0, 18);
 
       const vals = [
         String(l.articulo || '').substring(0, 36),
         String(l.unidad || '---').substring(0, 10),
         cantStr,
-        minimoStr,
-        maximoStr,
         obsStr
       ];
       doc.setTextColor(...negro); doc.setFontSize(7.5);
