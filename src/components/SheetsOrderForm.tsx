@@ -36,6 +36,15 @@ function generarCSV(pedido) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
+// Semáforo para HistorialPedidos
+function getSemaforoHP(p) {
+  var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
+  var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
+  if (hasFact && hasNPS) return '🟢';
+  if (hasFact || hasNPS) return '🟡';
+  return '🔴';
+}
+
 // âââ HistorialPedidos âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
 function HistorialPedidos({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
@@ -175,7 +184,10 @@ function HistorialPedidos({ proveedoresMeta }) {
     var pasaArt = !articuloBusq || p.articulos.some(function(a) {
       return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
     });
-    return pasaSede && pasaArt;
+    var sem = getSemaforoHP(p);
+    var pasaEstado = filtroEstadoDoc === 'todos' || (filtroEstadoDoc === 'pendientes' && (sem === '🔴' || sem === '🟡')) || (filtroEstadoDoc === 'completados' && sem === '🟢');
+    return pasaSede && pasaArt && pasaEstado;
+  });
   });
 
   return (
@@ -208,6 +220,11 @@ function HistorialPedidos({ proveedoresMeta }) {
           </div>
         </div>
         {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500 mt-1">{pedidosFiltrados.length} resultado(s)</div>}
+        <div className="flex gap-2 mt-2">
+          <button onClick={function(){ setFiltroEstadoDoc('todos'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='todos'?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>Todos</button>
+          <button onClick={function(){ setFiltroEstadoDoc('pendientes'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='pendientes'?'bg-red-600 text-white border-red-600':'bg-white text-slate-600 border-slate-200 hover:border-red-400')}>🔴 Pendientes</button>
+          <button onClick={function(){ setFiltroEstadoDoc('completados'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='completados'?'bg-green-600 text-white border-green-600':'bg-white text-slate-600 border-slate-200 hover:border-green-400')}>🟢 Completados</button>
+        </div>
       </div>
 
       {/* Buscador por ID de pedido */}
@@ -297,6 +314,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span>
+                      <span className="text-base leading-none" title={getSemaforoHP(p)}>{getSemaforoHP(p)}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
                 </button>
