@@ -1,10 +1,10 @@
 // @ts-nocheck
 /**
  * SheetsOrderForm.tsx v18 - Edicion HistorialDocumentado + Semaforos + Filtros
- * - Agrega campo "NÃºmero de Pedido (Sistema)" en Historial de Pedidos
- * - Pedidos con ese campo lleno se mueven automÃ¡ticamente a Historial Documentado
- * - Historial de Pedidos solo muestra pedidos SIN nÃºmero de pedido sistema
- * - Nuevo mÃ³dulo HistorialDocumentado exportado para uso en App.tsx
+ * - Agrega campo "NÃÂºmero de Pedido (Sistema)" en Historial de Pedidos
+ * - Pedidos con ese campo lleno se mueven automÃÂ¡ticamente a Historial Documentado
+ * - Historial de Pedidos solo muestra pedidos SIN nÃÂºmero de pedido sistema
+ * - Nuevo mÃÂ³dulo HistorialDocumentado exportado para uso en App.tsx
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
@@ -36,16 +36,16 @@ function generarCSV(pedido) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
-// Semáforo para HistorialPedidos
+// SemÃ¡foro para HistorialPedidos
 function getSemaforoHP(p) {
   var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
   var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasNPS) return '🟢';
-  if (hasFact || hasNPS) return '🟡';
-  return '🔴';
+  if (hasFact && hasNPS) return 'ð¢';
+  if (hasFact || hasNPS) return 'ð¡';
+  return 'ð´';
 }
 
-// âââ HistorialPedidos âââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ HistorialPedidos Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 function HistorialPedidos({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
   var [articuloBusq, setArticuloBusq] = useState('');
@@ -67,6 +67,9 @@ function HistorialPedidos({ proveedoresMeta }) {
   var [editandoNPS, setEditandoNPS] = useState(null);
   var [npsData, setNpsData] = useState({});
   var [guardandoNPS, setGuardandoNPS] = useState(false);
+  var [busqHP, setBusqHP] = useState('');
+  var [fechaDesdeHP, setFechaDesdeHP] = useState('');
+  var [fechaHastaHP, setFechaHastaHP] = useState('');
 
   useEffect(function() { cargarHistorial(); }, []);
 
@@ -122,7 +125,7 @@ function HistorialPedidos({ proveedoresMeta }) {
       var lista = Object.values(mapa).reverse();
       var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
-      // Solo pedidos SIN nÃºmero de pedido sistema asignado
+      // Solo pedidos SIN nÃÂºmero de pedido sistema asignado
       setPedidos(lista.filter(function(p) { return !p.numeroPedidoSistema || p.numeroPedidoSistema.trim() === '' || p.numeroPedidoSistema === '---'; }));
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
@@ -140,7 +143,7 @@ function HistorialPedidos({ proveedoresMeta }) {
 
   async function guardarNumeroPedidoSistema(nOrden) {
     var nps = (npsData[nOrden] || '').trim();
-    if (!nps) { alert('Ingresa el NÃºmero de Pedido (Sistema) para continuar.'); return; }
+    if (!nps) { alert('Ingresa el NÃÂºmero de Pedido (Sistema) para continuar.'); return; }
     setGuardandoNPS(true);
     try {
       var result = await actualizarNumeroPedidoSistema({ nOrden, numeroPedidoSistema: nps });
@@ -162,13 +165,18 @@ function HistorialPedidos({ proveedoresMeta }) {
 
   var pedidosFiltrados = pedidos.filter(function(p) {
     var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
-    var pasaArt = !articuloBusq || p.articulos.some(function(a) {
-      return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
-    });
+    var q = busqHP.trim().toLowerCase();
+    var pasaBusq = !q || (
+      (p.proveedor||'').toLowerCase().includes(q) ||
+      p.articulos.some(function(a){ return (a.articulo||'').toLowerCase().includes(q)||(a.codigo||'').toLowerCase().includes(q); }) ||
+      (p.nroFactura||'').toLowerCase().includes(q) ||
+      (p.numeroPedidoSistema||'').toLowerCase().includes(q)
+    );
+    var pasaFecha = (!fechaDesdeHP || p.fecha >= fechaDesdeHP) && (!fechaHastaHP || p.fecha <= fechaHastaHP);
     var sem = getSemaforoHP(p);
     var pasaEstado = filtroEstadoDoc === 'todos' || (filtroEstadoDoc === 'pendientes' && (sem === '🔴' || sem === '🟡')) || (filtroEstadoDoc === 'completados' && sem === '🟢');
-    return pasaSede && pasaArt && pasaEstado;
-  });
+    return pasaSede && pasaBusq && pasaFecha && pasaEstado;
+  });;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -186,7 +194,7 @@ function HistorialPedidos({ proveedoresMeta }) {
         </button>
       </div>
       <div className="p-4 border-b border-slate-100">
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
           <select value={sedeFiltro} onChange={function(e){setSedeFiltro(e.target.value);}}
             className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500">
             <option value="">Todas las sedes</option>
@@ -194,77 +202,33 @@ function HistorialPedidos({ proveedoresMeta }) {
           </select>
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
-            <input type="text" value={articuloBusq} onChange={function(e){setArticuloBusq(e.target.value);}}
-              placeholder="Buscar por articulo o codigo..."
+            <input type="text" value={busqHP} onChange={function(e){setBusqHP(e.target.value);}}
+              placeholder="Buscar por proveedor, artículo, factura o N° sistema..."
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
           </div>
         </div>
-        {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500 mt-1">{pedidosFiltrados.length} resultado(s)</div>}
-        <div className="flex gap-2 mt-2">
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
+          <div className="flex items-center gap-2 flex-1">
+            <label className="text-xs text-slate-500 whitespace-nowrap">Desde:</label>
+            <input type="date" value={fechaDesdeHP} onChange={function(e){setFechaDesdeHP(e.target.value);}}
+              className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+          </div>
+          <div className="flex items-center gap-2 flex-1">
+            <label className="text-xs text-slate-500 whitespace-nowrap">Hasta:</label>
+            <input type="date" value={fechaHastaHP} onChange={function(e){setFechaHastaHP(e.target.value);}}
+              className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"/>
+          </div>
+          {(fechaDesdeHP || fechaHastaHP) && <button onClick={function(){ setFechaDesdeHP(''); setFechaHastaHP(''); }} className="px-3 py-1.5 text-xs text-slate-500 hover:text-red-500 border border-slate-200 rounded-xl bg-white">✕ Limpiar</button>}
+        </div>
+        <div className="flex gap-2">
           <button onClick={function(){ setFiltroEstadoDoc('todos'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='todos'?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>Todos</button>
           <button onClick={function(){ setFiltroEstadoDoc('pendientes'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='pendientes'?'bg-red-600 text-white border-red-600':'bg-white text-slate-600 border-slate-200 hover:border-red-400')}>🔴 Pendientes</button>
           <button onClick={function(){ setFiltroEstadoDoc('completados'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='completados'?'bg-green-600 text-white border-green-600':'bg-white text-slate-600 border-slate-200 hover:border-green-400')}>🟢 Completados</button>
+          {(sedeFiltro || busqHP || fechaDesdeHP || fechaHastaHP || filtroEstadoDoc !== 'todos') && <span className="ml-auto text-xs text-slate-500 self-center">{pedidosFiltrados.length} resultado(s)</span>}
         </div>
       </div>
 
-      {/* Buscador por ID de pedido */}
-      <div className="p-4 border-b border-slate-100">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
-          <input
-            type="text"
-            value={idBusq}
-            onChange={function(e){ setIdBusq(e.target.value); }}
-            onKeyDown={function(e){ if(e.key==='Enter'){ var v=e.target.value.trim(); setIdBusq(v); } }}
-            placeholder="Buscar pedido por ID (columna A del Drive)..."
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-blue-500"
-          />
-        </div>
-        {idBuscando && <div className="text-xs text-slate-400 mt-2 flex items-center gap-1"><RefreshCw className="w-3 h-3 animate-spin"/> Buscando en Drive...</div>}
-        {idErr && <div className="text-xs text-red-600 mt-2">{idErr}</div>}
-        {idResultado !== null && !idBuscando && (
-          <div className="mt-3">
-            {idResultado.length === 0 ? (
-              <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl p-3 text-amber-700 text-sm">
-                <AlertCircle className="w-4 h-4 flex-shrink-0"/>
-                No existe ningun pedido con este ID en la base del Drive.
-              </div>
-            ) : (
-              <div className="rounded-xl overflow-hidden border border-slate-200">
-                <table className="w-full text-xs">
-                  <thead><tr style={{background:'#1a3c6e'}}>
-                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Fecha</th>
-                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Sede</th>
-                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Proveedor</th>
-                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Cod. Barras</th>
-                    <th className="py-2 px-3 text-left text-white font-bold uppercase">Insumo / Articulo</th>
-                    <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
-                    <th className="py-2 px-3 text-center text-white font-bold uppercase w-16">Cant.</th>
-                  </tr></thead>
-                  <tbody>
-                    {idResultado.map(function(r, i) {
-                      var fecha = String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---');
-                      return (
-                        <tr key={i} className={'border-b border-slate-100 ' + (i%2===0?'bg-white':'bg-slate-50')}>
-                          <td className="py-1.5 px-3 text-slate-600">{fecha}</td>
-                          <td className="py-1.5 px-3 text-slate-600">{String(r[2]||'---')}</td>
-                          <td className="py-1.5 px-3 font-medium text-slate-800">{String(r[3]||'---')}</td>
-                          <td className="py-1.5 px-3 font-mono text-slate-500">{String(r[4]||'---')}</td>
-                          <td className="py-1.5 px-3 font-medium text-slate-800">{String(r[5]||'---')}</td>
-                          <td className="py-1.5 px-3 text-center text-slate-500">{String(r[6]||'---')}</td>
-                          <td className="py-1.5 px-3 text-center font-bold text-blue-800">{String(r[7]||'---')}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
+            {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
       {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial...</div>}
       {!cargando && pedidos.length === 0 && !err && <div className="p-8 text-center text-slate-400 text-sm">No hay pedidos pendientes. Todos los pedidos han sido documentados.</div>}
       {!cargando && pedidosFiltrados.length > 0 && (
@@ -286,7 +250,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
-                      <div className="text-xs text-slate-500">{p.sede} Â· {p.fecha} Â· {p.articulos.length} art.
+                      <div className="text-xs text-slate-500">{p.sede} ÃÂ· {p.fecha} ÃÂ· {p.articulos.length} art.
                         {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
                         {p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
                       </div>
@@ -397,13 +361,13 @@ function HistorialPedidos({ proveedoresMeta }) {
                       )}
                     </div>
 
-                    {/* NÃºmero de Pedido Sistema - NUEVO CAMPO */}
+                    {/* NÃÂºmero de Pedido Sistema - NUEVO CAMPO */}
                     <div className="rounded-xl border-2 border-amber-200 bg-amber-50 p-3">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Archive className="w-4 h-4 text-amber-600"/>
-                          <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">NÃºmero de Pedido (Sistema)</span>
-                          <span className="text-[10px] text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">Al asignar, pasa a Historial Documentado</span>
+                          <span className="text-xs font-bold text-amber-800 uppercase tracking-wider">NÃÂºmero de Pedido (Sistema)</span>
+                          <span className="text-[10px] text-amber-600 bg-amber-100 px-2 py-0.5 rounded-full border border-amber-300">Al asignar, pasa a Histórico de Pedidos</span>
                         </div>
                         {!isEditNPS && !p.numeroPedidoSistema && (
                           <button onClick={function(){
@@ -417,13 +381,13 @@ function HistorialPedidos({ proveedoresMeta }) {
                       {!isEditNPS ? (
                         <div className="text-xs text-amber-700">
                           {p.numeroPedidoSistema && p.numeroPedidoSistema !== '---'
-                            ? <span className="font-bold text-green-700">â {p.numeroPedidoSistema}</span>
-                            : <span className="text-amber-600 italic">Sin asignar â Este pedido aÃºn no ha sido documentado</span>}
+                            ? <span className="font-bold text-green-700">Ã¢ÂÂ {p.numeroPedidoSistema}</span>
+                            : <span className="text-amber-600 italic">Sin asignar Ã¢ÂÂ Este pedido aÃÂºn no ha sido documentado</span>}
                         </div>
                       ) : (
                         <div className="space-y-2">
                           <div>
-                            <label className="text-[10px] font-bold text-amber-700 uppercase block mb-1">NÃºmero de Pedido en el Sistema *</label>
+                            <label className="text-[10px] font-bold text-amber-700 uppercase block mb-1">NÃÂºmero de Pedido en el Sistema *</label>
                             <input type="text" value={npsData[p.nOrden]||''} onChange={function(e){ setNpsData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=e.target.value; return n; }); }}
                               className="w-full px-2 py-1.5 bg-white border-2 border-amber-300 rounded-lg text-xs focus:outline-none focus:border-amber-500 font-mono"
                               placeholder="Ej: PED-2024-001, ORD-123, etc."
@@ -456,14 +420,14 @@ function HistorialPedidos({ proveedoresMeta }) {
   );
 }
 
-// âââ HistorialDocumentado âââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ HistorialDocumentado Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 // Semaforo para HistorialDocumentado
 function getSemaforoHD(p) {
   var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
   var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasNPS) return '🟢';
-  if (hasFact || hasNPS) return '🟡';
-  return '🔴';
+  if (hasFact && hasNPS) return 'ð¢';
+  if (hasFact || hasNPS) return 'ð¡';
+  return 'ð´';
 }
 
 export function HistorialDocumentado({ proveedoresMeta }) {
@@ -478,6 +442,9 @@ export function HistorialDocumentado({ proveedoresMeta }) {
   var [editDataDoc, setEditDataDoc] = useState({});
   var [guardandoDoc, setGuardandoDoc] = useState(false);
   var [filtroEstadoDoc, setFiltroEstadoDoc] = useState('todos');
+  var [busqHD, setBusqHD] = useState('');
+  var [fechaDesdeHD, setFechaDesdeHD] = useState('');
+  var [fechaHastaHD, setFechaHastaHD] = useState('');
 
   useEffect(function() { cargarDocumentados(); }, []);
 
@@ -513,7 +480,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         }
       });
       var lista = Object.values(mapa).reverse();
-      // Solo pedidos CON nÃºmero de pedido sistema asignado
+      // Solo pedidos CON nÃÂºmero de pedido sistema asignado
       var documentados = lista.filter(function(p) { return p.numeroPedidoSistema && p.numeroPedidoSistema.trim() !== '' && p.numeroPedidoSistema !== '---'; });
       var sds = [...new Set(documentados.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
@@ -531,7 +498,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
       if (!r.ok) { alert('Error guardando factura: ' + (r.error||'')); return; }
       if (d.numeroPedidoSistema !== undefined) {
         var r2 = await actualizarNumeroPedidoSistema({ nOrden: nOrden, numeroPedidoSistema: d.numeroPedidoSistema });
-        if (!r2.ok) { alert('Error guardando N° Documento: ' + (r2.error||'')); return; }
+        if (!r2.ok) { alert('Error guardando NÂ° Documento: ' + (r2.error||'')); return; }
       }
       setEditandoDoc(null);
       invalidarCache();
@@ -549,12 +516,18 @@ export function HistorialDocumentado({ proveedoresMeta }) {
 
   var pedidosFiltrados = pedidos.filter(function(p) {
     var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
-    var pasaArt = !articuloBusq || p.articulos.some(function(a) {
-      return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase()) || (a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase());
-    });
-    var pasaEstado = filtroEstadoDoc === 'todos' || getSemaforoHD(p) === (filtroEstadoDoc === 'pendientes' ? '🔴' : '🟢');
-    return pasaSede && pasaArt && pasaEstado;
-  });
+    var q = busqHD.trim().toLowerCase();
+    var pasaBusq = !q || (
+      (p.proveedor||'').toLowerCase().includes(q) ||
+      p.articulos.some(function(a){ return (a.articulo||'').toLowerCase().includes(q)||(a.codigo||'').toLowerCase().includes(q); }) ||
+      (p.nroFactura||'').toLowerCase().includes(q) ||
+      (p.numeroPedidoSistema||'').toLowerCase().includes(q)
+    );
+    var pasaFecha = (!fechaDesdeHD || p.fecha >= fechaDesdeHD) && (!fechaHastaHD || p.fecha <= fechaHastaHD);
+    var sem = getSemaforoHD(p);
+    var pasaEstado = filtroEstadoDoc === 'todos' || (filtroEstadoDoc === 'pendientes' && (sem === '🔴' || sem === '🟡')) || (filtroEstadoDoc === 'completados' && sem === '🟢');
+    return pasaSede && pasaBusq && pasaFecha && pasaEstado;
+  });;
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -562,8 +535,8 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         <div className="flex items-center gap-3">
           <Archive className="w-5 h-5 text-green-300"/>
           <div>
-            <div className="text-white font-bold text-sm">Historial Documentado</div>
-            <div className="text-green-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' pedidos con nÃºmero de sistema asignado'}</div>
+            <div className="text-white font-bold text-sm">Histórico de Pedidos</div>
+            <div className="text-green-300 text-xs">{cargando ? 'Cargando...' : pedidos.length + ' pedidos con nÃÂºmero de sistema asignado'}</div>
           </div>
         </div>
         <button onClick={cargarDocumentados} disabled={cargando}
@@ -572,7 +545,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         </button>
       </div>
       <div className="p-4 border-b border-slate-100">
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
           <select value={sedeFiltro} onChange={function(e){setSedeFiltro(e.target.value);}}
             className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500">
             <option value="">Todas las sedes</option>
@@ -580,20 +553,38 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           </select>
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none"/>
-            <input type="text" value={articuloBusq} onChange={function(e){setArticuloBusq(e.target.value);}}
-              placeholder="Buscar por articulo, codigo o N. pedido sistema..."
+            <input type="text" value={busqHD} onChange={function(e){setBusqHD(e.target.value);}}
+              placeholder="Buscar por proveedor, artículo, factura o N° sistema..."
               className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500"/>
           </div>
         </div>
-        {(sedeFiltro || articuloBusq) && <div className="text-xs text-slate-500 mt-1">{pedidosFiltrados.length} resultado(s)</div>}
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
+          <div className="flex items-center gap-2 flex-1">
+            <label className="text-xs text-slate-500 whitespace-nowrap">Desde:</label>
+            <input type="date" value={fechaDesdeHD} onChange={function(e){setFechaDesdeHD(e.target.value);}}
+              className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500"/>
+          </div>
+          <div className="flex items-center gap-2 flex-1">
+            <label className="text-xs text-slate-500 whitespace-nowrap">Hasta:</label>
+            <input type="date" value={fechaHastaHD} onChange={function(e){setFechaHastaHD(e.target.value);}}
+              className="flex-1 py-2 px-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:border-green-500"/>
+          </div>
+          {(fechaDesdeHD || fechaHastaHD) && <button onClick={function(){ setFechaDesdeHD(''); setFechaHastaHD(''); }} className="px-3 py-1.5 text-xs text-slate-500 hover:text-red-500 border border-slate-200 rounded-xl bg-white">✕ Limpiar</button>}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={function(){ setFiltroEstadoDoc('todos'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='todos'?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>Todos</button>
+          <button onClick={function(){ setFiltroEstadoDoc('pendientes'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='pendientes'?'bg-red-600 text-white border-red-600':'bg-white text-slate-600 border-slate-200 hover:border-red-400')}>🔴 Pendientes</button>
+          <button onClick={function(){ setFiltroEstadoDoc('completados'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='completados'?'bg-green-600 text-white border-green-600':'bg-white text-slate-600 border-slate-200 hover:border-green-400')}>🟢 Completados</button>
+          {(sedeFiltro || busqHD || fechaDesdeHD || fechaHastaHD || filtroEstadoDoc !== 'todos') && <span className="ml-auto text-xs text-slate-500 self-center">{pedidosFiltrados.length} resultado(s)</span>}
+        </div>
       </div>
 
-      {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
-      {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial documentado...</div>}
+            {err && <div className="p-4"><div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl p-3 text-red-700 text-sm"><AlertCircle className="w-4 h-4 flex-shrink-0"/>{err}</div></div>}
+      {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando histórico de pedidos...</div>}
       {!cargando && pedidos.length === 0 && !err && (
         <div className="p-8 text-center text-slate-400 text-sm">
           <Archive className="w-8 h-8 mx-auto mb-2 text-slate-300"/>
-          No hay pedidos documentados aun. Asigna un NÃºmero de Pedido (Sistema) en el Historial de Pedidos para que aparezcan aquÃ­.
+          No hay pedidos documentados aun. Asigna un NÃÂºmero de Pedido (Sistema) en el Historial de Pedidos para que aparezcan aquÃÂ­.
         </div>
       )}
       {!cargando && pedidosFiltrados.length > 0 && (
@@ -602,7 +593,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           {['todos','pendientes','completados'].map(function(f) {
             return (<button key={f} onClick={function(){ setFiltroEstadoDoc(f); }}
               className={"px-3 py-1 rounded-full text-xs font-semibold border transition " + (filtroEstadoDoc===f ? 'bg-green-700 text-white border-green-700' : 'bg-white text-slate-600 border-slate-300 hover:bg-slate-100')}>
-              {f==='todos'?'Todos':f==='pendientes'?'🔴 Pendientes':'🟢 Completados'}
+              {f==='todos'?'Todos':f==='pendientes'?'ð´ Pendientes':'ð¢ Completados'}
             </button>);
           })}
         </div>
@@ -620,25 +611,25 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                     </div>
                     <div className="min-w-0">
                       <div className="text-sm font-bold text-slate-800 truncate">{p.proveedor}</div>
-                      <div className="text-xs text-slate-500">{p.sede} Â· {p.fecha} Â· {p.articulos.length} art.
+                      <div className="text-xs text-slate-500">{p.sede} ÃÂ· {p.fecha} ÃÂ· {p.articulos.length} art.
                         {p.medioPago && <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold "+(p.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{p.medioPago}</span>}
                         {p.nroFactura && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-100 text-blue-700">Fact: {p.nroFactura}</span>}
-                        {p.numeroPedidoSistema && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800 border border-green-300">ð {p.numeroPedidoSistema}</span>}
+                        {p.numeroPedidoSistema && <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-green-100 text-green-800 border border-green-300">Ã°ÂÂÂ {p.numeroPedidoSistema}</span>}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span> <span title="Estado: 🟢 Completo | 🟡 Parcial | 🔴 Pendiente" className="ml-1 text-base leading-none">{getSemaforoHD(p)}</span>
+                    <span className="text-xs text-slate-400 font-mono hidden sm:block">#{p.nOrden}</span> <span title="Estado: ð¢ Completo | ð¡ Parcial | ð´ Pendiente" className="ml-1 text-base leading-none">{getSemaforoHD(p)}</span>
                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#0f6b3a" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                   </div>
                 </button>
                 {isOpen && (
                   <div className="px-4 pb-4 bg-slate-50/50">
-                    {/* NÃºmero de Pedido Sistema - Destacado */}
+                    {/* NÃÂºmero de Pedido Sistema - Destacado */}
                     <div className="rounded-xl border-2 border-green-300 bg-green-50 p-3 mb-3">
                       <div className="flex items-center gap-2 mb-1">
                         <Archive className="w-4 h-4 text-green-700"/>
-                        <span className="text-xs font-bold text-green-800 uppercase tracking-wider">NÃºmero de Pedido (Sistema)</span>
+                        <span className="text-xs font-bold text-green-800 uppercase tracking-wider">NÃÂºmero de Pedido (Sistema)</span>
                       </div>
                       <div className="text-lg font-bold text-green-800 font-mono">{p.numeroPedidoSistema}</div>
                     </div>
@@ -698,9 +689,9 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                     </div>
               {editandoDoc === p.nOrden && (
                 <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
-                  <div className="font-semibold text-xs text-indigo-700 uppercase tracking-wider mb-2">✏️ Editar Pedido #{p.nOrden}</div>
+                  <div className="font-semibold text-xs text-indigo-700 uppercase tracking-wider mb-2">âï¸ Editar Pedido #{p.nOrden}</div>
                    <div className="grid grid-cols-2 gap-2">
-                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Factura</label>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">NÂ° Factura</label>
                        <input type="text" value={editDataDoc[p.nOrden]?.nroFactura!==undefined?editDataDoc[p.nOrden].nroFactura:p.nroFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{nroFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: F-001"/>
                      </div>
                      <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Tipo Factura</label>
@@ -708,7 +699,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                          <option value="contado">Contado</option><option value="credito">Credito</option><option value="consignacion">Consignacion</option>
                        </select>
                      </div>
-                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Doc. Ingreso</label>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">NÂ° Doc. Ingreso</label>
                        <input type="text" value={editDataDoc[p.nOrden]?.numeroPedidoSistema!==undefined?editDataDoc[p.nOrden].numeroPedidoSistema:p.numeroPedidoSistema||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{numeroPedidoSistema:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: 2024-001"/>
                      </div>
                      <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Obs. Factura</label>
@@ -767,7 +758,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
   );
 }
 
-// âââ SheetsOrderForm ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂ SheetsOrderForm Ã¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂÃ¢ÂÂ
 export default function SheetsOrderForm() {
   var [proveedoresNombres, setProveedoresNombres] = useState([]);
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
@@ -850,7 +841,7 @@ export default function SheetsOrderForm() {
     return function() { cancelled = true; };
   }, [selectedProveedor]);
 
-  // FunciÃ³n auxiliar para convertir el texto "1,250.005" al nÃºmero real 1250.005
+  // FunciÃÂ³n auxiliar para convertir el texto "1,250.005" al nÃÂºmero real 1250.005
   function parsearTextoANumero(val) {
   if (val === undefined || val === null || val === '') return 0;
   // Eliminamos las comas de miles para que parseFloat entienda el string
@@ -860,17 +851,17 @@ export default function SheetsOrderForm() {
   }
 
   function handleCantidad(codigo, val) {
-    // 1. Permite solo nÃºmeros, puntos y comas iniciales
+    // 1. Permite solo nÃÂºmeros, puntos y comas iniciales
     var strVal = String(val).replace(/[^0-9.,]/g, '');
 
-    // 2. Asegurar que haya mÃ¡ximo UN solo punto decimal
+    // 2. Asegurar que haya mÃÂ¡ximo UN solo punto decimal
     var partes = strVal.split('.');
     if (partes.length > 2) {
-      // Si escriben "0.01.01", conservamos el primer punto y unimos el resto de nÃºmeros sin puntos
+      // Si escriben "0.01.01", conservamos el primer punto y unimos el resto de nÃÂºmeros sin puntos
       strVal = partes[0] + '.' + partes.slice(1).join('').replace(/\./g, '');
     }
 
-    // 3. Asegurar que NO existan comas de miles despuÃ©s del punto decimal
+    // 3. Asegurar que NO existan comas de miles despuÃÂ©s del punto decimal
     if (strVal.includes('.')) {
       var partesPunto = strVal.split('.');
       // Limpiamos cualquier coma que el usuario intente poner en los decimales
@@ -1098,7 +1089,7 @@ export default function SheetsOrderForm() {
                   {productosFiltrados.map(function(p,idx){
                   // Conservamos el texto tal cual lo escribe el usuario (ej: "1,200.")
                   var textoCantidad = cantidades[p.codigo] !== undefined ? cantidades[p.codigo] : '';
-                  // Convertimos temporalmente a nÃºmero matemÃ¡tico sÃ³lo para aplicar los estilos de fila activa (verde)
+                  // Convertimos temporalmente a nÃÂºmero matemÃÂ¡tico sÃÂ³lo para aplicar los estilos de fila activa (verde)
                   var qtyParsed = parsearTextoANumero(textoCantidad);
               
                   return(
@@ -1108,17 +1099,17 @@ export default function SheetsOrderForm() {
                         <td className="py-3 px-4 text-center text-slate-500 text-xs hidden md:table-cell">{p.unidad||'---'}</td>
                         <td className="py-3 px-4">
                           <div className="flex items-center gap-1.5 justify-center">
-                            {/* El botÃ³n "-" resta 1 al valor numÃ©rico parseado y lo devuelve como string */}
+                            {/* El botÃÂ³n "-" resta 1 al valor numÃÂ©rico parseado y lo devuelve como string */}
                             <button type="button" onClick={function(){handleCantidad(p.codigo, String(Math.max(0, qtyParsed - 1)));}} className="w-7 h-7 rounded-lg bg-slate-200 hover:bg-slate-300 font-bold flex items-center justify-center text-slate-600 text-base">-</button>
                             <input 
                             type="text" 
-                            inputMode="decimal" // Fuerza la apariciÃ³n del teclado numÃ©rico con punto/coma en dispositivos mÃ³viles
+                            inputMode="decimal" // Fuerza la apariciÃÂ³n del teclado numÃÂ©rico con punto/coma en dispositivos mÃÂ³viles
                             value={textoCantidad} 
                             onChange={function(e){ handleCantidad(p.codigo, e.target.value); }} 
                             placeholder="0" 
                             className="w-20 text-center py-1.5 border border-slate-200 rounded-lg text-sm font-bold focus:outline-none focus:border-cyan-500" 
                             />
-                            {/* El botÃ³n "+" suma 1 al valor numÃ©rico parseado y lo devuelve como string */}
+                            {/* El botÃÂ³n "+" suma 1 al valor numÃÂ©rico parseado y lo devuelve como string */}
                             <button type="button" onClick={function(){handleCantidad(p.codigo, String(qtyParsed + 1));}} className="w-7 h-7 rounded-lg bg-cyan-500 hover:bg-cyan-600 font-bold text-white flex items-center justify-center text-base">+</button>
                             </div>
                         </td>
@@ -1158,14 +1149,6 @@ export default function SheetsOrderForm() {
           )}
         </div>
       )}
-
-      {/* 4. Medio de Pago */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4 flex items-center gap-2"><CheckCircle className="w-4 h-4 text-cyan-500"/> 4. Medio de Pago</h2>
-        <div className="flex gap-3">
-          {['contado','credito'].map(function(mp){return(<button key={mp} onClick={function(){setMedioPago(mp);}} className={"flex-1 py-3 rounded-xl border-2 text-sm font-bold transition-all "+(medioPago===mp?'border-cyan-500 bg-cyan-50 text-cyan-700':'border-slate-200 bg-slate-50 text-slate-500 hover:border-slate-300')}>{mp.charAt(0).toUpperCase()+mp.slice(1)}</button>);})}
-        </div>
-      </div>
 
       {/* 5. Observaciones y Registro */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
