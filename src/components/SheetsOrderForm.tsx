@@ -125,7 +125,11 @@ function HistorialPedidos({ proveedoresMeta }) {
     setGuardandoDoc(true);
     try {
       var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'' });
-      if (!r.ok) { alert('Error: ' + (r.error||''))); return; }
+      if (!r.ok) { alert('Error guardando factura: ' + (r.error||'')); return; }
+      if (d.numeroPedidoSistema !== undefined) {
+        var r2 = await actualizarNumeroPedidoSistema({ nOrden: nOrden, numeroPedidoSistema: d.numeroPedidoSistema });
+        if (!r2.ok) { alert('Error guardando N° Documento: ' + (r2.error||'')); return; }
+      }
       setEditandoDoc(null);
       invalidarCache();
       await cargarDocumentados();
@@ -675,16 +679,22 @@ export function HistorialDocumentado({ proveedoresMeta }) {
               {editandoDoc === p.nOrden && (
                 <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
                   <div className="font-semibold text-xs text-indigo-700 uppercase tracking-wider mb-2">✏️ Editar Pedido #{p.nOrden}</div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Factura</label>
-                      <input type="text" value={editDataDoc[p.nOrden]?.nroFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{nroFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: F-001"/>
-                    </div>
-                    <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Tipo Factura</label>
-                      <select value={editDataDoc[p.nOrden]?.tipoFactura||'contado'} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg">
-                        <option value="contado">Contado</option><option value="credito">Credito</option><option value="consignacion">Consignacion</option>
-                      </select>
-                    </div>
-                  </div>
+                   <div className="grid grid-cols-2 gap-2">
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Factura</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.nroFactura!==undefined?editDataDoc[p.nOrden].nroFactura:p.nroFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{nroFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: F-001"/>
+                     </div>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Tipo Factura</label>
+                       <select value={editDataDoc[p.nOrden]?.tipoFactura||p.tipoFactura||'contado'} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg">
+                         <option value="contado">Contado</option><option value="credito">Credito</option><option value="consignacion">Consignacion</option>
+                       </select>
+                     </div>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Doc. Ingreso</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.numeroPedidoSistema!==undefined?editDataDoc[p.nOrden].numeroPedidoSistema:p.numeroPedidoSistema||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{numeroPedidoSistema:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: 2024-001"/>
+                     </div>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Obs. Factura</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.obsFactura!==undefined?editDataDoc[p.nOrden].obsFactura:p.obsFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Observaciones"/>
+                     </div>
+                   </div>
                   <div className="flex gap-2 pt-1">
                     <button onClick={function(){ guardarEdicionDoc(p.nOrden); }} disabled={guardandoDoc} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{background:'#4f46e5',opacity:guardandoDoc?0.6:1}}>
                       <Save className="w-3 h-3 inline mr-1"/>{guardandoDoc?'Guardando...':"Guardar Cambios"}
