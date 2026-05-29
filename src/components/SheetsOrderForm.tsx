@@ -128,23 +128,6 @@ function HistorialPedidos({ proveedoresMeta }) {
     finally { setCargando(false); }
   }
 
-  async function guardarEdicionDoc(nOrden) {
-    var d = editDataDoc[nOrden] || {};
-    if (Object.keys(d).length === 0) { alert('No hay cambios que guardar.'); return; }
-    setGuardandoDoc(true);
-    try {
-      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'' });
-      if (!r.ok) { alert('Error guardando factura: ' + (r.error||'')); return; }
-      if (d.numeroPedidoSistema !== undefined) {
-        var r2 = await actualizarNumeroPedidoSistema({ nOrden: nOrden, numeroPedidoSistema: d.numeroPedidoSistema });
-        if (!r2.ok) { alert('Error guardando N° Documento: ' + (r2.error||'')); return; }
-      }
-      setEditandoDoc(null);
-      invalidarCache();
-      await cargarDocumentados();
-    } catch(e) { alert('Error: ' + e.message); }
-    finally { setGuardandoDoc(false); }
-  }
 
   async function guardarFactura(nOrden) {
     var fd = facturaData[nOrden] || {};
@@ -493,6 +476,10 @@ export function HistorialDocumentado({ proveedoresMeta }) {
   var [sedesDisp, setSedesDisp] = useState([]);
   var [err, setErr] = useState('');
   var [expandido, setExpandido] = useState(null);
+  var [editandoDoc, setEditandoDoc] = useState(null);
+  var [editDataDoc, setEditDataDoc] = useState({});
+  var [guardandoDoc, setGuardandoDoc] = useState(false);
+  var [filtroEstadoDoc, setFiltroEstadoDoc] = useState('todos');
 
   useEffect(function() { cargarDocumentados(); }, []);
 
@@ -535,6 +522,24 @@ export function HistorialDocumentado({ proveedoresMeta }) {
       setPedidos(documentados);
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
+  }
+
+  async function guardarEdicionDoc(nOrden) {
+    var d = editDataDoc[nOrden] || {};
+    if (Object.keys(d).length === 0) { alert('No hay cambios que guardar.'); return; }
+    setGuardandoDoc(true);
+    try {
+      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'' });
+      if (!r.ok) { alert('Error guardando factura: ' + (r.error||'')); return; }
+      if (d.numeroPedidoSistema !== undefined) {
+        var r2 = await actualizarNumeroPedidoSistema({ nOrden: nOrden, numeroPedidoSistema: d.numeroPedidoSistema });
+        if (!r2.ok) { alert('Error guardando N° Documento: ' + (r2.error||'')); return; }
+      }
+      setEditandoDoc(null);
+      invalidarCache();
+      await cargarDocumentados();
+    } catch(e) { alert('Error: ' + e.message); }
+    finally { setGuardandoDoc(false); }
   }
 
   function getProvMeta(nombre) {
