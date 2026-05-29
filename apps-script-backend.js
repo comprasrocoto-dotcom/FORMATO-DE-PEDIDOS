@@ -104,3 +104,39 @@ function actualizarNumeroPedidoSistema(payload) {
 //
 // Esto garantiza que r[16] (columna Q) siempre esté presente en los rows.
 // ============================================================
+
+
+// ============================================================
+// CAMBIO REQUERIDO v9: Agregar minMaxMap a la funcion getDatos()
+// ============================================================
+// En tu funcion getDatos() existente dentro del Apps Script,
+// AGREGA estas lineas ANTES del return final del objeto result:
+//
+//   // ── Leer hoja Maximos y Minimos ──────────────────────────
+//   var minMaxMap = {};
+//   var mmSheet = ss.getSheetByName('Maximos y Minimos');
+//   if (mmSheet) {
+//     var mmData = mmSheet.getDataRange().getValues();
+//     for (var r = 1; r < mmData.length; r++) {
+//       var cod = String(mmData[r][0] || '').trim();
+//       if (cod) {
+//         minMaxMap[cod] = {
+//           minimo: (mmData[r][5] !== '' && mmData[r][5] !== undefined) ? mmData[r][5] : '',
+//           maximo: (mmData[r][6] !== '' && mmData[r][6] !== undefined) ? mmData[r][6] : ''
+//         };
+//       }
+//     }
+//   }
+//   result.minMaxMap = minMaxMap;
+//   // ─────────────────────────────────────────────────────────
+//
+// ESTRUCTURA de la hoja "Maximos y Minimos":
+//   Col A (0) = Codigo del producto
+//   Col B..E  = (otros datos que ya existen)
+//   Col F (5) = Minimo sugerido  <-- ESTE ES EL DATO
+//   Col G (6) = Maximo sugerido  <-- ESTE ES EL DATO
+//
+// NOTA: La app lee datos.minMaxMap (retornado por getDatos).
+//       Si la hoja se llama diferente, ajusta el nombre arriba.
+// ============================================================
+
