@@ -194,6 +194,13 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
 }
 
 // ─── Componente principal ─────────────────────────────────────────────────────
+function getSemaforoAP(g) {
+  var tieneFactura = g.nroFactura && g.nroFactura.trim() !== '';
+  var tieneNPS = g.numeroPedidoSistema && g.numeroPedidoSistema.trim() !== '';
+  if (tieneFactura && tieneNPS) return '🟢';
+  return '🔴';
+}
+
 export default function AjustePedidos() {
   var [grupos, setGrupos] = useState([]);
   var [cargando, setCargando] = useState(false);
@@ -207,6 +214,7 @@ export default function AjustePedidos() {
   var [guardando, setGuardando] = useState(false);
   var [filtroSede, setFiltroSede] = useState('');
   var [filtroProveedor, setFiltroProveedor] = useState('');
+  var [filtroEstadoAP, setFiltroEstadoAP] = useState('todos');
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
 
   useEffect(function(){
@@ -261,6 +269,7 @@ export default function AjustePedidos() {
             nroFactura: String(r[13]||''),
             tipoFactura: String(r[14]||''),
             obsFactura: String(r[15]||''),
+            numeroPedidoSistema: String(r[16]||''),
             lineas: []
           };
         }
@@ -331,7 +340,11 @@ export default function AjustePedidos() {
   var sedesDisp = [...new Set(grupos.map(function(g){ return g.sede; }))].filter(Boolean).sort();
   var provDisp = [...new Set(grupos.map(function(g){ return g.proveedor; }))].filter(Boolean).sort();
   var gruposFiltrados = grupos.filter(function(g){
-    return (!filtroSede || g.sede === filtroSede) && (!filtroProveedor || g.proveedor === filtroProveedor);
+    var pasaSede = !filtroSede || g.sede === filtroSede;
+    var pasaProv = !filtroProveedor || g.proveedor === filtroProveedor;
+    var sem = getSemaforoAP(g);
+    var pasaEstado = filtroEstadoAP === 'todos' || (filtroEstadoAP === 'pendientes' && sem === '🔴') || (filtroEstadoAP === 'completados' && sem === '🟢');
+    return pasaSede && pasaProv && pasaEstado;
   });
 
   return (
@@ -365,6 +378,11 @@ export default function AjustePedidos() {
               <option value="">Todos los proveedores</option>
               {provDisp.map(function(p){ return <option key={p} value={p}>{p}</option>; })}
             </select>
+          </div>
+          <div className="flex gap-2 mt-2">
+            <button onClick={function(){ setFiltroEstadoAP('todos'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoAP==='todos'?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>Todos</button>
+            <button onClick={function(){ setFiltroEstadoAP('pendientes'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoAP==='pendientes'?'bg-red-600 text-white border-red-600':'bg-white text-slate-600 border-slate-200 hover:border-red-400')}>🔴 Pendientes</button>
+            <button onClick={function(){ setFiltroEstadoAP('completados'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoAP==='completados'?'bg-green-600 text-white border-green-600':'bg-white text-slate-600 border-slate-200 hover:border-green-400')}>🟢 Completados</button>
           </div>
         </div>
 
@@ -411,6 +429,7 @@ export default function AjustePedidos() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-xs text-slate-400 font-mono hidden sm:block">#{g.nOrden}</span>
+                      <span className="text-base leading-none" title={"Semáforo: " + getSemaforoAP(g)}>{getSemaforoAP(g)}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                   </button>
