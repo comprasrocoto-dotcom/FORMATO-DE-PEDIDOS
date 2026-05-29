@@ -188,7 +188,6 @@ function HistorialPedidos({ proveedoresMeta }) {
     var pasaEstado = filtroEstadoDoc === 'todos' || (filtroEstadoDoc === 'pendientes' && (sem === '🔴' || sem === '🟡')) || (filtroEstadoDoc === 'completados' && sem === '🟢');
     return pasaSede && pasaArt && pasaEstado;
   });
-  });
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
