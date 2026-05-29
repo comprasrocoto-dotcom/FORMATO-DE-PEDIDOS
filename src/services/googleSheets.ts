@@ -1,7 +1,7 @@
 // @ts-nocheck
-// rebuild: v11-exact-sede-articulo-no-fallback
+// rebuild: v12-conversion-unidad-medida
 /**
- * googleSheets.ts v11
+ * googleSheets.ts v12
  * - Agrega actualizarNumeroPedidoSistema para asignar número de pedido del sistema
  * - Usado para mover pedidos de Historial de Pedidos a Historial Documentado
  * - v9: Agrega getProductosConMinMax para cargar productos con mínimo/máximo por proveedor
@@ -221,19 +221,30 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
     const datos = await fetchAllDatos();
     const artPorHoja = datos.articulosPorProveedor || {};
     const minMaxMap = datos.minMaxMap || {};
+    // unidadMedidaMap: clave = nombre unidad MAYUSCULAS → factor de conversión
+    // factor = cuántas unidades de inventario = 1 unidad de compra
+    // Ej: "KILO" → 1000, "TARROX1.62L" → 1620, "UNIDADES" → 1
+    const unidadMedidaMap = datos.unidadMedidaMap || {};
     const productos: any[] = [];
     const seen = new Set<string>();
-    // Normalizar sede: la clave en minMaxMap es "SEDE_UPPER|ARTICULO_UPPER"
-    // Coincidencia EXACTA: no se hace fallback a otras sedes ni a nombres parecidos
     const sedeUpper = (sede || '').trim().toUpperCase();
 
-    // Formatea número con máximo 2 decimales, 0 si es entero
+    // Formatea número: máximo 2 decimales, 0 si es entero exacto
     function formatNum(val: any): string {
       if (val === undefined || val === null || val === '') return '';
       const n = typeof val === 'number' ? val : parseFloat(String(val).replace(/,/g, '.'));
-      if (isNaN(n)) return '';
+      if (isNaN(n) || !isFinite(n)) return '';
       if (Number.isInteger(n)) return String(n);
       return n.toFixed(2).replace(/\.?0+$/, '');
+    }
+
+    // Convierte valor en unidades de inventario → unidades de compra (divide por factor)
+    function convertirUnidad(valorInv: any, factor: number): string {
+      if (valorInv === undefined || valorInv === null || valorInv === '') return '';
+      const v = typeof valorInv === 'number' ? valorInv : parseFloat(String(valorInv).replace(/,/g, '.'));
+      if (isNaN(v) || !isFinite(v)) return '';
+      if (factor <= 0) return formatNum(v);
+      return formatNum(v / factor);
     }
 
     Object.keys(artPorHoja).forEach(function(hoja) {
@@ -245,21 +256,37 @@ export async function getProductosConMinMax(proveedorNombre: string, sede?: stri
         const art = (row.subArticulo || '').trim();
         if (!cod || seen.has(cod)) return;
         seen.add(cod);
-        // Búsqueda EXACTA por "SEDE|ARTICULO_EN_MAYUSCULAS" — sin fallback
-        // Si la clave no existe: ese artículo no tiene min/max para esa sede → vacío
+
+        // Búsqueda EXACTA "SEDE|ARTICULO" — sin fallback a otras sedes
         let mm: any = {};
         if (sedeUpper) {
           const exactKey = sedeUpper + '|' + art.toUpperCase();
           mm = minMaxMap[exactKey] || {};
         }
+
+        // Factor de conversión según unidad de compra del producto
+        const unidad = (row.unidad || '').trim();
+        const unidadUpper = unidad.toUpperCase();
+        let factor = unidadMedidaMap[unidadUpper] || 0;
+        if (!factor) {
+          // Coincidencia flexible: normalizar quitando espacios/puntos
+          const unidadNorm = unidadUpper.replace(/[\s.\-_]/g, '');
+          const matchKey = Object.keys(unidadMedidaMap).find(function(k) {
+            return k.replace(/[\s.\-_]/g, '') === unidadNorm;
+          });
+          if (matchKey) factor = unidadMedidaMap[matchKey];
+        }
+        const factorFinal = factor > 0 ? factor : 1;
+
         productos.push({
           codigo: cod,
           articulo: art,
           subfamilia: (row.subfamilia || '').trim(),
-          unidad: (row.unidad || '').trim(),
+          unidad: unidad,
           proveedorNombre: prov,
-          minimo: formatNum(mm.minimo),
-          maximo: formatNum(mm.maximo)
+          minimo: convertirUnidad(mm.minimo, factorFinal),
+          maximo: convertirUnidad(mm.maximo, factorFinal),
+          factorConversion: factorFinal
         });
       });
     });
