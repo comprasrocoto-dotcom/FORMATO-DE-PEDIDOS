@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v22 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
+ * SheetsOrderForm.tsx v23 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -239,7 +239,7 @@ function HistorialPedidos({ proveedoresMeta }) {
             var isOpen = expandido === p.nOrden;
             var isEditFac = editandoFactura === p.nOrden;
             var isEditNPS = editandoNPS === p.nOrden;
-            var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura||'contado', obsFactura: p.obsFactura };
+            var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura||'contado', obsFactura: p.obsFactura, notaCredito: p.notaCredito||'' };
             var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase())||(a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
             var pm = getProvMeta(p.proveedor);
             return (
@@ -353,6 +353,10 @@ function HistorialPedidos({ proveedoresMeta }) {
                             <input type="text" value={fd.obsFactura||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }}
                               className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
                               placeholder="Ej: Pedido incompleto, diferencia en cantidades..."/>
+                          </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Nota de crédito</label>
+                            <input type="text" value={fd.notaCredito||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{notaCredito:e.target.value}); return n; }); }} className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-400" placeholder="Ej: NC-001..."/>
                           </div>
                           <div className="flex gap-2 pt-1">
                             <button onClick={function(){ guardarFactura(p.nOrden); }}
