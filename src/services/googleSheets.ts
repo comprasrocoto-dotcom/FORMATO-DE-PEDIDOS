@@ -1,7 +1,7 @@
 // @ts-nocheck
 // rebuild: v14-server-side-conversion
 /**
- * googleSheets.ts v14
+ * googleSheets.ts v15
  * - USA minMaxConvertidoMap del servidor (conversion de unidades hecha en Apps Script)
  * - Fallback a conversion cliente si no disponible
  * - v13: Correccion URL y conversion cliente
@@ -71,6 +71,7 @@ export interface FacturaRow {
       nroFactura: string;
       tipoFactura: string;
       obsFactura: string;
+            notaCredito?: string;
 }
 
 export interface NumeroPedidoSistemaRow {
@@ -186,7 +187,7 @@ export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; er
 }
 
 export async function actualizarFactura(factura: FacturaRow): Promise<{ ok: boolean; error?: string }> {
-      const payload = { action:'actualizarFactura', nOrden:factura.nOrden||'', nroFactura:factura.nroFactura||'', tipoFactura:factura.tipoFactura||'contado', obsFactura:factura.obsFactura||'' };
+      const payload = { action:'actualizarFactura', nOrden:factura.nOrden||'', nroFactura:factura.nroFactura||'', tipoFactura:factura.tipoFactura||'contado', obsFactura:factura.obsFactura||'' , notaCredito:factura.notaCredito||''};
       try {
               const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload), redirect:'follow' });
               const text = await res.text().catch(()=>'');
