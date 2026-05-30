@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v23 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
+ * SheetsOrderForm.tsx v24 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -329,7 +329,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">N. Factura</div><div className="text-slate-700">{p.nroFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Tipo</div><div className="text-slate-700">{p.tipoFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Observacion</div><div className="text-slate-700">{p.obsFactura||'---'}</div></div>
-                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Nota de crédito</div><div className="text-slate-700">{p.notaCredito||'---'}</div></div>
+                          <div className="col-span-3"><div className="font-bold text-slate-400 uppercase mb-0.5">Nota de crédito</div><div className="text-slate-700">{p.notaCredito||'---'}</div></div>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -763,7 +763,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">N. Factura</div><div className="text-slate-700">{p.nroFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Tipo</div><div className="text-slate-700">{p.tipoFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Observacion</div><div className="text-slate-700">{p.obsFactura||'---'}</div></div>
-                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Nota de crédito</div><div className="text-slate-700">{p.notaCredito||'---'}</div></div>
+                          <div className="col-span-3"><div className="font-bold text-slate-400 uppercase mb-0.5">Nota de crédito</div><div className="text-slate-700">{p.notaCredito||'---'}</div></div>
                         </div>
                       </div>
                     )}
