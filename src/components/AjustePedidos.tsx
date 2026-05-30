@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v6
+ * AjustePedidos.tsx v7
  * Fix: PDF ahora usa la misma estructura que generarPDF en SheetsOrderForm
  * - Mismos campos (Sede, Direccion, Telefono Sede, Horario, Encargado / Proveedor, NIT, Tel, Contacto, Correo)
  * - Misma tabla (Articulo, Unidad, Cantidad, Total)
@@ -132,7 +132,7 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
             <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-32">Cantidad</th>
-            tr></thead>
+            </tr></thead>
           <tbody>
             {lineas.length === 0 && (
               <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Sin artículos en este pedido.</td></tr>
