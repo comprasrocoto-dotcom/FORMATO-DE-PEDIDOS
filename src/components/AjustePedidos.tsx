@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v7
+ * AjustePedidos.tsx v8
  * Fix: PDF ahora usa la misma estructura que generarPDF en SheetsOrderForm
  * - Mismos campos (Sede, Direccion, Telefono Sede, Horario, Encargado / Proveedor, NIT, Tel, Contacto, Correo)
  * - Misma tabla (Articulo, Unidad, Cantidad, Total)
@@ -9,15 +9,17 @@
  * Fix: key estable sin remount innecesario
  * Fix: validacion F-G-H del proveedor antes de generar PDF
  * Fix: carga proveedoresMeta desde Drive con campos correos/telefono/contacto
+ * v8: agrega campo editable "Nota de credito" en DetalleOrden
+ * v8: corrige semaforo AP (emoji directo sin encoding)
  */
 import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download, Search } from 'lucide-react';
-import { actualizarPedido, getProveedores, getAllDatos } from '../services/googleSheets';
+import { actualizarPedido, actualizarFactura, getProveedores, getAllDatos } from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
-// âââ Helpers ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+// --- Helpers ---------------------------------------------------------------
 function getProvMeta(proveedoresMeta, nombre) {
   if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
   var found = (proveedoresMeta || []).find(function(p){ return p.nombre === nombre; });
@@ -31,37 +33,21 @@ function getProvMeta(proveedoresMeta, nombre) {
 }
 
 function validarProveedorFGH(pm) {
-  // F=telefono, G=correo, H=contacto/asesor
   var tel = pm.telefono && pm.telefono !== '---' ? pm.telefono.trim() : '';
   var cor = pm.correo && pm.correo !== '---' ? pm.correo.trim() : '';
   var con = pm.contacto && pm.contacto !== '---' ? pm.contacto.trim() : '';
   return !!(tel || cor || con);
 }
 
-// âââ DetalleOrden âââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, onPDFError }) {
-  // Semáforo por artículo: compara cantidad pedida vs mínimo y máximo convertidos
-  function getSemaforoLinea(linea) {
-    var sedeKey = (g.sede || '').trim().toUpperCase();
-    var artKey = (linea.articulo || '').trim().toUpperCase();
-    var key = sedeKey + '|' + artKey;
-    var entry = (minMaxConvertido || {})[key];
-    if (!entry) return null;
-    var cant = parseFloat(String(linea.cantidad || 0)) || 0;
-    var minVal = parseFloat(String(entry.minimo || ''));
-    var maxVal = parseFloat(String(entry.maximo || ''));
-    if (isNaN(minVal) && isNaN(maxVal)) return null;
-    if (!isNaN(minVal) && cant < minVal) return { emoji: '🔴', label: 'Bajo mínimo (' + entry.minimo + ')', color: 'text-red-600 bg-red-50' };
-    if (!isNaN(maxVal) && cant > maxVal) return { emoji: '🟢', label: 'Sobre máximo (' + entry.maximo + ')', color: 'text-green-600 bg-green-50' };
-    return { emoji: '🟡', label: 'Entre mínimo y máximo', color: 'text-yellow-600 bg-yellow-50' };
-  }
+// --- DetalleOrden ----------------------------------------------------------
+function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError }) {
   var isEdit = editandoOrden === g.nOrden;
   var lineas = g.lineas || [];
-
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
+  var [guardandoNC, setGuardandoNC] = useState(false);
+  var [ncGuardado, setNcGuardado] = useState(false);
 
   function handleDescargarPDF() {
-    // Buscamos los metadatos del proveedor de forma robusta ignorando mayÃºsculas/minÃºsculas
     var pmActual = (proveedoresMeta || []).find(function(p) {
       return String(p.nombre || '').trim().toLowerCase() === String(g.proveedor || '').trim().toLowerCase();
     }) || {};
@@ -73,21 +59,18 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
       sedeHorario: g.sedeHorario || pmActual.sedeHorario || '---',
       encargado: g.responsable || '---',
       proveedorNombre: g.proveedor || '',
-      // Mapeamos soportando ambas estructuras del useEffect
       provNit: pmActual.nit || '---',
       provTel: pmActual.telefono || pmActual.tel || '---',
       provCorreo: pmActual.correo || pmActual.email || '---',
       provContacto: pmActual.contacto || pmActual.asesor || '---',
-      
-      lineas: lineas.map(function(l){ 
-        return { 
-          articulo: l.articulo || '', 
-          unidad: l.unidad || '', 
-          cantidad: parseFloat(String(l.cantidad || 0)) || 0, 
-          // Pasamos el valor real si existe para que no multiplique por cero
-          valorUnitario: parseFloat(String(l.valorUnitario || 0)) || 0, 
-          codigo: l.codigo || '' 
-        }; 
+      lineas: lineas.map(function(l){
+        return {
+          articulo: l.articulo || '',
+          unidad: l.unidad || '',
+          cantidad: parseFloat(String(l.cantidad || 0)) || 0,
+          valorUnitario: parseFloat(String(l.valorUnitario || 0)) || 0,
+          codigo: l.codigo || ''
+        };
       }),
       notas: lineas[0] ? lineas[0].observaciones || '' : '',
       medioPago: g.medioPago || 'contado',
@@ -95,10 +78,32 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
       nroFactura: g.nroFactura || '',
       tipoFactura: g.tipoFactura || '',
       obsFactura: g.obsFactura || '',
-      numeroPedidoSistema: g.numeroPedidoSistema || ''
+      numeroPedidoSistema: g.numeroPedidoSistema || '',
+      notaCredito: notaCredito || ''
     });
   }
-  
+
+  async function guardarNotaCredito() {
+    setGuardandoNC(true);
+    try {
+      var r = await actualizarFactura({
+        nOrden: g.nOrden,
+        nroFactura: g.nroFactura || '',
+        tipoFactura: g.tipoFactura || '',
+        obsFactura: g.obsFactura || '',
+        numeroPedidoSistema: g.numeroPedidoSistema || '',
+        notaCredito: notaCredito || ''
+      });
+      if (r && r.ok) {
+        setNcGuardado(true);
+        setTimeout(function(){ setNcGuardado(false); }, 3000);
+      }
+    } catch(e) {
+      console.warn('[notaCredito save]', e.message);
+    }
+    setGuardandoNC(false);
+  }
+
   return (
     <div className="px-4 pb-4 bg-slate-50/50">
       {/* Info del pedido */}
@@ -108,7 +113,28 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
         })}
       </div>
 
-      {/* Campo modificado por â SIEMPRE presente en DOM, visible solo en isEdit */}
+      {/* Nota de credito - siempre visible */}
+      <div className="mb-3 p-3 bg-white border border-slate-200 rounded-xl">
+        <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nota de crédito</label>
+        <div className="flex gap-2 items-center">
+          <input
+            type="text"
+            value={notaCredito || ''}
+            onChange={function(e){ setNotaCredito(e.target.value); setNcGuardado(false); }}
+            className="flex-1 px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500"
+            placeholder="Ej: NC-001..."
+          />
+          <button
+            onClick={guardarNotaCredito}
+            disabled={guardandoNC}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 flex-shrink-0"
+          >
+            {ncGuardado ? '✓ Guardado' : (guardandoNC ? 'Guardando...' : 'Guardar')}
+          </button>
+        </div>
+      </div>
+
+      {/* Campo modificado por - SIEMPRE presente en DOM, visible solo en isEdit */}
       <div style={{display: isEdit ? 'block' : 'none'}} className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
@@ -132,7 +158,7 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
             <th className="py-2 px-3 text-left text-white font-bold uppercase">Articulo</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-20">Unidad</th>
             <th className="py-2 px-3 text-center text-white font-bold uppercase w-32">Cantidad</th>
-            </tr></thead>
+          </tr></thead>
           <tbody>
             {lineas.length === 0 && (
               <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Sin artículos en este pedido.</td></tr>
@@ -208,40 +234,40 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
   );
 }
 
-// âââ Componente principal âââââââââââââââââââââââââââââââââââââââââââââââââââââ
-// --- Semaforo de orden basado en min/max de articulos ---
+// --- Componente principal --------------------------------------------------
 function getSemaforoOrden(g, minMaxConv) {
-    var lineas = g.lineas || [];
-    var tieneRojo = false;
-    var tieneAmarillo = false;
-    var tieneVerde = false;
-    var tieneDato = false;
-    var sedeKey = (g.sede || '').trim().toUpperCase();
-    for (var i = 0; i < lineas.length; i++) {
-          var linea = lineas[i];
-          var artKey = (linea.articulo || '').trim().toUpperCase();
-          var key = sedeKey + '|' + artKey;
-          var entry = (minMaxConv || {})[key];
-          if (!entry) continue;
-          var cant = parseFloat(String(linea.cantidad || 0)) || 0;
-          var minVal = parseFloat(String(entry.minimo));
-          var maxVal = parseFloat(String(entry.maximo));
-          if (isNaN(minVal) && isNaN(maxVal)) continue;
-          tieneDato = true;
-          if (!isNaN(minVal) && cant < minVal) { tieneRojo = true; break; }
-          if (!isNaN(maxVal) && cant > maxVal) tieneVerde = true;
-          else tieneAmarillo = true;
-    }
-    if (!tieneDato) return null;
-    if (tieneRojo) return '🔴';
-    if (tieneAmarillo) return '🟡';
-    return '🟢';
+  var lineas = g.lineas || [];
+  var tieneRojo = false;
+  var tieneAmarillo = false;
+  var tieneVerde = false;
+  var tieneDato = false;
+  var sedeKey = (g.sede || '').trim().toUpperCase();
+  for (var i = 0; i < lineas.length; i++) {
+    var linea = lineas[i];
+    var artKey = (linea.articulo || '').trim().toUpperCase();
+    var key = sedeKey + '|' + artKey;
+    var entry = (minMaxConv || {})[key];
+    if (!entry) continue;
+    var cant = parseFloat(String(linea.cantidad || 0)) || 0;
+    var minVal = parseFloat(String(entry.minimo));
+    var maxVal = parseFloat(String(entry.maximo));
+    if (isNaN(minVal) && isNaN(maxVal)) continue;
+    tieneDato = true;
+    if (!isNaN(minVal) && cant < minVal) { tieneRojo = true; break; }
+    if (!isNaN(maxVal) && cant > maxVal) tieneVerde = true;
+    else tieneAmarillo = true;
+  }
+  if (!tieneDato) return null;
+  if (tieneRojo) return '🔴';
+  if (tieneAmarillo) return '🟡';
+  return '🟢';
 }
+
 function getSemaforoAP(g) {
   var tieneFactura = g.nroFactura && g.nroFactura.trim() !== '';
   var tieneNPS = g.numeroPedidoSistema && g.numeroPedidoSistema.trim() !== '';
-  if (tieneFactura && tieneNPS) return 'ð¢';
-  return 'ð´';
+  if (tieneFactura && tieneNPS) return '🟢';
+  return '🔴';
 }
 
 export default function AjustePedidos() {
@@ -263,14 +289,13 @@ export default function AjustePedidos() {
   var [fechaHastaAP, setFechaHastaAP] = useState('');
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
   var [minMaxConvertido, setMinMaxConvertido] = useState({});
+  var [notaCreditoMap, setNotaCreditoMap] = useState({});
 
   useEffect(function(){
     cargarPendientes();
-    // Cargar meta proveedores desde Drive (F=telefono, G=correo, H=asesor/contacto)
     getProveedores()
       .then(function(ps){ if (ps && ps.length > 0) setProveedoresMeta(ps); })
       .catch(function(e){ console.warn('[proveedoresMeta]', e.message); });
-    // Tambien intentar via getAllDatos para datos mas completos
     getAllDatos()
       .then(function(datos){
         var provMeta = datos && datos.proveedores;
@@ -320,6 +345,7 @@ export default function AjustePedidos() {
             tipoFactura: String(r[14]||''),
             obsFactura: String(r[15]||''),
             numeroPedidoSistema: String(r[16]||''),
+            notaCredito: String(r[17]||''),
             lineas: []
           };
         }
@@ -339,7 +365,12 @@ export default function AjustePedidos() {
           });
         }
       });
-      setGrupos(Object.values(mapa).reverse());
+      var grupos = Object.values(mapa).reverse();
+      setGrupos(grupos);
+      // Inicializar notaCreditoMap con valores cargados
+      var ncMap = {};
+      grupos.forEach(function(g){ ncMap[g.nOrden] = g.notaCredito || ''; });
+      setNotaCreditoMap(ncMap);
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
   }
@@ -351,10 +382,8 @@ export default function AjustePedidos() {
       var key = l.codigo || ('linea_idx');
       cants[key] = l.cantidad || 0;
     });
-    // Primero actualizar cantidades, luego activar edicion
     setCantidadesEdit(cants);
     setObsModificacion('');
-    // Usar setTimeout para asegurar que el estado se actualice antes de mostrar el editor
     setTimeout(function(){ setEditandoOrden(g.nOrden); }, 0);
   }
 
@@ -402,7 +431,7 @@ export default function AjustePedidos() {
     var sem = getSemaforoAP(g);
     var pasaEstado = filtroEstadoAP === 'todos' || (filtroEstadoAP === 'pendientes' && sem === '🔴') || (filtroEstadoAP === 'completados' && sem === '🟢');
     return pasaSede && pasaBusq && pasaFecha && pasaEstado;
-  });;
+  });
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 space-y-5">
@@ -500,7 +529,7 @@ export default function AjustePedidos() {
                       </div>
                       <div className="min-w-0">
                         <div className="text-sm font-bold text-slate-800 truncate">{g.proveedor}</div>
-                        <div className="text-xs text-slate-500">{g.sede} Â· {g.fecha} Â· {(g.lineas||[]).length} art.
+                        <div className="text-xs text-slate-500">{g.sede} · {g.fecha} · {(g.lineas||[]).length} art.
                           <span className={"ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold " + (g.medioPago==='credito'?'bg-amber-100 text-amber-700':'bg-emerald-100 text-emerald-700')}>{g.medioPago}</span>
                           <span className="ml-2 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-orange-100 text-orange-700 inline-flex items-center gap-0.5"><Clock className="w-2.5 h-2.5"/> Pendiente</span>
                         </div>
@@ -508,12 +537,12 @@ export default function AjustePedidos() {
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className="text-xs text-slate-400 font-mono hidden sm:block">#{g.nOrden}</span>
-                                            <span className="text-base leading-none" title={"Semaforo: " + (getSemaforoOrden(g, minMaxConvertido)||'')}>{getSemaforoOrden(g, minMaxConvertido)}</span>
+                      <span className="text-base leading-none">{getSemaforoAP(g)}</span>
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a3c6e" strokeWidth="3" strokeLinecap="round" className={"transition-transform "+(isOpen?'rotate-180':'')}><polyline points="6 9 12 15 18 9"/></svg>
                     </div>
                   </button>
 
-                  {/* Detalle - key ESTABLE en g.nOrden, sin remount por estado de edicion */}
+                  {/* Detalle */}
                   {isOpen && (
                     <DetalleOrden
                       key={g.nOrden}
@@ -531,6 +560,8 @@ export default function AjustePedidos() {
                       cancelarEdicion={cancelarEdicion}
                       proveedoresMeta={proveedoresMeta}
                       minMaxConvertido={minMaxConvertido}
+                      notaCredito={notaCreditoMap[g.nOrden] !== undefined ? notaCreditoMap[g.nOrden] : (g.notaCredito || '')}
+                      setNotaCredito={function(v){ setNotaCreditoMap(function(p){ return Object.assign({},p,{[g.nOrden]:v}); }); }}
                       onPDFError={function(msg){ setErr(msg); }}
                     />
                   )}
@@ -544,8 +575,8 @@ export default function AjustePedidos() {
       {/* Leyenda */}
       <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-xs text-blue-700">
         <p className="font-bold mb-1">Acerca de este modulo</p>
-        <p>Aqui se muestran todos los pedidos <strong>sin factura registrada</strong>. Puedes editar las cantidades antes de confirmar la recepcion. Los cambios quedan registrados en Drive con fecha, hora y nombre del responsable.</p>
+        <p>Aquí se muestran todos los pedidos <strong>sin factura registrada</strong>. Puedes editar las cantidades antes de confirmar la recepcion. Los cambios quedan registrados en Drive con fecha, hora y nombre del responsable.</p>
       </div>
     </div>
   );
-    }
+}
