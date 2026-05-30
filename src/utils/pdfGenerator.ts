@@ -1,9 +1,10 @@
 // @ts-nocheck
 /**
-  * Utility para generacion unificada de PDFs de Pedidos v11
-  * - Columnas: Codigo, Articulo, Unidad, Cantidad, Obs.
+  * Utility para generacion unificada de PDFs de Pedidos v12
+  * - Columnas: Codigo, Articulo, Unidad, Cantidad, Total.
  * v11: agrega columna CODIGO en tabla de productos
  * - Se elimino columna Total (no aplica en pedidos de compra)
+  * v12: columna Obs. renombrada a TOTAL (muestra cantidad por linea)
  */
 
 let _jsPDFClass: any = null;
@@ -102,13 +103,13 @@ export async function generarPDF(params) {
   doc.setDrawColor(200, 210, 230); doc.line(margen, y - 2, ancho - margen, y - 2);
 
   // Tabla de productos
-  // Columnas: Articulo(65) | Unidad(22) | Cant.(20) | Obs.(55) = 162
-const cW = [22, 63, 22, 20, 55];
+    // Columnas: Codigo(22) | Articulo(63) | Unidad(22) | Cant.(20) | Total(55) = 182
+    const cW = [22, 63, 22, 20, 55];
   const cX = [margen];
   for (let ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
   const rH = 7;
-  const headers = ['CÓDIGO', 'Articulo', 'Unidad', 'Cant.', 'Obs.'];
-  const aligns  = ['left', 'left', 'center', 'center', 'left'];
+    const headers = ['CÓDIGO', 'Articulo', 'Unidad', 'Cant.', 'TOTAL'];
+     const aligns  = ['left', 'left', 'center', 'center', 'left'];
 
   doc.setFillColor(...azul); doc.rect(margen, y, ancho - 2 * margen, rH, 'F');
   doc.setTextColor(...blanco); doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
@@ -133,7 +134,7 @@ const cW = [22, 63, 22, 20, 55];
         String(l.articulo || '').substring(0, 34),
         String(l.unidad || '---').substring(0, 10),
         cantStr,
-        obsStr
+        cantStr
       ];
       doc.setTextColor(...negro); doc.setFontSize(7.5);
       vals.forEach((v, i) => {
