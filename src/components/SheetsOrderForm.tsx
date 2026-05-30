@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v21 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
+ * SheetsOrderForm.tsx v22 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -113,6 +113,7 @@ function HistorialPedidos({ proveedoresMeta }) {
             observaciones: String(r[10]||''),
             nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
             numeroPedidoSistema: String(r[16]||''),
+            notaCredito: String(r[17]||''),
             articulos: []
           };
         }
@@ -136,7 +137,7 @@ function HistorialPedidos({ proveedoresMeta }) {
   async function guardarFactura(nOrden) {
     var fd = facturaData[nOrden] || {};
     try {
-      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'' });
+      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'', notaCredito: fd.notaCredito||'' });
       setEditandoFactura(null);
       await cargarHistorial();
     } catch(e) { alert('Error guardando factura: ' + (e.message||'Error')); }
@@ -277,7 +278,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                           lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
                           notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
                           nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'',
-                          numeroPedidoSistema:p.numeroPedidoSistema||'' });
+                          numeroPedidoSistema:p.numeroPedidoSistema||'', notaCredito:p.notaCredito||'' });
                       }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> PDF
                       </button>
@@ -328,6 +329,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">N. Factura</div><div className="text-slate-700">{p.nroFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Tipo</div><div className="text-slate-700">{p.tipoFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Observacion</div><div className="text-slate-700">{p.obsFactura||'---'}</div></div>
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Nota de crédito</div><div className="text-slate-700">{p.notaCredito||'---'}</div></div>
                         </div>
                       ) : (
                         <div className="space-y-2">
@@ -478,6 +480,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
             observaciones: String(r[10]||''),
             nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
             numeroPedidoSistema: String(r[16]||''),
+            notaCredito: String(r[17]||''),
             articulos: []
           };
         }
@@ -503,7 +506,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
     if (Object.keys(d).length === 0) { alert('No hay cambios que guardar.'); return; }
     setGuardandoDoc(true);
     try {
-      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'' });
+      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'', notaCredito: d.notaCredito||'' });
       if (!r.ok) { alert('Error guardando factura: ' + (r.error||'')); return; }
       if (d.numeroPedidoSistema !== undefined) {
         var r2 = await actualizarNumeroPedidoSistema({ nOrden: nOrden, numeroPedidoSistema: d.numeroPedidoSistema });
@@ -714,6 +717,9 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                      <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Obs. Factura</label>
                        <input type="text" value={editDataDoc[p.nOrden]?.obsFactura!==undefined?editDataDoc[p.nOrden].obsFactura:p.obsFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Observaciones"/>
                      </div>
+                     <div className="col-span-2"><label className="text-xs font-semibold text-slate-600 block mb-0.5">Nota de crédito</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.notaCredito!==undefined?editDataDoc[p.nOrden].notaCredito:p.notaCredito||''} onChange={function(e){ setEditDataDoc(function(prev){ return Object.assign({},prev,{[p.nOrden]:Object.assign({},prev[p.nOrden]||{},{notaCredito:e.target.value})}); });}} className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500" placeholder="Ej: NC-001..."/>
+                     </div>
                    </div>
                   <div className="flex gap-2 pt-1">
                     <button onClick={function(){ guardarEdicionDoc(p.nOrden); }} disabled={guardandoDoc} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{background:'#4f46e5',opacity:guardandoDoc?0.6:1}}>
@@ -743,7 +749,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                         </tbody>
                       </table>
                     </div>
-                    {(p.nroFactura || p.tipoFactura || p.obsFactura) && (
+                    {(p.nroFactura || p.tipoFactura || p.obsFactura || p.notaCredito) && (
                       <div className="rounded-xl border border-slate-200 bg-white p-3">
                         <div className="flex items-center gap-2 mb-2">
                           <FileText className="w-4 h-4 text-blue-600"/>
@@ -753,6 +759,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">N. Factura</div><div className="text-slate-700">{p.nroFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Tipo</div><div className="text-slate-700">{p.tipoFactura||'---'}</div></div>
                           <div><div className="font-bold text-slate-400 uppercase mb-0.5">Observacion</div><div className="text-slate-700">{p.obsFactura||'---'}</div></div>
+                          <div><div className="font-bold text-slate-400 uppercase mb-0.5">Nota de crédito</div><div className="text-slate-700">{p.notaCredito||'---'}</div></div>
                         </div>
                       </div>
                     )}
