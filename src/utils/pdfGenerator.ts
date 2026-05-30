@@ -1,7 +1,8 @@
 // @ts-nocheck
 /**
-  * Utility para generacion unificada de PDFs de Pedidos v10
-  * - Columnas: Articulo, Unidad, Cantidad, Obs.
+  * Utility para generacion unificada de PDFs de Pedidos v11
+  * - Columnas: Codigo, Articulo, Unidad, Cantidad, Obs.
+ * v11: agrega columna CODIGO en tabla de productos
  * - Se elimino columna Total (no aplica en pedidos de compra)
  */
 
@@ -102,12 +103,12 @@ export async function generarPDF(params) {
 
   // Tabla de productos
   // Columnas: Articulo(65) | Unidad(22) | Cant.(20) | Obs.(55) = 162
-const cW = [65, 22, 20, 55];
+const cW = [22, 63, 22, 20, 55];
   const cX = [margen];
   for (let ci = 0; ci < cW.length - 1; ci++) cX.push(cX[ci] + cW[ci]);
   const rH = 7;
-  const headers = ['Articulo', 'Unidad', 'Cant.', 'Obs.'];
-  const aligns  = ['left', 'center', 'center', 'left'];
+  const headers = ['CÓDIGO', 'Articulo', 'Unidad', 'Cant.', 'Obs.'];
+  const aligns  = ['left', 'left', 'center', 'center', 'left'];
 
   doc.setFillColor(...azul); doc.rect(margen, y, ancho - 2 * margen, rH, 'F');
   doc.setTextColor(...blanco); doc.setFont('helvetica', 'bold'); doc.setFontSize(8);
@@ -128,7 +129,8 @@ const cW = [65, 22, 20, 55];
       const obsStr = String(l.observaciones || l.obs || '').substring(0, 18);
 
       const vals = [
-        String(l.articulo || '').substring(0, 36),
+        String(l.codigo || '---').substring(0, 8),
+        String(l.articulo || '').substring(0, 34),
         String(l.unidad || '---').substring(0, 10),
         cantStr,
         obsStr
