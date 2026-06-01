@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v24 - Semaforos coloreados + Carga automatica Min/Max por proveedor + PDF con Min/Max
+ * SheetsOrderForm.tsx v25 - fix: N° Doc. Ingreso ahora vincula a numeroPedidoSistema (no obsFactura)
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -11,7 +11,7 @@ import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, Chec
 import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getProductosConMinMax,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
-const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3hb8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
 function validarProveedorFGH(provMeta) {
   if (!provMeta) return false;
@@ -716,7 +716,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                        </select>
                      </div>
                      <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Doc. Ingreso</label>
-                       <input type="text" value={editDataDoc[p.nOrden]?.obsFactura!==undefined?editDataDoc[p.nOrden].obsFactura:p.obsFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: 2024-001"/>
+                       <input type="text" value={editDataDoc[p.nOrden]?.numeroPedidoSistema!==undefined?editDataDoc[p.nOrden].numeroPedidoSistema:p.numeroPedidoSistema||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{numeroPedidoSistema:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: 2024-001"/>
                      </div>
                      <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Obs. Factura</label>
                        <input type="text" value={editDataDoc[p.nOrden]?.obsFactura!==undefined?editDataDoc[p.nOrden].obsFactura:p.obsFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Observaciones"/>
