@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v25 - fix: N° Doc. Ingreso ahora vincula a numeroPedidoSistema (no obsFactura)
+ * SheetsOrderForm.tsx v26 - fix: ENDPOINT corregido (URL correcta para getHistorial)
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -11,7 +11,7 @@ import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, Chec
 import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getProductosConMinMax,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
-const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3hb8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTSclSTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
 
 function validarProveedorFGH(provMeta) {
   if (!provMeta) return false;
