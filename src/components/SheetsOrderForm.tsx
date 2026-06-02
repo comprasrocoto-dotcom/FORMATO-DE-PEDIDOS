@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v28 - feat: campo fechaEntrega (col M) en form edición Histórico de Pedidos
+ * SheetsOrderForm.tsx v29 - feat: campo fechaEntrega (col M) en form edición Histórico de Pedidos
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -546,6 +546,42 @@ export function HistorialDocumentado({ proveedoresMeta }) {
     return pasaSede && pasaBusq && pasaFecha && pasaEstado;
   });;
 
+  // PDF de Facturas - genera reporte tabular listo para impresion
+  function descargarPDFFacturas(pedidos) {
+    var ahora = new Date();
+    var fechaGen = ahora.toLocaleDateString('es-CO', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' + ahora.toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
+    var filas = pedidos.map(function(p) {
+      var fechaRec = p.fechaEntrega || '';
+      if (fechaRec && fechaRec.includes('-') && fechaRec.length === 10) {
+        var partes = fechaRec.split('-');
+        fechaRec = partes[2] + '/' + partes[1] + '/' + partes[0];
+      }
+      return '<tr><td>' + (p.proveedor || '') + '</td><td>' + fechaRec + '</td><td>' + (p.nroFactura || '') + '</td></tr>';
+    }).join('');
+    var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte de Facturas</title>' +
+      '<style>body{font-family:Arial,sans-serif;margin:20px;color:#222;}' +
+      'h2{color:#1e40af;margin-bottom:4px;}' +
+      '.subtitulo{color:#6b7280;font-size:12px;margin-bottom:20px;}' +
+      'table{width:100%;border-collapse:collapse;font-size:13px;}' +
+      'thead{background:#1e40af;color:#fff;}' +
+      'th{padding:8px 12px;text-align:left;font-weight:600;}' +
+      'td{padding:7px 12px;border-bottom:1px solid #e5e7eb;}' +
+      'tr:nth-child(even) td{background:#f9fafb;}' +
+      '.footer{margin-top:16px;font-size:11px;color:#9ca3af;text-align:right;}' +
+      '@media print{button{display:none!important;}body{margin:0;}}' +
+      '</style></head><body>' +
+      '<h2>Reporte de Facturas</h2>' +
+      '<div class="subtitulo">Generado: ' + fechaGen + ' &nbsp;|&nbsp; Total registros: ' + pedidos.length + '</div>' +
+      '<table><thead><tr><th>Proveedor</th><th>Fecha de Recepci\u00f3n</th><th>N\u00b0 Factura</th></tr></thead>' +
+      '<tbody>' + filas + '</tbody></table>' +
+      '<div class="footer">InsumoMaster &ndash; RESTAURANTES ROCOTO</div>' +
+      '<script>window.onload=function(){window.print();}<\/script>' +
+      '</body></html>';
+    var win = window.open('', '_blank', 'width=900,height=600');
+    if (win) { win.document.write(html); win.document.close(); }
+  }
+
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
       <div className="flex items-center justify-between px-5 py-4" style={{background:'#0f6b3a'}}>
@@ -593,6 +629,14 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           <button onClick={function(){ setFiltroEstadoDoc('pendientes'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='pendientes'?'bg-red-600 text-white border-red-600':'bg-white text-slate-600 border-slate-200 hover:border-red-400')}>🔴 Pendientes</button>
           <button onClick={function(){ setFiltroEstadoDoc('completados'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='completados'?'bg-green-600 text-white border-green-600':'bg-white text-slate-600 border-slate-200 hover:border-green-400')}>🟢 Completados</button>
           {(sedeFiltro || busqHD || fechaDesdeHD || fechaHastaHD || filtroEstadoDoc !== 'todos') && <span className="ml-auto text-xs text-slate-500 self-center">{pedidosFiltrados.length} resultado(s)</span>}
+
+                <button
+                  onClick={function(e) { e.stopPropagation(); descargarPDFFacturas(pedidosFiltrados); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors"
+                  title="Descargar PDF con Proveedor, Fecha de Recepci\u00f3n y N\u00b0 Factura"
+                >
+                  <Download className="w-3.5 h-3.5" /> Descargar PDF Facturas
+                </button>
         </div>
       </div>
 
@@ -1206,3 +1250,4 @@ export default function SheetsOrderForm() {
     </div>
   );
 }
+
