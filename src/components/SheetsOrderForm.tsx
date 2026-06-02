@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v29 - feat: campo fechaEntrega (col M) en form edición Histórico de Pedidos
+ * SheetsOrderForm.tsx v30 - feat: Metodo de pago y sede en PDF (col M) en form edición Histórico de Pedidos
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -547,7 +547,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
   });;
 
   // PDF de Facturas - genera reporte tabular listo para impresion
-  function descargarPDFFacturas(pedidos) {
+  function descargarPDFFacturas(pedidos, sede) {
     var ahora = new Date();
     var fechaGen = ahora.toLocaleDateString('es-CO', {day:'2-digit',month:'2-digit',year:'numeric'}) + ' ' + ahora.toLocaleTimeString('es-CO', {hour:'2-digit',minute:'2-digit'});
     var filas = pedidos.map(function(p) {
@@ -556,7 +556,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         var partes = fechaRec.split('-');
         fechaRec = partes[2] + '/' + partes[1] + '/' + partes[0];
       }
-      return '<tr><td>' + (p.proveedor || '') + '</td><td>' + fechaRec + '</td><td>' + (p.nroFactura || '') + '</td></tr>';
+      return '<tr><td>' + (p.proveedor || '') + '</td><td>' + fechaRec + '</td><td>' + (p.nroFactura || '') + '</td><td>' + (p.medioPago || '') + '</td></tr>';
     }).join('');
     var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte de Facturas</title>' +
       '<style>body{font-family:Arial,sans-serif;margin:20px;color:#222;}' +
@@ -568,11 +568,13 @@ export function HistorialDocumentado({ proveedoresMeta }) {
       'td{padding:7px 12px;border-bottom:1px solid #e5e7eb;}' +
       'tr:nth-child(even) td{background:#f9fafb;}' +
       '.footer{margin-top:16px;font-size:11px;color:#9ca3af;text-align:right;}' +
+      '.sede-label{font-size:13px;color:#374151;margin-bottom:4px;font-weight:600;}' +
       '@media print{button{display:none!important;}body{margin:0;}}' +
       '</style></head><body>' +
       '<h2>Reporte de Facturas</h2>' +
+      '<p class="sede-label">Sede: ' + (sede ? sede : 'Todas las sedes') + '</p>' +
       '<div class="subtitulo">Generado: ' + fechaGen + ' &nbsp;|&nbsp; Total registros: ' + pedidos.length + '</div>' +
-      '<table><thead><tr><th>Proveedor</th><th>Fecha de Recepci\u00f3n</th><th>N\u00b0 Factura</th></tr></thead>' +
+      '<table><thead><tr><th>Proveedor</th><th>Fecha de Recepci\u00f3n</th><th>N\u00b0 Factura</th><th>M\u00e9todo de Pago</th></tr></thead>' +
       '<tbody>' + filas + '</tbody></table>' +
       '<div class="footer">InsumoMaster &ndash; RESTAURANTES ROCOTO</div>' +
       '<script>window.onload=function(){window.print();}<\/script>' +
@@ -631,7 +633,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           {(sedeFiltro || busqHD || fechaDesdeHD || fechaHastaHD || filtroEstadoDoc !== 'todos') && <span className="ml-auto text-xs text-slate-500 self-center">{pedidosFiltrados.length} resultado(s)</span>}
 
                 <button
-                  onClick={function(e) { e.stopPropagation(); descargarPDFFacturas(pedidosFiltrados); }}
+                  onClick={function(e) { e.stopPropagation(); descargarPDFFacturas(pedidosFiltrados, sedeFiltro); }}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-green-600 hover:bg-green-700 transition-colors"
                   title="Descargar PDF con Proveedor, Fecha de Recepci\u00f3n y N\u00b0 Factura"
                 >
@@ -1251,3 +1253,4 @@ export default function SheetsOrderForm() {
   );
 }
 
+ 
