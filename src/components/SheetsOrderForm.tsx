@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v27 - fix: ENDPOINT corregido 2 (STSclST → STScIST en URL)
+ * SheetsOrderForm.tsx v28 - feat: campo fechaEntrega (col M) en form edición Histórico de Pedidos
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -114,6 +114,7 @@ function HistorialPedidos({ proveedoresMeta }) {
             nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
             numeroPedidoSistema: String(r[16]||''),
             notaCredito: String(r[17]||''),
+            fechaEntrega: String(r[12]||''),
             articulos: []
           };
         }
@@ -510,7 +511,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
     if (Object.keys(d).length === 0) { alert('No hay cambios que guardar.'); return; }
     setGuardandoDoc(true);
     try {
-      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'', notaCredito: d.notaCredito||'' });
+      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'', notaCredito: d.notaCredito||'', fechaEntrega: d.fechaEntrega||'' });
       if (!r.ok) { alert('Error guardando factura: ' + (r.error||'')); return; }
       if (d.numeroPedidoSistema !== undefined) {
         var r2 = await actualizarNumeroPedidoSistema({ nOrden: nOrden, numeroPedidoSistema: d.numeroPedidoSistema });
@@ -723,6 +724,9 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                      </div>
                      <div className="col-span-2"><label className="text-xs font-semibold text-slate-600 block mb-0.5">Nota de crédito</label>
                        <input type="text" value={editDataDoc[p.nOrden]?.notaCredito!==undefined?editDataDoc[p.nOrden].notaCredito:p.notaCredito||''} onChange={function(e){ setEditDataDoc(function(prev){ return Object.assign({},prev,{[p.nOrden]:Object.assign({},prev[p.nOrden]||{},{notaCredito:e.target.value})}); });}} className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500" placeholder="Ej: NC-001..."/>
+                     </div>
+                     <div className="col-span-2"><label className="text-xs font-semibold text-slate-600 block mb-0.5">Fecha de Entrega</label>
+                       <input type="date" value={editDataDoc[p.nOrden]?.fechaEntrega!==undefined?editDataDoc[p.nOrden].fechaEntrega:p.fechaEntrega||''} onChange={function(e){ setEditDataDoc(function(prev){ return Object.assign({},prev,{[p.nOrden]:Object.assign({},prev[p.nOrden]||{},{fechaEntrega:e.target.value})}); }); }} className="w-full border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500" />
                      </div>
                    </div>
                   <div className="flex gap-2 pt-1">
