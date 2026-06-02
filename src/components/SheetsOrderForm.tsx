@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v30 - feat: Metodo de pago y sede en PDF (col M) en form edición Histórico de Pedidos
+ * SheetsOrderForm.tsx v31 - fix: fechaEntrega se preserva al editar factura (col M) en form edición Histórico de Pedidos
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
  * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
@@ -138,7 +138,7 @@ function HistorialPedidos({ proveedoresMeta }) {
   async function guardarFactura(nOrden) {
     var fd = facturaData[nOrden] || {};
     try {
-      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'', notaCredito: fd.notaCredito||'' });
+      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'', notaCredito: fd.notaCredito||'', fechaEntrega: fd.fechaEntrega||'' });
       setEditandoFactura(null);
       await cargarHistorial();
     } catch(e) { alert('Error guardando factura: ' + (e.message||'Error')); }
@@ -318,7 +318,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                         </div>
                         {!isEditFac && (
                           <button onClick={function(){
-                            setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||''}; return n; });
+                            setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||'',notaCredito:p.notaCredito||'',fechaEntrega:p.fechaEntrega||''}; return n; });
                             setEditandoFactura(p.nOrden);
                           }} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
                             <Edit3 className="w-3 h-3"/> Editar
@@ -1253,4 +1253,5 @@ export default function SheetsOrderForm() {
   );
 }
 
+ 
  
