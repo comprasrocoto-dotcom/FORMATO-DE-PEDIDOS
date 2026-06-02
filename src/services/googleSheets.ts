@@ -72,6 +72,7 @@ export interface FacturaRow {
       tipoFactura: string;
       obsFactura: string;
             notaCredito?: string;
+      fechaEntrega?: string;
 }
 
 export interface NumeroPedidoSistemaRow {
@@ -187,7 +188,7 @@ export async function appendPedido(pedido: PedidoRow): Promise<{ ok: boolean; er
 }
 
 export async function actualizarFactura(factura: FacturaRow): Promise<{ ok: boolean; error?: string }> {
-      const payload = { action:'actualizarFactura', nOrden:factura.nOrden||'', nroFactura:factura.nroFactura||'', tipoFactura:factura.tipoFactura||'contado', obsFactura:factura.obsFactura||'' , notaCredito:factura.notaCredito||''};
+      const payload = { action:'actualizarFactura', nOrden:factura.nOrden||'', nroFactura:factura.nroFactura||'', tipoFactura:factura.tipoFactura||'contado', obsFactura:factura.obsFactura||'' , notaCredito:factura.notaCredito||'', fechaEntrega:factura.fechaEntrega||''};
       try {
               const res = await fetch(APPS_SCRIPT_URL, { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload), redirect:'follow' });
               const text = await res.text().catch(()=>'');
