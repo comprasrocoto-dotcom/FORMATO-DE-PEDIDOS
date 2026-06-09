@@ -3,7 +3,7 @@
  * SheetsOrderForm.tsx v31 - fix: fechaEntrega se preserva al editar factura (col M) en form edición Histórico de Pedidos
  * - Agrega campo "Número de Pedido (Sistema)" en Historial de Pedidos
  * - Pedidos con ese campo lleno se mueven automáticamente a Historial Documentado
- * - Historial de Pedidos solo muestra pedidos SIN número de pedido sistema
+ * - Historial de Pedidos solo muestrha pedidos SIN número de pedido sistema
  * - Nuevo módulo HistorialDocumentado exportado para uso en App.tsx
  */
 import { useState, useEffect, useRef } from 'react';
@@ -154,7 +154,7 @@ function HistorialPedidos({ proveedoresMeta }) {
         alert('Error guardando: ' + (result.error || 'Error desconocido'));
         return;
       }
-      window.location.reload();
+      setEditandoNPS(null);      await cargarHistorial();
     } catch(e) { alert('Error: ' + (e.message||'Error de red')); }
     finally { setGuardandoNPS(false); }
   }
