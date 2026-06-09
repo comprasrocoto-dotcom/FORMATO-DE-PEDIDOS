@@ -808,7 +808,7 @@ var pedidosFiltrados = pedidos.filter(function(p) {
                     }); });
                     setAdicionarProductos(prods);
                   } catch(err) { setAdicionarProductos([]); }
-                  setAdicionandoInsumo(p.nOrden);
+                  setAdicionandoInsumo(p);
                 })();
               }}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-90" style={{background:'#0891b2'}}>
@@ -848,68 +848,7 @@ var pedidosFiltrados = pedidos.filter(function(p) {
                   </div>
                 </div>
               )}
-              {adicionandoInsumo === p.nOrden && (
-                <div className="mt-3 p-3 bg-cyan-50 border-2 border-cyan-300 rounded-xl space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="font-semibold text-xs text-cyan-700 uppercase tracking-wider flex items-center gap-1">
-                      <ShoppingCart className="w-3.5 h-3.5"/> Adicionar Insumo a Orden #{p.nOrden}
-                    </div>
-                    <button onClick={function(){ setAdicionandoInsumo(null); setAdicionarCantidades({}); setAdicionarBusq(''); setAdicionarError(''); }}
-                      className="text-xs text-slate-500 hover:text-red-500 border border-slate-200 rounded-lg px-2 py-1">x Cerrar</button>
-                  </div>
-                  <p className="text-[10px] text-cyan-700 bg-cyan-100 rounded-lg px-2 py-1">
-                    Proveedor: <strong>{p.proveedor}</strong> — Asigna cantidades a los articulos a agregar.
-                  </p>
-                  {adicionarError && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-2 py-1">{adicionarError}</div>}
-                  <div className="relative">
-                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none"/>
-                    <input type="text" value={adicionarBusq} onChange={function(e){ setAdicionarBusq(e.target.value); }}
-                      placeholder="Buscar articulo..." className="w-full pl-8 pr-3 py-1.5 bg-white border border-cyan-200 rounded-lg text-xs focus:outline-none focus:border-cyan-500"/>
-                  </div>
-                  <div className="max-h-56 overflow-y-auto rounded-xl border border-cyan-200 bg-white">
-                    <table className="w-full text-xs">
-                      <thead><tr style={{background:'#0891b2'}}>
-                        <th className="py-2 px-2 text-left text-white font-bold uppercase text-[10px]">Cod.</th>
-                        <th className="py-2 px-2 text-left text-white font-bold uppercase text-[10px]">Articulo</th>
-                        <th className="py-2 px-2 text-center text-white font-bold uppercase text-[10px]">Und</th>
-                        <th className="py-2 px-2 text-center text-white font-bold uppercase text-[10px] w-28">Cantidad</th>
-                      </tr></thead>
-                      <tbody>
-                        {(adicionarBusq ? adicionarProductos.filter(function(pr){ var q=adicionarBusq.toLowerCase(); return (pr.articulo||'').toLowerCase().includes(q)||(pr.codigo||'').toLowerCase().includes(q); }) : adicionarProductos).map(function(pr,pi){
-                          var qty = adicionarCantidades[pr.codigo] !== undefined ? adicionarCantidades[pr.codigo] : '';
-                          var qtyN = parseFloat(qty) || 0;
-                          return (
-                            <tr key={pr.codigo} className={'border-b border-slate-100 ' + (qtyN > 0 ? 'bg-cyan-50' : pi % 2 === 0 ? 'bg-white' : 'bg-slate-50/50')}>
-                              <td className="py-1.5 px-2 font-mono text-slate-400 text-[10px]">{pr.codigo}</td>
-                              <td className="py-1.5 px-2 font-medium text-slate-800">{pr.articulo}</td>
-                              <td className="py-1.5 px-2 text-center text-slate-500 text-[10px]">{pr.unidad||'---'}</td>
-                              <td className="py-1.5 px-2">
-                                <div className="flex items-center gap-1 justify-center">
-                                  <button type="button" onClick={function(){ setAdicionarCantidades(function(prev){ var n=Object.assign({},prev); n[pr.codigo]=String(Math.max(0,(parseFloat(n[pr.codigo])||0)-1)); return n; }); }} className="w-6 h-6 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-600 flex items-center justify-center text-sm">-</button>
-                                  <input type="text" inputMode="decimal" value={qty} onChange={function(e){ var v=e.target.value.replace(/[^0-9.]/g,''); setAdicionarCantidades(function(prev){ var n=Object.assign({},prev); n[pr.codigo]=v; return n; }); }}
-                                    placeholder="0" className="w-16 text-center py-1 border border-slate-200 rounded text-xs font-bold focus:outline-none focus:border-cyan-500"/>
-                                  <button type="button" onClick={function(){ setAdicionarCantidades(function(prev){ var n=Object.assign({},prev); n[pr.codigo]=String((parseFloat(n[pr.codigo])||0)+1); return n; }); }} className="w-6 h-6 rounded bg-cyan-500 hover:bg-cyan-600 font-bold text-white flex items-center justify-center text-sm">+</button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {adicionarProductos.length === 0 && <tr><td colSpan={4} className="py-4 text-center text-slate-400 text-xs">Cargando articulos del proveedor...</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={function(){ adicionarInsumosAOrden(p); }} disabled={adicionarGuardando || Object.keys(adicionarCantidades).filter(function(k){ return parseFloat(adicionarCantidades[k])>0; }).length===0}
-                      className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-semibold text-white disabled:opacity-50" style={{background:'#0891b2'}}>
-                      {adicionarGuardando ? <RefreshCw className="w-3 h-3 animate-spin"/> : <Save className="w-3 h-3"/>}
-                      {adicionarGuardando ? 'Guardando...' : 'Guardar Insumos'}
-                    </button>
-                    <button onClick={function(){ setAdicionandoInsumo(null); setAdicionarCantidades({}); setAdicionarBusq(''); setAdicionarError(''); }} disabled={adicionarGuardando}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-300 hover:bg-slate-50 disabled:opacity-50">Cancelar</button>
-                  </div>
-                </div>
-              )}
-                    <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
+                                  <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
                       <table className="w-full text-xs">
                         <thead><tr style={{background:'#0f6b3a'}}>
                           <th className="py-2 px-3 text-left text-white font-bold uppercase">Codigo</th>
@@ -948,6 +887,66 @@ var pedidosFiltrados = pedidos.filter(function(p) {
               </div>
             );
           })}
+        </div>
+      )}
+      {adicionandoInsumo && (
+        <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.4)',zIndex:1000,display:'flex',alignItems:'flex-start',justifyContent:'center',paddingTop:'60px',overflowY:'auto'}} onClick={function(e){ if(e.target===e.currentTarget){setAdicionandoInsumo(null);setAdicionarCantidades({});setAdicionarBusq('');setAdicionarError('');} }}>
+          <div style={{background:'white',borderRadius:'16px',padding:'20px',width:'90%',maxWidth:'700px',maxHeight:'80vh',overflowY:'auto',border:'2px solid #0891b2'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+              <span style={{fontSize:'13px',fontWeight:700,color:'#0891b2',textTransform:'uppercase',letterSpacing:'0.05em'}}>
+                Agregar Insumo — Orden #{adicionandoInsumo.nOrden}
+              </span>
+              <button onClick={function(){setAdicionandoInsumo(null);setAdicionarCantidades({});setAdicionarBusq('');setAdicionarError('');}} style={{fontSize:'12px',padding:'4px 10px',border:'1px solid #cbd5e1',borderRadius:'8px',cursor:'pointer',background:'white'}}>x Cerrar</button>
+            </div>
+            <p style={{fontSize:'11px',color:'#0891b2',background:'#ecfeff',borderRadius:'8px',padding:'6px 10px',marginBottom:'10px'}}>
+              Proveedor: <strong>{adicionandoInsumo.proveedor}</strong> — Asigna cantidades a los articulos a agregar.
+            </p>
+            {adicionarError && <div style={{fontSize:'12px',color:'#dc2626',background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:'8px',padding:'6px 10px',marginBottom:'8px'}}>{adicionarError}</div>}
+            <div style={{position:'relative',marginBottom:'10px'}}>
+              <input type="text" value={adicionarBusq} onChange={function(e){setAdicionarBusq(e.target.value);}}
+                placeholder="Buscar articulo..." style={{width:'100%',padding:'8px 12px',border:'1px solid #a5f3fc',borderRadius:'8px',fontSize:'13px',outline:'none',boxSizing:'border-box'}}/>
+            </div>
+            <div style={{maxHeight:'45vh',overflowY:'auto',border:'1px solid #a5f3fc',borderRadius:'12px'}}>
+              <table style={{width:'100%',fontSize:'12px',borderCollapse:'collapse'}}>
+                <thead><tr style={{background:'#0891b2'}}>
+                  <th style={{padding:'8px',textAlign:'left',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase'}}>Cod.</th>
+                  <th style={{padding:'8px',textAlign:'left',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase'}}>Articulo</th>
+                  <th style={{padding:'8px',textAlign:'center',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase'}}>Und</th>
+                  <th style={{padding:'8px',textAlign:'center',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase',width:'130px'}}>Cantidad</th>
+                </tr></thead>
+                <tbody>
+                  {(adicionarBusq ? adicionarProductos.filter(function(pr){var q=adicionarBusq.toLowerCase();return (pr.articulo||'').toLowerCase().includes(q)||(pr.codigo||'').toLowerCase().includes(q);}) : adicionarProductos).map(function(pr,pi){
+                    var qty=adicionarCantidades[pr.codigo]!==undefined?adicionarCantidades[pr.codigo]:'';
+                    var qtyN=parseFloat(qty)||0;
+                    return (
+                      <tr key={pr.codigo} style={{borderBottom:'1px solid #e2e8f0',background:qtyN>0?'#ecfeff':pi%2===0?'white':'#f8fafc'}}>
+                        <td style={{padding:'6px 8px',fontFamily:'monospace',color:'#94a3b8',fontSize:'10px'}}>{pr.codigo}</td>
+                        <td style={{padding:'6px 8px',fontWeight:500,color:'#1e293b'}}>{pr.articulo}</td>
+                        <td style={{padding:'6px 8px',textAlign:'center',color:'#64748b',fontSize:'10px'}}>{pr.unidad||'---'}</td>
+                        <td style={{padding:'6px 8px'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'4px',justifyContent:'center'}}>
+                            <button type="button" onClick={function(){setAdicionarCantidades(function(prev){var n=Object.assign({},prev);n[pr.codigo]=String(Math.max(0,(parseFloat(n[pr.codigo])||0)-1));return n;});}} style={{width:'24px',height:'24px',borderRadius:'6px',background:'#e2e8f0',border:'none',cursor:'pointer',fontWeight:700,color:'#475569',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>-</button>
+                            <input type="text" inputMode="decimal" value={qty} onChange={function(e){var v=e.target.value.replace(/[^0-9.]/g,'');setAdicionarCantidades(function(prev){var n=Object.assign({},prev);n[pr.codigo]=v;return n;});}}
+                              placeholder="0" style={{width:'60px',textAlign:'center',padding:'4px',border:'1px solid #e2e8f0',borderRadius:'6px',fontSize:'12px',fontWeight:700,outline:'none'}}/>
+                            <button type="button" onClick={function(){setAdicionarCantidades(function(prev){var n=Object.assign({},prev);n[pr.codigo]=String((parseFloat(n[pr.codigo])||0)+1);return n;});}} style={{width:'24px',height:'24px',borderRadius:'6px',background:'#0891b2',border:'none',cursor:'pointer',fontWeight:700,color:'white',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {adicionarProductos.length===0 && <tr><td colSpan={4} style={{padding:'16px',textAlign:'center',color:'#94a3b8',fontSize:'12px'}}>Cargando articulos del proveedor...</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div style={{display:'flex',gap:'8px',marginTop:'12px'}}>
+              <button onClick={function(){adicionarInsumosAOrden(adicionandoInsumo);}} disabled={adicionarGuardando||Object.keys(adicionarCantidades).filter(function(k){return parseFloat(adicionarCantidades[k])>0;}).length===0}
+                style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 16px',borderRadius:'8px',fontSize:'12px',fontWeight:700,color:'white',background:adicionarGuardando?'#7dd3fc':'#0891b2',border:'none',cursor:adicionarGuardando?'not-allowed':'pointer',opacity:adicionarGuardando||Object.keys(adicionarCantidades).filter(function(k){return parseFloat(adicionarCantidades[k])>0;}).length===0?0.5:1}}>
+                {adicionarGuardando ? 'Guardando...' : 'Guardar Insumos'}
+              </button>
+              <button onClick={function(){setAdicionandoInsumo(null);setAdicionarCantidades({});setAdicionarBusq('');setAdicionarError('');}} disabled={adicionarGuardando}
+                style={{padding:'8px 12px',borderRadius:'8px',fontSize:'12px',fontWeight:600,color:'#475569',background:'white',border:'1px solid #e2e8f0',cursor:'pointer'}}>Cancelar</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
