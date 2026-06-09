@@ -729,7 +729,7 @@ var pedidosFiltrados = pedidos.filter(function(p) {
                   </div>
                 </button>
                 {isOpen && (
-                  <div className="px-4 pb-4 bg-slate-50/50">
+                  <div key={"expanded-"+p.nOrden} className="px-4 pb-4 bg-slate-50/50">
                     {/* Número de Pedido Sistema - Destacado */}
                     <div className="rounded-xl border-2 border-green-300 bg-green-50 p-3 mb-3">
                       <div className="flex items-center gap-2 mb-1">
@@ -815,7 +815,7 @@ var pedidosFiltrados = pedidos.filter(function(p) {
                 <ShoppingCart className="w-3 h-3"/> + Insumo
               </button>
                     </div>
-              {editandoDoc === p.nOrden && (
+              <div key={"editform-"+p.nOrden}>{editandoDoc === p.nOrden && (
                 <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
                   <div className="font-semibold text-xs text-indigo-700 uppercase tracking-wider mb-2">✏️ Editar Pedido #{p.nOrden}</div>
                    <div className="grid grid-cols-2 gap-2">
@@ -847,7 +847,7 @@ var pedidosFiltrados = pedidos.filter(function(p) {
                     <button onClick={function(){ setEditandoDoc(null); }} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-300">Cancelar</button>
                   </div>
                 </div>
-              )}
+              )}</div>
                                   <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
                       <table className="w-full text-xs">
                         <thead><tr style={{background:'#0f6b3a'}}>
