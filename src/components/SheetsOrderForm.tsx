@@ -693,7 +693,7 @@ var pedidosFiltrados = pedidos.filter(function(p) {
         </div>
       )}
       {!cargando && pedidosFiltrados.length > 0 && (
-        <div className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
+        <div key='documentado-list' className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
           <div className="flex gap-2 mb-3 px-1">
           {['todos','pendientes','completados'].map(function(f) {
             return (<button key={f} onClick={function(){ setFiltroEstadoDoc(f); }}
