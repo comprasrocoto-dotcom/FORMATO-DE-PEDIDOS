@@ -1,9 +1,9 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v34 - parsearTextoANumero al scope de modulo (fix ReferenceError en HD)
- * - parsearTextoANumero movida fuera de SheetsOrderForm para que HistorialDocumentado la use
- * - Metadata factura/NPS desde todas las filas
- * - keys estables en HistorialDocumentado (HD)
+ * SheetsOrderForm.tsx v34 - parsearTextoANumero al scope del modulo
+ * - Corrige ReferenceError al hacer clic en Editar (HD)
+ * - Metadata factura/NPS desde todas las filas - keys estables HD
+ * - Base: v33 limpio (commit 61fb629)
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
 import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getProductosConMinMax,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
@@ -452,12 +452,12 @@ function getColorSemaforo(em) {
   return '#ff4d4d';
 }
 
-// parsearTextoANumero: funcion de modulo accesible desde HistorialDocumentado y SheetsOrderForm
+// parsearTextoANumero: funcion de modulo
 function parsearTextoANumero(val) {
-  if (val === undefined || val === null || val === '') return 0;
-  var numeroLimpio = String(val).replace(/,/g, '');
-  var parsed = parseFloat(numeroLimpio);
-  return isNaN(parsed) || parsed < 0 ? 0 : parsed;
+  if (val === undefined || val === null || String(val) === '') return 0;
+  var limpio = String(val).split(',').join('');
+  var parsed = parseFloat(limpio);
+  return (isNaN(parsed) || parsed < 0) ? 0 : parsed;
 }
 
 
