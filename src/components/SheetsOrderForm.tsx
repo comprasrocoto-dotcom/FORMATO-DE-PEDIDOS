@@ -1,7 +1,7 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v34 - parsearTextoANumero al scope del modulo
- * - Corrige ReferenceError al hacer clic en Editar (HD)
+ * SheetsOrderForm.tsx v34 - fix crash PDF en HistorialDocumentado (ReferenceError parsearTextoANumero)
+ * - Reemplaza parsearTextoANumero por parseFloat inline en boton PDF de HD
  * - Metadata factura/NPS desde todas las filas - keys estables HD
  * - Base: v33 limpio (commit 61fb629)
 import { useState, useEffect, useRef } from 'react';
@@ -452,15 +452,6 @@ function getColorSemaforo(em) {
   return '#ff4d4d';
 }
 
-// parsearTextoANumero: funcion de modulo
-function parsearTextoANumero(val) {
-  if (val === undefined || val === null || String(val) === '') return 0;
-  var limpio = String(val).split(',').join('');
-  var parsed = parseFloat(limpio);
-  return (isNaN(parsed) || parsed < 0) ? 0 : parsed;
-}
-
-
 export function HistorialDocumentado({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
   var [articuloBusq, setArticuloBusq] = useState('');
@@ -747,7 +738,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                             return {
                               articulo: a.articulo || '',
                               unidad: a.unidad || '', 
-                              cantidad: parsearTextoANumero ? parsearTextoANumero(a.cantidad) : (parseFloat(a.cantidad) || 0), 
+                              cantidad: (function(v){ var s=String(v||'').split(',').join(''); var n=parseFloat(s); return isNaN(n)||n<0?0:n; })(a.cantidad), 
                               valorUnitario: parseFloat(a.valorUnitario || 0), 
                               codigo: a.codigo || ''
                             }; 
@@ -934,6 +925,13 @@ export default function SheetsOrderForm() {
   }, [selectedProveedor, selectedSede]);
 
   // Función auxiliar para convertir el texto "1,250.005" al número real 1250.005
+  function parsearTextoANumero(val) {
+  if (val === undefined || val === null || val === '') return 0;
+  // Eliminamos las comas de miles para que parseFloat entienda el string
+  var numeroLimpio = String(val).replace(/,/g, '');
+  var parsed = parseFloat(numeroLimpio);
+  return isNaN(parsed) || parsed < 0 ? 0 : parsed;
+  }
 
   function handleCantidad(codigo, val) {
     // 1. Permite solo números, puntos y comas iniciales
