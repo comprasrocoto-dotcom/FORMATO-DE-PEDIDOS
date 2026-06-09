@@ -1,9 +1,9 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v34 - parsearTextoANumero modulo + modal editar HD fuera del map
- * - parsearTextoANumero movida a scope de modulo (sin ReferenceError desde HD)
- * - Form Editar en HistorialDocumentado como modal externo (sin insertBefore)
+ * SheetsOrderForm.tsx v34 - parsearTextoANumero al scope de modulo (fix ReferenceError en HD)
+ * - parsearTextoANumero movida fuera de SheetsOrderForm para que HistorialDocumentado la use
  * - Metadata factura/NPS desde todas las filas
+ * - keys estables en HistorialDocumentado (HD)
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
 import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getProductosConMinMax,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
@@ -452,7 +452,7 @@ function getColorSemaforo(em) {
   return '#ff4d4d';
 }
 
-// parsearTextoANumero: funcion de modulo (accessible desde todos los componentes)
+// parsearTextoANumero: funcion de modulo accesible desde HistorialDocumentado y SheetsOrderForm
 function parsearTextoANumero(val) {
   if (val === undefined || val === null || val === '') return 0;
   var numeroLimpio = String(val).replace(/,/g, '');
@@ -767,11 +767,44 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> CSV
                       </button>
-              <button onClick={function(e){ e.stopPropagation(); setEditandoDoc(p); setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||''}; return n; }); }}
+              <button onClick={function(e){ e.stopPropagation(); setEditandoDoc(p.nOrden); setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||''}; return n; }); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-90" style={{background:'#4f46e5'}}>
                 <Edit3 className="w-3 h-3"/> Editar
               </button>
                     </div>
+              <div key={"editform-"+p.nOrden}>{editandoDoc === p.nOrden && (
+                <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
+                  <div className="font-semibold text-xs text-indigo-700 uppercase tracking-wider mb-2">✏️ Editar Pedido #{p.nOrden}</div>
+                   <div className="grid grid-cols-2 gap-2">
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Factura</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.nroFactura!==undefined?editDataDoc[p.nOrden].nroFactura:p.nroFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{nroFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: F-001"/>
+                     </div>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Tipo Factura</label>
+                       <select value={editDataDoc[p.nOrden]?.tipoFactura||p.tipoFactura||'contado'} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg">
+                         <option value="contado">Contado</option><option value="credito">Credito</option><option value="consignacion">Consignacion</option>
+                       </select>
+                     </div>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">N° Doc. Ingreso</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.numeroPedidoSistema!==undefined?editDataDoc[p.nOrden].numeroPedidoSistema:p.numeroPedidoSistema||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{numeroPedidoSistema:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Ej: 2024-001"/>
+                     </div>
+                     <div><label className="text-xs font-semibold text-slate-600 block mb-0.5">Obs. Factura</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.obsFactura!==undefined?editDataDoc[p.nOrden].obsFactura:p.obsFactura||''} onChange={function(e){ setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{obsFactura:e.target.value}); return n; }); }} className="w-full px-2 py-1 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500" placeholder="Observaciones"/>
+                     </div>
+                     <div className="col-span-2"><label className="text-xs font-semibold text-slate-600 block mb-0.5">Nota de crédito</label>
+                       <input type="text" value={editDataDoc[p.nOrden]?.notaCredito!==undefined?editDataDoc[p.nOrden].notaCredito:p.notaCredito||''} onChange={function(e){ setEditDataDoc(function(prev){ return Object.assign({},prev,{[p.nOrden]:Object.assign({},prev[p.nOrden]||{},{notaCredito:e.target.value})}); });}} className="w-full px-2 py-1 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500" placeholder="Ej: NC-001..."/>
+                     </div>
+                     <div className="col-span-2"><label className="text-xs font-semibold text-slate-600 block mb-0.5">Fecha de Entrega</label>
+                       <input type="date" value={editDataDoc[p.nOrden]?.fechaEntrega!==undefined?editDataDoc[p.nOrden].fechaEntrega:p.fechaEntrega||''} onChange={function(e){ setEditDataDoc(function(prev){ return Object.assign({},prev,{[p.nOrden]:Object.assign({},prev[p.nOrden]||{},{fechaEntrega:e.target.value})}); }); }} className="w-full border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500" />
+                     </div>
+                   </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={function(){ guardarEdicionDoc(p.nOrden); }} disabled={guardandoDoc} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{background:'#4f46e5',opacity:guardandoDoc?0.6:1}}>
+                      <Save className="w-3 h-3 inline mr-1"/>{guardandoDoc?'Guardando...':"Guardar Cambios"}
+                    </button>
+                    <button onClick={function(){ setEditandoDoc(null); }} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 bg-white border border-slate-300">Cancelar</button>
+                  </div>
+                </div>
+              )}</div>
                     <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
                       <table className="w-full text-xs">
                         <thead><tr style={{background:'#0f6b3a'}}>
@@ -811,53 +844,6 @@ export function HistorialDocumentado({ proveedoresMeta }) {
               </div>
             );
           })}
-
-{/* Modal de edicion - renderizado FUERA del map para evitar insertBefore */}
-{editandoDoc && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={function(){ setEditandoDoc(null); }}>
-    <div className="bg-white rounded-2xl shadow-2xl border border-indigo-200 p-6 w-full max-w-lg mx-4" onClick={function(e){ e.stopPropagation(); }}>
-      <div className="font-bold text-sm text-indigo-700 uppercase tracking-wider mb-4">
-        &#9999;&#65039; Editar Pedido #{typeof editandoDoc === 'object' ? editandoDoc.nOrden : editandoDoc}
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div><label className='text-xs font-semibold text-slate-600 block mb-0.5'>N° Factura</label>
-          <input type='text' value={editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)]?.nroFactura!==undefined?editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)].nroFactura:(typeof editandoDoc==='object'?editandoDoc.nroFactura||'':'')}
-            onChange={function(e){ var nOrd=typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc; setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[nOrd]=Object.assign({},n[nOrd]||{},{nroFactura:e.target.value}); return n; }); }}
-            className='w-full px-2 py-1.5 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500' placeholder='Ej: F-001'/></div>
-        <div><label className='text-xs font-semibold text-slate-600 block mb-0.5'>Tipo Factura</label>
-          <select value={editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)]?.tipoFactura||(typeof editandoDoc==='object'?editandoDoc.tipoFactura||'contado':'contado')}
-            onChange={function(e){ var nOrd=typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc; setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[nOrd]=Object.assign({},n[nOrd]||{},{tipoFactura:e.target.value}); return n; }); }}
-            className='w-full px-2 py-1.5 text-xs border border-indigo-300 rounded-lg'>
-          <option value='contado'>Contado</option><option value='credito'>Credito</option><option value='consignacion'>Consignacion</option>
-          </select></div>
-        <div><label className='text-xs font-semibold text-slate-600 block mb-0.5'>N° Doc. Ingreso</label>
-          <input type='text' value={editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)]?.numeroPedidoSistema!==undefined?editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)].numeroPedidoSistema:(typeof editandoDoc==='object'?editandoDoc.numeroPedidoSistema||'':'')}
-            onChange={function(e){ var nOrd=typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc; setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[nOrd]=Object.assign({},n[nOrd]||{},{numeroPedidoSistema:e.target.value}); return n; }); }}
-            className='w-full px-2 py-1.5 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500' placeholder='Ej: 2024-001'/></div>
-        <div><label className='text-xs font-semibold text-slate-600 block mb-0.5'>Obs. Factura</label>
-          <input type='text' value={editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)]?.obsFactura!==undefined?editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)].obsFactura:(typeof editandoDoc==='object'?editandoDoc.obsFactura||'':'')}
-            onChange={function(e){ var nOrd=typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc; setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[nOrd]=Object.assign({},n[nOrd]||{},{obsFactura:e.target.value}); return n; }); }}
-            className='w-full px-2 py-1.5 text-xs border border-indigo-300 rounded-lg focus:outline-none focus:border-indigo-500' placeholder='Observaciones'/></div>
-        <div className='col-span-2'><label className='text-xs font-semibold text-slate-600 block mb-0.5'>Nota de crédito</label>
-          <input type='text' value={editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)]?.notaCredito!==undefined?editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)].notaCredito:(typeof editandoDoc==='object'?editandoDoc.notaCredito||'':'')}
-            onChange={function(e){ var nOrd=typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc; setEditDataDoc(function(prev){ return Object.assign({},prev,{[nOrd]:Object.assign({},prev[nOrd]||{},{notaCredito:e.target.value})}); }); }}
-            className='w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500' placeholder='Ej: NC-001...'/></div>
-        <div className='col-span-2'><label className='text-xs font-semibold text-slate-600 block mb-0.5'>Fecha de Entrega</label>
-          <input type='date' value={editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)]?.fechaEntrega!==undefined?editDataDoc[(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc)].fechaEntrega:(typeof editandoDoc==='object'?editandoDoc.fechaEntrega||'':'')}
-            onChange={function(e){ var nOrd=typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc; setEditDataDoc(function(prev){ return Object.assign({},prev,{[nOrd]:Object.assign({},prev[nOrd]||{},{fechaEntrega:e.target.value})}); }); }}
-            className='w-full border border-slate-200 rounded-lg text-xs p-1.5 focus:outline-none focus:border-blue-500'/></div>
-      </div>
-      <div className='flex gap-2 pt-4'>
-        <button onClick={function(){ guardarEdicionDoc(typeof editandoDoc==='object'?editandoDoc.nOrden:editandoDoc); }} disabled={guardandoDoc}
-          className='flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white disabled:opacity-50' style={{background:'#4f46e5'}}>
-          {guardandoDoc ? <RefreshCw className='w-3 h-3 animate-spin'/> : null}
-          {guardandoDoc ? 'Guardando...' : 'Guardar Cambios'}
-        </button>
-        <button onClick={function(){ setEditandoDoc(null); }} className='px-3 py-2 rounded-lg text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200'>Cancelar</button>
-      </div>
-    </div>
-  </div>
-)}
         </div>
       )}
     </div>
