@@ -1,9 +1,9 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v34 - fix crash PDF en HistorialDocumentado (ReferenceError parsearTextoANumero)
- * - Reemplaza parsearTextoANumero por parseFloat inline en boton PDF de HD
- * - Metadata factura/NPS desde todas las filas - keys estables HD
- * - Base: v33 limpio (commit 61fb629)
+ * SheetsOrderForm.tsx v34 - fix: parseFloat inline en HD (reemplaza parsearTextoANumero no-definida)
+ * - Metadata (factura, NPS) se lee de TODAS las filas, no solo la primera
+ * - key estables en lista y contenido expandido eliminan error insertBefore
+ */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
 import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getProductosConMinMax,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
@@ -738,7 +738,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                             return {
                               articulo: a.articulo || '',
                               unidad: a.unidad || '', 
-                              cantidad: (function(v){ var s=String(v||'').split(',').join(''); var n=parseFloat(s); return isNaN(n)||n<0?0:n; })(a.cantidad), 
+                              cantidad: parseFloat(String(a.cantidad||'').replace(/,/g,'')) || 0, 
                               valorUnitario: parseFloat(a.valorUnitario || 0), 
                               codigo: a.codigo || ''
                             }; 
