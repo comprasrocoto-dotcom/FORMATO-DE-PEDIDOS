@@ -236,7 +236,7 @@ function HistorialPedidos({ proveedoresMeta }) {
       {cargando && <div className="p-8 text-center text-slate-400 text-sm">Cargando historial...</div>}
       {!cargando && pedidos.length === 0 && !err && <div className="p-8 text-center text-slate-400 text-sm">No hay pedidos pendientes. Todos los pedidos han sido documentados.</div>}
       {!cargando && pedidosFiltrados.length > 0 && (
-        <div key={'list-' + pedidos.length} className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
+        <div key='historial-list' className="divide-y divide-slate-100 max-h-[700px] overflow-y-auto">
           {pedidosFiltrados.map(function(p) {
             var isOpen = expandido === p.nOrden;
             var isEditFac = editandoFactura === p.nOrden;
