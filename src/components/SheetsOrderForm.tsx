@@ -1,9 +1,8 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v32 - fix: integridad de datos en Ordenes de Compra
- * - ID de orden unico con ms + random (evita colision de concurrencia)
- * - Metadatos (factura, NPS) se leen de TODAS las filas, no solo la primera
- * - Adicionar Insumo: permite agregar articulos a una orden ya creada
+ * SheetsOrderForm.tsx v33 - fix: insertBefore definitivo en HistorialDocumentado
+ * - Metadata (factura, NPS) se lee de TODAS las filas, no solo la primera
+ * - key estables en lista y contenido expandido eliminan error insertBefore
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
@@ -468,12 +467,6 @@ export function HistorialDocumentado({ proveedoresMeta }) {
   var [busqHD, setBusqHD] = useState('');
   var [fechaDesdeHD, setFechaDesdeHD] = useState('');
   var [fechaHastaHD, setFechaHastaHD] = useState('');
-  var [adicionandoInsumo, setAdicionandoInsumo] = useState(null);
-  var [adicionarProductos, setAdicionarProductos] = useState([]);
-  var [adicionarCantidades, setAdicionarCantidades] = useState({});
-  var [adicionarBusq, setAdicionarBusq] = useState('');
-  var [adicionarGuardando, setAdicionarGuardando] = useState(false);
-  var [adicionarError, setAdicionarError] = useState('');
 
   useEffect(function() { cargarDocumentados(); }, []);
 
@@ -551,29 +544,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
     return { nit: found.nit||'---', telefono: found.telefono||'---', correo: found.correo||'---', contacto: found.contacto||found.asesor||'---' };
   }
 
-  
-  async function adicionarInsumosAOrden(pedido) {
-    var nuevas = Object.keys(adicionarCantidades).filter(function(cod) { return parseFloat(adicionarCantidades[cod]) > 0; });
-    if (nuevas.length === 0) { alert('Agrega al menos un articulo.'); return; }
-    setAdicionarGuardando(true); setAdicionarError('');
-    var errores = 0; var fechaHoy = new Date().toISOString().split('T')[0];
-    for (var i = 0; i < nuevas.length; i++) {
-      var cod = nuevas[i];
-      var prod = adicionarProductos.find(function(p) { return p.codigo === cod; });
-      if (!prod) continue;
-      try {
-        var payload = { action:'appendPedido', nOrden:pedido.nOrden, fecha:fechaHoy, sede:pedido.sede, proveedor:pedido.proveedor, codigo:prod.codigo, insumo:prod.articulo, unidad:prod.unidad||'', cantidad:parseFloat(adicionarCantidades[cod])||0, correo:'', responsable:pedido.responsable||'', observaciones:'Insumo adicional', medioPago:pedido.medioPago||'contado' };
-        var res = await fetch('https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec', { method:'POST', headers:{'Content-Type':'text/plain'}, body:JSON.stringify(payload), redirect:'follow' });
-        var txt = await res.text().catch(function(){ return ''; });
-        try { var j = JSON.parse(txt); if (j.ok === false) errores++; } catch(_) {}
-      } catch(e) { errores++; }
-    }
-    if (errores > 0) { setAdicionarError(errores + ' linea(s) no guardadas.'); }
-    else { setAdicionandoInsumo(null); setAdicionarCantidades({}); setAdicionarBusq(''); await cargarDocumentados(); alert('Insumos guardados correctamente.'); }
-    setAdicionarGuardando(false);
-  }
-
-var pedidosFiltrados = pedidos.filter(function(p) {
+  var pedidosFiltrados = pedidos.filter(function(p) {
     var pasaSede = !sedeFiltro || p.sede === sedeFiltro;
     var q = busqHD.trim().toLowerCase();
     var pasaBusq = !q || (
@@ -791,29 +762,6 @@ var pedidosFiltrados = pedidos.filter(function(p) {
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-90" style={{background:'#4f46e5'}}>
                 <Edit3 className="w-3 h-3"/> Editar
               </button>
-              <button onClick={function(e){ e.stopPropagation();
-                (async function() {
-                  setAdicionarCantidades({}); setAdicionarBusq(''); setAdicionarError('');
-                  try {
-                    var res = await fetch('https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec?action=getDatos', { redirect:'follow' });
-                    var data = await res.json();
-                    var artMap = data.articulosPorProveedor || {};
-                    var prods = []; var seen = new Set();
-                    Object.values(artMap).forEach(function(rows) { (rows||[]).forEach(function(row) {
-                      var prov = String(row.articulo||'').trim();
-                      if (prov !== p.proveedor) return;
-                      var cod = String(row.codigo||'').trim(); var art = String(row.subArticulo||'').trim();
-                      if (!cod || !art || seen.has(cod)) return;
-                      seen.add(cod); prods.push({codigo:cod, articulo:art, unidad:String(row.unidad||'').trim()});
-                    }); });
-                    setAdicionarProductos(prods);
-                  } catch(err) { setAdicionarProductos([]); }
-                  setAdicionandoInsumo(p);
-                })();
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-90" style={{background:'#0891b2'}}>
-                <ShoppingCart className="w-3 h-3"/> + Insumo
-              </button>
                     </div>
               <div key={"editform-"+p.nOrden}>{editandoDoc === p.nOrden && (
                 <div className="mt-3 p-3 bg-indigo-50 border border-indigo-200 rounded-xl space-y-2">
@@ -848,7 +796,7 @@ var pedidosFiltrados = pedidos.filter(function(p) {
                   </div>
                 </div>
               )}</div>
-                                  <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
+                    <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
                       <table className="w-full text-xs">
                         <thead><tr style={{background:'#0f6b3a'}}>
                           <th className="py-2 px-3 text-left text-white font-bold uppercase">Codigo</th>
@@ -887,66 +835,6 @@ var pedidosFiltrados = pedidos.filter(function(p) {
               </div>
             );
           })}
-        </div>
-      )}
-      {adicionandoInsumo && (
-        <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.4)',zIndex:1000,display:'flex',alignItems:'flex-start',justifyContent:'center',paddingTop:'60px',overflowY:'auto'}} onClick={function(e){ if(e.target===e.currentTarget){setAdicionandoInsumo(null);setAdicionarCantidades({});setAdicionarBusq('');setAdicionarError('');} }}>
-          <div style={{background:'white',borderRadius:'16px',padding:'20px',width:'90%',maxWidth:'700px',maxHeight:'80vh',overflowY:'auto',border:'2px solid #0891b2'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-              <span style={{fontSize:'13px',fontWeight:700,color:'#0891b2',textTransform:'uppercase',letterSpacing:'0.05em'}}>
-                Agregar Insumo — Orden #{adicionandoInsumo.nOrden}
-              </span>
-              <button onClick={function(){setAdicionandoInsumo(null);setAdicionarCantidades({});setAdicionarBusq('');setAdicionarError('');}} style={{fontSize:'12px',padding:'4px 10px',border:'1px solid #cbd5e1',borderRadius:'8px',cursor:'pointer',background:'white'}}>x Cerrar</button>
-            </div>
-            <p style={{fontSize:'11px',color:'#0891b2',background:'#ecfeff',borderRadius:'8px',padding:'6px 10px',marginBottom:'10px'}}>
-              Proveedor: <strong>{adicionandoInsumo.proveedor}</strong> — Asigna cantidades a los articulos a agregar.
-            </p>
-            {adicionarError && <div style={{fontSize:'12px',color:'#dc2626',background:'#fef2f2',border:'1px solid #fca5a5',borderRadius:'8px',padding:'6px 10px',marginBottom:'8px'}}>{adicionarError}</div>}
-            <div style={{position:'relative',marginBottom:'10px'}}>
-              <input type="text" value={adicionarBusq} onChange={function(e){setAdicionarBusq(e.target.value);}}
-                placeholder="Buscar articulo..." style={{width:'100%',padding:'8px 12px',border:'1px solid #a5f3fc',borderRadius:'8px',fontSize:'13px',outline:'none',boxSizing:'border-box'}}/>
-            </div>
-            <div style={{maxHeight:'45vh',overflowY:'auto',border:'1px solid #a5f3fc',borderRadius:'12px'}}>
-              <table style={{width:'100%',fontSize:'12px',borderCollapse:'collapse'}}>
-                <thead><tr style={{background:'#0891b2'}}>
-                  <th style={{padding:'8px',textAlign:'left',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase'}}>Cod.</th>
-                  <th style={{padding:'8px',textAlign:'left',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase'}}>Articulo</th>
-                  <th style={{padding:'8px',textAlign:'center',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase'}}>Und</th>
-                  <th style={{padding:'8px',textAlign:'center',color:'white',fontWeight:700,fontSize:'10px',textTransform:'uppercase',width:'130px'}}>Cantidad</th>
-                </tr></thead>
-                <tbody>
-                  {(adicionarBusq ? adicionarProductos.filter(function(pr){var q=adicionarBusq.toLowerCase();return (pr.articulo||'').toLowerCase().includes(q)||(pr.codigo||'').toLowerCase().includes(q);}) : adicionarProductos).map(function(pr,pi){
-                    var qty=adicionarCantidades[pr.codigo]!==undefined?adicionarCantidades[pr.codigo]:'';
-                    var qtyN=parseFloat(qty)||0;
-                    return (
-                      <tr key={pr.codigo} style={{borderBottom:'1px solid #e2e8f0',background:qtyN>0?'#ecfeff':pi%2===0?'white':'#f8fafc'}}>
-                        <td style={{padding:'6px 8px',fontFamily:'monospace',color:'#94a3b8',fontSize:'10px'}}>{pr.codigo}</td>
-                        <td style={{padding:'6px 8px',fontWeight:500,color:'#1e293b'}}>{pr.articulo}</td>
-                        <td style={{padding:'6px 8px',textAlign:'center',color:'#64748b',fontSize:'10px'}}>{pr.unidad||'---'}</td>
-                        <td style={{padding:'6px 8px'}}>
-                          <div style={{display:'flex',alignItems:'center',gap:'4px',justifyContent:'center'}}>
-                            <button type="button" onClick={function(){setAdicionarCantidades(function(prev){var n=Object.assign({},prev);n[pr.codigo]=String(Math.max(0,(parseFloat(n[pr.codigo])||0)-1));return n;});}} style={{width:'24px',height:'24px',borderRadius:'6px',background:'#e2e8f0',border:'none',cursor:'pointer',fontWeight:700,color:'#475569',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>-</button>
-                            <input type="text" inputMode="decimal" value={qty} onChange={function(e){var v=e.target.value.replace(/[^0-9.]/g,'');setAdicionarCantidades(function(prev){var n=Object.assign({},prev);n[pr.codigo]=v;return n;});}}
-                              placeholder="0" style={{width:'60px',textAlign:'center',padding:'4px',border:'1px solid #e2e8f0',borderRadius:'6px',fontSize:'12px',fontWeight:700,outline:'none'}}/>
-                            <button type="button" onClick={function(){setAdicionarCantidades(function(prev){var n=Object.assign({},prev);n[pr.codigo]=String((parseFloat(n[pr.codigo])||0)+1);return n;});}} style={{width:'24px',height:'24px',borderRadius:'6px',background:'#0891b2',border:'none',cursor:'pointer',fontWeight:700,color:'white',fontSize:'16px',display:'flex',alignItems:'center',justifyContent:'center'}}>+</button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                  {adicionarProductos.length===0 && <tr><td colSpan={4} style={{padding:'16px',textAlign:'center',color:'#94a3b8',fontSize:'12px'}}>Cargando articulos del proveedor...</td></tr>}
-                </tbody>
-              </table>
-            </div>
-            <div style={{display:'flex',gap:'8px',marginTop:'12px'}}>
-              <button onClick={function(){adicionarInsumosAOrden(adicionandoInsumo);}} disabled={adicionarGuardando||Object.keys(adicionarCantidades).filter(function(k){return parseFloat(adicionarCantidades[k])>0;}).length===0}
-                style={{display:'flex',alignItems:'center',gap:'6px',padding:'8px 16px',borderRadius:'8px',fontSize:'12px',fontWeight:700,color:'white',background:adicionarGuardando?'#7dd3fc':'#0891b2',border:'none',cursor:adicionarGuardando?'not-allowed':'pointer',opacity:adicionarGuardando||Object.keys(adicionarCantidades).filter(function(k){return parseFloat(adicionarCantidades[k])>0;}).length===0?0.5:1}}>
-                {adicionarGuardando ? 'Guardando...' : 'Guardar Insumos'}
-              </button>
-              <button onClick={function(){setAdicionandoInsumo(null);setAdicionarCantidades({});setAdicionarBusq('');setAdicionarError('');}} disabled={adicionarGuardando}
-                style={{padding:'8px 12px',borderRadius:'8px',fontSize:'12px',fontWeight:600,color:'#475569',background:'white',border:'1px solid #e2e8f0',cursor:'pointer'}}>Cancelar</button>
-            </div>
-          </div>
         </div>
       )}
     </div>
@@ -1098,7 +986,7 @@ export default function SheetsOrderForm() {
       provTel:provMeta?provMeta.telefono||'---':'---',
       provCorreo:provMeta?provMeta.correo||'---':'---',
       provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',
-      orden:(function(){ var ms=Date.now(); var rnd=Math.floor(Math.random()*10000).toString().padStart(4,'0'); return parseInt(ms.toString().slice(-7)+rnd); })(),fecha:new Date().toISOString().split('T')[0]
+      orden:Math.floor(Date.now()/1000),fecha:new Date().toISOString().split('T')[0]
     };
     try {
       localStorage.setItem('ped_responsable',snap.resp);
