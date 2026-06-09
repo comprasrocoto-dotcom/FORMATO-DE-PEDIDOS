@@ -154,7 +154,8 @@ function HistorialPedidos({ proveedoresMeta }) {
         alert('Error guardando: ' + (result.error || 'Error desconocido'));
         return;
       }
-      setEditandoNPS(null);      await cargarHistorial();
+            setEditandoNPS(null);
+            await cargarHistorial();
     } catch(e) { alert('Error: ' + (e.message||'Error de red')); }
     finally { setGuardandoNPS(false); }
   }
