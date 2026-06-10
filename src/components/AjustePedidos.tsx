@@ -40,28 +40,18 @@ function validarProveedorFGH(pm) {
 }
 
 // --- DetalleOrden ----------------------------------------------------------
-function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, nuevasLineas, setNuevasLineas }) {
+function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, nuevasLineas, setNuevasLineas, productosProveedor, loadingProds }) {
   var isEdit = editandoOrden === g.nOrden;
   var lineas = g.lineas || [];
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
   var [guardandoNC, setGuardandoNC] = useState(false);
   var [ncGuardado, setNcGuardado] = useState(false);
 var [busqNuevo, setBusqNuevo] = useState('');
-var [productosProveedor, setProductosProveedor] = useState([]);
-var [loadingProds, setLoadingProds] = useState(false);
 var [cantNueva, setCantNueva] = useState('');
 var [artSeleccionado, setArtSeleccionado] = useState(null);
 var [showDropdown, setShowDropdown] = useState(false);
 
-// Cargar productos del proveedor cuando se entra en modo edicion
 useEffect(function() {
-  if (isEdit && productosProveedor.length === 0 && g.proveedor) {
-    setLoadingProds(true);
-    getProductosByProveedor(g.proveedor).then(function(prods) {
-      setProductosProveedor(prods || []);
-      setLoadingProds(false);
-    }).catch(function(){ setLoadingProds(false); });
-  }
   if (!isEdit) {
     setBusqNuevo(''); setArtSeleccionado(null); setCantNueva(''); setShowDropdown(false);
   }
@@ -388,6 +378,8 @@ export default function AjustePedidos() {
   var [minMaxConvertido, setMinMaxConvertido] = useState({});
   var [notaCreditoMap, setNotaCreditoMap] = useState({});
 var [nuevasLineasMap, setNuevasLineasMap] = useState({});
+var [productosProveedorActual, setProductosProveedorActual] = useState([]);
+var [loadingProdsActual, setLoadingProdsActual] = useState(false);
 
   useEffect(function(){
     cargarPendientes();
@@ -484,12 +476,22 @@ var [nuevasLineasMap, setNuevasLineasMap] = useState({});
     setObsModificacion('');
     setTimeout(function(){ setEditandoOrden(g.nOrden); }, 0);
 setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]:[]}); });
+if (g.proveedor) {
+  setProductosProveedorActual([]);
+  setLoadingProdsActual(true);
+  getProductosByProveedor(g.proveedor).then(function(prods) {
+    setProductosProveedorActual(prods || []);
+    setLoadingProdsActual(false);
+  }).catch(function(){ setLoadingProdsActual(false); });
+}
   }
 
   function cancelarEdicion() {
     setEditandoOrden(null);
     setCantidadesEdit({});
 setNuevasLineasMap({});
+setProductosProveedorActual([]);
+setLoadingProdsActual(false);
   }
 
   async function guardarCambios(g) {
@@ -688,6 +690,8 @@ await cargarPendientes();
                       onPDFError={function(msg){ setErr(msg); }}
 nuevasLineas={nuevasLineasMap[g.nOrden] || []}
 setNuevasLineas={function(v){ setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]: typeof v === 'function' ? v(p[g.nOrden]||[]) : v}); }); }}
+productosProveedor={productosProveedorActual}
+loadingProds={loadingProdsActual}
                     />
                   )}
                 </div>
