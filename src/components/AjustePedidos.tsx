@@ -1,20 +1,14 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v9 - agrega referencias nuevas al editar pedido
- * Fix: PDF ahora usa la misma estructura que generarPDF en SheetsOrderForm
- * - Mismos campos (Sede, Direccion, Telefono Sede, Horario, Encargado / Proveedor, NIT, Tel, Contacto, Correo)
- * - Misma tabla (Articulo, Unidad, Cantidad, Total)
- * - Agrega nroFactura, tipoFactura, obsFactura al historial de ajustes
- * Fix: pantalla en blanco al editar - seguridad nula en lineas/codigo
- * Fix: key estable sin remount innecesario
- * Fix: validacion F-G-H del proveedor antes de generar PDF
- * Fix: carga proveedoresMeta desde Drive con campos correos/telefono/contacto
- * v8: agrega campo editable "Nota de credito" en DetalleOrden
- * v8: corrige semaforo AP (emoji directo sin encoding)
+ * AjustePedidos.tsx v10
+ * Fix: eliminados useState(guardandoNC, ncGuardado) de DetalleOrden
+ * => evita crash insertBefore al cambiar editandoOrden
+ * => estado movido al padre como ncGuardandoMap / ncGuardadoMap
+ * Feature: agregar nuevas referencias al pedido en modo edicion
  */
 import { useState, useEffect, useRef } from 'react';
-import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download, Search } from 'lucide-react';
-import { actualizarPedido, actualizarFactura, getProveedores, getAllDatos, getProductosByProveedor, appendPedido } from '../services/googleSheets';
+import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download, Search, Plus } from 'lucide-react';
+import { actualizarPedido, actualizarFactura, getProveedores, getAllDatos, appendPedido, getProductosByProveedor } from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
@@ -40,28 +34,16 @@ function validarProveedorFGH(pm) {
 }
 
 // --- DetalleOrden ----------------------------------------------------------
-function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, nuevasLineas, setNuevasLineas, productosProveedor, loadingProds, guardandoNC, setGuardandoNC, ncGuardado, setNcGuardado, busqNuevo, setBusqNuevo, cantNueva, setCantNueva, artSeleccionado, setArtSeleccionado, showDropdown, setShowDropdown }) {
-var isEdit = editandoOrden === g.nOrden;
-var lineas = g.lineas || [];
-var pm = getProvMeta(proveedoresMeta, g.proveedor);
-
-
-function agregarLinea() {
-  if (!artSeleccionado || !cantNueva || parseFloat(cantNueva) <= 0) { alert('Selecciona un artículo e ingresa una cantidad mayor a 0.'); return; }
-  var existe = (nuevasLineas || []).find(function(l){ return l.codigo === artSeleccionado.codigo; });
-  if (existe) { alert('Este artículo ya fue agregado. Ajusta la cantidad en la lista.'); return; }
-  var existeEnPedido = (g.lineas || []).find(function(l){ return l.codigo === artSeleccionado.codigo; });
-  if (existeEnPedido) { alert('Este artículo ya existe en el pedido. Edita su cantidad directamente en la tabla.'); return; }
-  var linea = { codigo: artSeleccionado.codigo, articulo: artSeleccionado.articulo, unidad: artSeleccionado.unidad || '', cantidad: parseFloat(cantNueva) || 0 };
-  setNuevasLineas(function(prev){ return (prev || []).concat([linea]); });
-  setBusqNuevo(''); setArtSeleccionado(null); setCantNueva(''); setShowDropdown(false);
-}
+// IMPORTANTE: NO tiene useState ni useEffect para evitar crash insertBefore
+function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, guardandoNC, setGuardandoNC, ncGuardado, setNcGuardado, productosProveedor, loadingProds, nuevasLineas, setNuevasLineas }) {
+  var isEdit = editandoOrden === g.nOrden;
+  var lineas = g.lineas || [];
+  var pm = getProvMeta(proveedoresMeta, g.proveedor);
 
   function handleDescargarPDF() {
     var pmActual = (proveedoresMeta || []).find(function(p) {
       return String(p.nombre || '').trim().toLowerCase() === String(g.proveedor || '').trim().toLowerCase();
     }) || {};
-
     generarPDF({
       sede: g.sede || '---',
       sedeDireccion: g.sedeDireccion || pmActual.sedeDireccion || '---',
@@ -123,7 +105,7 @@ function agregarLinea() {
         })}
       </div>
 
-      {/* Nota de credito - siempre visible */}
+      {/* Nota de credito */}
       <div className="mb-3 p-3 bg-white border border-slate-200 rounded-xl">
         <label className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Nota de crédito</label>
         <div className="flex gap-2 items-center">
@@ -144,7 +126,7 @@ function agregarLinea() {
         </div>
       </div>
 
-      {/* Campo modificado por - SIEMPRE presente en DOM, visible solo en isEdit */}
+      {/* Modificado por - visible solo en edit */}
       <div style={{display: isEdit ? 'block' : 'none'}} className="mb-3 p-3 bg-amber-50 border border-amber-200 rounded-xl">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <div>
@@ -160,7 +142,7 @@ function agregarLinea() {
         </div>
       </div>
 
-      {/* Tabla articulos */}
+      {/* Tabla articulos existentes */}
       <div className="rounded-xl overflow-hidden border border-slate-200 mb-3">
         <table className="w-full text-xs">
           <thead><tr style={{background:'#1a3c6e'}}>
@@ -214,73 +196,104 @@ function agregarLinea() {
         </table>
       </div>
 
-      {/* Panel agregar articulo - solo en modo edicion */}
-{isEdit && (
-<div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
-<div className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-2">+ Agregar artículo al pedido</div>
-<div className="flex flex-col sm:flex-row gap-2 mb-2">
-<div className="flex-1 relative">
-<input type="text" value={busqNuevo} onChange={function(e){ setBusqNuevo(e.target.value); setArtSeleccionado(null); setShowDropdown(true); }}
-onFocus={function(){ setShowDropdown(true); }}
-className="w-full px-2 py-1.5 bg-white border border-blue-300 rounded-lg text-xs focus:outline-none focus:border-blue-500" placeholder="Buscar artículo del proveedor..."/>
-{showDropdown && busqNuevo.length > 0 && (
-<div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
-{loadingProds ? (
-<div className="px-3 py-2 text-xs text-slate-400">Cargando...</div>
-) : (function(){
-var q = busqNuevo.trim().toLowerCase();
-var resultados = productosProveedor.filter(function(p){
-return (p.articulo||'').toLowerCase().includes(q) || (p.codigo||'').toLowerCase().includes(q);
-}).slice(0, 20);
-if (resultados.length === 0) return (<div className="px-3 py-2 text-xs text-slate-400">Sin resultados</div>);
-return resultados.map(function(p){
-return (<button key={p.codigo} type="button" onMouseDown={function(e){ e.preventDefault(); setArtSeleccionado(p); setBusqNuevo(p.articulo + ' (' + p.codigo + ')'); setShowDropdown(false); }}
-className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-slate-100 last:border-0 flex items-center justify-between">
-<span className="font-medium text-slate-800">{p.articulo}</span>
-<span className="text-slate-400 font-mono ml-2">{p.codigo}</span>
-</button>);
-});
-})()}
-</div>
-)}
-</div>
-<input type="number" min="0.01" step="0.01" value={cantNueva} onChange={function(e){ setCantNueva(e.target.value); }}
-className="w-24 px-2 py-1.5 bg-white border border-blue-300 rounded-lg text-xs focus:outline-none focus:border-blue-500 text-center" placeholder="Cant."/>
-<button type="button" onClick={agregarLinea}
-className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 flex-shrink-0">
-Agregar
-</button>
-</div>
-{artSeleccionado && <div className="text-xs text-blue-700 bg-blue-100 rounded-lg px-2 py-1">✓ Seleccionado: <strong>{artSeleccionado.articulo}</strong> — {artSeleccionado.unidad}</div>}
-{(nuevasLineas || []).length > 0 && (
-<div className="mt-2 rounded-lg overflow-hidden border border-blue-200">
-<table className="w-full text-xs">
-<thead><tr className="bg-blue-600 text-white"><th className="py-1.5 px-2 text-left">Código</th><th className="py-1.5 px-2 text-left">Artículo</th><th className="py-1.5 px-2 text-center w-16">Unidad</th><th className="py-1.5 px-2 text-center w-20">Cant.</th><th className="py-1.5 px-2 w-8"></th></tr></thead>
-<tbody>
-{(nuevasLineas || []).map(function(nl, ni){
-return (<tr key={nl.codigo + '_' + ni} className="bg-white border-b border-blue-100">
-<td className="py-1 px-2 font-mono text-slate-500">{nl.codigo}</td>
-<td className="py-1 px-2 font-medium text-slate-800">{nl.articulo}</td>
-<td className="py-1 px-2 text-center text-slate-500">{nl.unidad||'---'}</td>
-<td className="py-1 px-2 text-center">
-<input type="number" min="0.01" step="0.01" value={nl.cantidad}
-onChange={function(e){ setNuevasLineas(function(prev){ return prev.map(function(x,xi){ return xi===ni ? Object.assign({},x,{cantidad:parseFloat(e.target.value)||0}) : x; }); }); }}
-className="w-14 text-center py-0.5 border border-blue-200 rounded text-xs font-bold focus:outline-none"/>
-</td>
-<td className="py-1 px-2 text-center">
-<button type="button" onClick={function(){ setNuevasLineas(function(prev){ return prev.filter(function(_,xi){ return xi!==ni; }); }); }}
-className="text-red-400 hover:text-red-600 font-bold text-sm leading-none">×</button>
-</td>
-</tr>);
-})}
-</tbody>
-</table>
-</div>
-)}
-</div>
-)}
+      {/* Panel agregar nueva referencia - solo en modo edicion */}
+      {isEdit && (
+        <div className="mb-3 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+          <div className="text-[10px] font-bold text-emerald-700 uppercase mb-2">Agregar nueva referencia</div>
+          {loadingProds ? (
+            <div className="text-xs text-slate-400 py-2 text-center">Cargando productos...</div>
+          ) : (
+            <div className="space-y-2">
+              {(productosProveedor || []).length === 0 ? (
+                <div className="text-xs text-slate-400 py-2 text-center">No se encontraron productos para este proveedor.</div>
+              ) : (
+                <>
+                  <select
+                    className="w-full py-1.5 px-2 bg-white border border-emerald-200 rounded-lg text-xs focus:outline-none focus:border-emerald-500"
+                    onChange={function(e){
+                      var val = e.target.value;
+                      if (!val) return;
+                      var prod = (productosProveedor || []).find(function(p){ return (p.codigo||p.code||p.id||p.articulo||p.nombre) === val; });
+                      if (!prod) return;
+                      var codigo = prod.codigo || prod.code || prod.id || val;
+                      var ya = (nuevasLineas || []).some(function(nl){ return nl.codigo === codigo; });
+                      if (ya) return;
+                      var nuevaLinea = {
+                        codigo: codigo,
+                        articulo: prod.articulo || prod.nombre || prod.name || val,
+                        unidad: prod.unidad || prod.unit || 'UND',
+                        cantidad: 1,
+                        valorUnitario: parseFloat(String(prod.valorUnitario || prod.precio || prod.price || 0)) || 0
+                      };
+                      setNuevasLineas(function(prev){ return (prev||[]).concat([nuevaLinea]); });
+                      e.target.value = '';
+                    }}
+                    defaultValue=""
+                  >
+                    <option value="">-- Seleccionar artículo --</option>
+                    {(productosProveedor || []).map(function(p, idx){
+                      var codigo = p.codigo || p.code || p.id || ('prod_'+idx);
+                      var nombre = p.articulo || p.nombre || p.name || codigo;
+                      return <option key={codigo} value={codigo}>{nombre}</option>;
+                    })}
+                  </select>
+                  {(nuevasLineas || []).length > 0 && (
+                    <div className="rounded-lg overflow-hidden border border-emerald-200">
+                      <table className="w-full text-xs">
+                        <thead><tr className="bg-emerald-700 text-white">
+                          <th className="py-1.5 px-2 text-left font-bold">Artículo</th>
+                          <th className="py-1.5 px-2 text-center font-bold w-20">Unidad</th>
+                          <th className="py-1.5 px-2 text-center font-bold w-24">Cantidad</th>
+                          <th className="py-1.5 px-2 w-8"></th>
+                        </tr></thead>
+                        <tbody>
+                          {(nuevasLineas || []).map(function(nl, idx){
+                            return (
+                              <tr key={nl.codigo + '_new_' + idx} className="border-b border-emerald-100 bg-white">
+                                <td className="py-1 px-2 text-slate-700 font-medium">{nl.articulo}</td>
+                                <td className="py-1 px-2 text-center text-slate-500">{nl.unidad}</td>
+                                <td className="py-1 px-2 text-center">
+                                  <div className="flex items-center gap-1 justify-center">
+                                    <button onClick={function(){
+                                      setNuevasLineas(function(prev){
+                                        return prev.map(function(x, i){ return i===idx ? Object.assign({},x,{cantidad:Math.max(0,x.cantidad-1)}) : x; });
+                                      });
+                                    }} className="w-5 h-5 rounded bg-slate-200 hover:bg-slate-300 font-bold text-slate-600">-</button>
+                                    <input type="number" min="0" step="0.01" value={nl.cantidad}
+                                      onChange={function(e){
+                                        var v = parseFloat(e.target.value)||0;
+                                        setNuevasLineas(function(prev){
+                                          return prev.map(function(x,i){ return i===idx ? Object.assign({},x,{cantidad:v}) : x; });
+                                        });
+                                      }}
+                                      className="w-14 text-center py-0.5 border border-emerald-300 rounded text-xs font-bold focus:outline-none focus:border-emerald-500"/>
+                                    <button onClick={function(){
+                                      setNuevasLineas(function(prev){
+                                        return prev.map(function(x,i){ return i===idx ? Object.assign({},x,{cantidad:x.cantidad+1}) : x; });
+                                      });
+                                    }} className="w-5 h-5 rounded bg-emerald-500 hover:bg-emerald-600 font-bold text-white">+</button>
+                                  </div>
+                                </td>
+                                <td className="py-1 px-2 text-center">
+                                  <button onClick={function(){
+                                    setNuevasLineas(function(prev){ return prev.filter(function(_,i){ return i!==idx; }); });
+                                  }} className="text-red-400 hover:text-red-600 font-bold text-sm leading-none">×</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
-{/* Botones */}
+      {/* Botones */}
       <div className="flex gap-2 flex-wrap">
         {!isEdit ? (
           <>
@@ -366,12 +379,14 @@ export default function AjustePedidos() {
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
   var [minMaxConvertido, setMinMaxConvertido] = useState({});
   var [notaCreditoMap, setNotaCreditoMap] = useState({});
-var [nuevasLineasMap, setNuevasLineasMap] = useState({});
-var [productosProveedorActual, setProductosProveedorActual] = useState([]);
-var [loadingProdsActual, setLoadingProdsActual] = useState(false);
-var [ncGuardandoMap, setNcGuardandoMap] = useState({});
-var [ncGuardadoMap, setNcGuardadoMap] = useState({});
-var [addingStateMap, setAddingStateMap] = useState({});
+  // Estados para NcGuardando/NcGuardado movidos fuera de DetalleOrden
+  var [ncGuardandoMap, setNcGuardandoMap] = useState({});
+  var [ncGuardadoMap, setNcGuardadoMap] = useState({});
+  // Estado para productos del proveedor activo
+  var [productosProveedorActual, setProductosProveedorActual] = useState([]);
+  var [loadingProdsActual, setLoadingProdsActual] = useState(false);
+  // Estado para nuevas lineas a agregar
+  var [nuevasLineasMap, setNuevasLineasMap] = useState({});
 
   useEffect(function(){
     cargarPendientes();
@@ -447,17 +462,16 @@ var [addingStateMap, setAddingStateMap] = useState({});
           });
         }
       });
-      var grupos = Object.values(mapa).reverse();
-      setGrupos(grupos);
-      // Inicializar notaCreditoMap con valores cargados
+      var gs = Object.values(mapa).reverse();
+      setGrupos(gs);
       var ncMap = {};
-      grupos.forEach(function(g){ ncMap[g.nOrden] = g.notaCredito || ''; });
+      gs.forEach(function(g){ ncMap[g.nOrden] = g.notaCredito || ''; });
       setNotaCreditoMap(ncMap);
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
   }
 
-  function iniciarEdicion(g) {
+  async function iniciarEdicion(g) {
     var cants = {};
     var lineas = g.lineas || [];
     lineas.forEach(function(l){
@@ -466,24 +480,26 @@ var [addingStateMap, setAddingStateMap] = useState({});
     });
     setCantidadesEdit(cants);
     setObsModificacion('');
+    setNuevasLineasMap(function(prev){ return Object.assign({},prev,{[g.nOrden]:[]}); });
     setEditandoOrden(g.nOrden);
-setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]:[]}); });
-if (g.proveedor) {
-  setProductosProveedorActual([]);
-  setLoadingProdsActual(true);
-  getProductosByProveedor(g.proveedor).then(function(prods) {
-    setProductosProveedorActual(prods || []);
+    // Cargar productos del proveedor
+    setProductosProveedorActual([]);
+    setLoadingProdsActual(true);
+    try {
+      var prods = await getProductosByProveedor(g.proveedor);
+      setProductosProveedorActual(prods || []);
+    } catch(e) {
+      console.warn('[getProductosByProveedor]', e.message);
+      setProductosProveedorActual([]);
+    }
     setLoadingProdsActual(false);
-  }).catch(function(){ setLoadingProdsActual(false); });
-}
   }
 
   function cancelarEdicion() {
     setEditandoOrden(null);
     setCantidadesEdit({});
-setNuevasLineasMap({});
-setProductosProveedorActual([]);
-setLoadingProdsActual(false);
+    setProductosProveedorActual([]);
+    setLoadingProdsActual(false);
   }
 
   async function guardarCambios(g) {
@@ -502,35 +518,36 @@ setLoadingProdsActual(false);
         if (!r.ok) { console.warn('Error ajuste:', r.error); errores++; }
       } catch(e2) { console.warn('[ajuste]', e2.message); errores++; }
     }
+    // Agregar nuevas lineas
+    var nls = nuevasLineasMap[g.nOrden] || [];
+    for (var j = 0; j < nls.length; j++) {
+      var nl = nls[j];
+      if (!nl.cantidad || nl.cantidad <= 0) continue;
+      try {
+        var r2 = await appendPedido({
+          nOrden: g.nOrden,
+          sede: g.sede,
+          proveedor: g.proveedor,
+          fecha: g.fecha,
+          codigo: nl.codigo,
+          articulo: nl.articulo,
+          unidad: nl.unidad,
+          cantidad: nl.cantidad,
+          valorUnitario: nl.valorUnitario || 0,
+          modificadoPor,
+          obsModificacion
+        });
+        if (!r2.ok) { console.warn('Error append:', r2.error); errores++; }
+      } catch(e3) { console.warn('[append]', e3.message); errores++; }
+    }
     setGuardando(false);
     setEditandoOrden(null);
     setCantidadesEdit({});
+    setNuevasLineasMap(function(prev){ return Object.assign({},prev,{[g.nOrden]:[]}); });
+    setProductosProveedorActual([]);
     if (errores > 0) { setErr(errores + ' linea(s) no pudieron actualizarse.'); }
     else { setSuccess('Cambios guardados exitosamente en Drive.'); setTimeout(function(){ setSuccess(''); }, 5000); }
-    // Guardar nuevas lineas via appendPedido
-var nuevasLineas = nuevasLineasMap[g.nOrden] || [];
-for (var j = 0; j < nuevasLineas.length; j++) {
-  var nl = nuevasLineas[j];
-  try {
-    var rr = await appendPedido({
-      fecha: g.fecha,
-      sede: g.sede,
-      proveedor: g.proveedor,
-      codigo: nl.codigo || '',
-      articulo: nl.articulo || '',
-      unidad: nl.unidad || '',
-      cantidad: nl.cantidad || 0,
-      responsable: modificadoPor,
-      correoResponsable: '',
-      notas: obsModificacion || 'Linea agregada en ajuste',
-      medioPago: g.medioPago || 'contado',
-      numeroOrden: g.nOrden
-    });
-    if (!rr.ok) { console.warn('Error agregando linea:', rr.error); errores++; }
-  } catch(e3) { console.warn('[appendNuevaLinea]', e3.message); errores++; }
-}
-setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]:[]}); });
-await cargarPendientes();
+    await cargarPendientes();
   }
 
   var sedesDisp = [...new Set(grupos.map(function(g){ return g.sede; }))].filter(Boolean).sort();
@@ -625,12 +642,11 @@ await cargarPendientes();
 
         {/* Lista */}
         {!cargando && gruposFiltrados.length > 0 && (
-          <div key={"list-"+(editandoOrden||"x")} className="divide-y divide-slate-100 max-h-[800px] overflow-y-auto">
+          <div className="divide-y divide-slate-100 max-h-[800px] overflow-y-auto">
             {gruposFiltrados.map(function(g) {
               var isOpen = expandido === g.nOrden;
               return (
                 <div key={g.nOrden}>
-                  {/* Fila resumen */}
                   <button onClick={function(){
                     if (isOpen) {
                       setExpandido(null);
@@ -659,9 +675,8 @@ await cargarPendientes();
                     </div>
                   </button>
 
-                  {/* Detalle */}
                   {isOpen && (
-<DetalleOrden
+                    <DetalleOrden
                       key={g.nOrden}
                       g={g}
                       editandoOrden={editandoOrden}
@@ -680,24 +695,16 @@ await cargarPendientes();
                       notaCredito={notaCreditoMap[g.nOrden] !== undefined ? notaCreditoMap[g.nOrden] : (g.notaCredito || '')}
                       setNotaCredito={function(v){ setNotaCreditoMap(function(p){ return Object.assign({},p,{[g.nOrden]:v}); }); }}
                       onPDFError={function(msg){ setErr(msg); }}
-nuevasLineas={nuevasLineasMap[g.nOrden] || []}
-setNuevasLineas={function(v){ setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]: typeof v === 'function' ? v(p[g.nOrden]||[]) : v}); }); }}
-productosProveedor={productosProveedorActual}
-loadingProds={loadingProdsActual}
-guardandoNC={ncGuardandoMap[g.nOrden]||false}
-setGuardandoNC={function(vv){ setNcGuardandoMap(function(p){ return Object.assign({},p,{[g.nOrden]:vv}); }); }}
-ncGuardado={ncGuardadoMap[g.nOrden]||false}
-setNcGuardado={function(vv){ setNcGuardadoMap(function(p){ return Object.assign({},p,{[g.nOrden]:vv}); }); }}
-busqNuevo={(addingStateMap[g.nOrden]||{}).busqNuevo||''}
-setBusqNuevo={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.busqNuevo=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
-cantNueva={(addingStateMap[g.nOrden]||{}).cantNueva||''}
-setCantNueva={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.cantNueva=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
-artSeleccionado={(addingStateMap[g.nOrden]||{}).artSeleccionado||null}
-setArtSeleccionado={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.artSeleccionado=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
-showDropdown={(addingStateMap[g.nOrden]||{}).showDropdown||false}
-setShowDropdown={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.showDropdown=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
+                      guardandoNC={!!ncGuardandoMap[g.nOrden]}
+                      setGuardandoNC={function(v){ setNcGuardandoMap(function(p){ return Object.assign({},p,{[g.nOrden]:v}); }); }}
+                      ncGuardado={!!ncGuardadoMap[g.nOrden]}
+                      setNcGuardado={function(v){ setNcGuardadoMap(function(p){ return Object.assign({},p,{[g.nOrden]:v}); }); }}
+                      productosProveedor={editandoOrden === g.nOrden ? productosProveedorActual : []}
+                      loadingProds={editandoOrden === g.nOrden ? loadingProdsActual : false}
+                      nuevasLineas={nuevasLineasMap[g.nOrden] || []}
+                      setNuevasLineas={function(updater){ setNuevasLineasMap(function(prev){ var cur = prev[g.nOrden]||[]; var next = typeof updater==='function'?updater(cur):updater; return Object.assign({},prev,{[g.nOrden]:next}); }); }}
                     />
-)}
+                  )}
                 </div>
               );
             })}
