@@ -474,7 +474,7 @@ var [loadingProdsActual, setLoadingProdsActual] = useState(false);
     });
     setCantidadesEdit(cants);
     setObsModificacion('');
-    setTimeout(function(){ setEditandoOrden(g.nOrden); }, 0);
+    setEditandoOrden(g.nOrden);
 setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]:[]}); });
 if (g.proveedor) {
   setProductosProveedorActual([]);
@@ -668,8 +668,8 @@ await cargarPendientes();
                   </button>
 
                   {/* Detalle */}
-                  {isOpen && (
-                    <DetalleOrden
+                  <div style={{display:isOpen?"block":"none"}}>
+<DetalleOrden
                       key={g.nOrden}
                       g={g}
                       editandoOrden={editandoOrden}
@@ -693,7 +693,7 @@ setNuevasLineas={function(v){ setNuevasLineasMap(function(p){ return Object.assi
 productosProveedor={productosProveedorActual}
 loadingProds={loadingProdsActual}
                     />
-                  )}
+</div>
                 </div>
               );
             })}
