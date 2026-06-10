@@ -625,7 +625,7 @@ await cargarPendientes();
 
         {/* Lista */}
         {!cargando && gruposFiltrados.length > 0 && (
-          <div className="divide-y divide-slate-100 max-h-[800px] overflow-y-auto">
+          <div key={"list-"+(editandoOrden||"x")} className="divide-y divide-slate-100 max-h-[800px] overflow-y-auto">
             {gruposFiltrados.map(function(g) {
               var isOpen = expandido === g.nOrden;
               return (
@@ -660,7 +660,7 @@ await cargarPendientes();
                   </button>
 
                   {/* Detalle */}
-                  <div style={{display:isOpen?"block":"none"}}>
+                  {isOpen && (
 <DetalleOrden
                       key={g.nOrden}
                       g={g}
@@ -697,7 +697,7 @@ setArtSeleccionado={function(vv){ setAddingStateMap(function(p){ var s=Object.as
 showDropdown={(addingStateMap[g.nOrden]||{}).showDropdown||false}
 setShowDropdown={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.showDropdown=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
                     />
-</div>
+)}
                 </div>
               );
             })}
