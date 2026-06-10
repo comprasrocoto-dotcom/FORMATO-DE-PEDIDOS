@@ -42,6 +42,8 @@ function validarProveedorFGH(pm) {
 // --- DetalleOrden ----------------------------------------------------------
 function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, nuevasLineas, setNuevasLineas, productosProveedor, loadingProds, guardandoNC, setGuardandoNC, ncGuardado, setNcGuardado, busqNuevo, setBusqNuevo, cantNueva, setCantNueva, artSeleccionado, setArtSeleccionado, showDropdown, setShowDropdown }) {
 var isEdit = editandoOrden === g.nOrden;
+var lineas = g.lineas || [];
+var pm = getProvMeta(proveedoresMeta, g.proveedor);
 
 
 function agregarLinea() {
