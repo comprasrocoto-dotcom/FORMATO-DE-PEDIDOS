@@ -40,22 +40,9 @@ function validarProveedorFGH(pm) {
 }
 
 // --- DetalleOrden ----------------------------------------------------------
-function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, nuevasLineas, setNuevasLineas, productosProveedor, loadingProds }) {
-  var isEdit = editandoOrden === g.nOrden;
-  var lineas = g.lineas || [];
-  var pm = getProvMeta(proveedoresMeta, g.proveedor);
-  var [guardandoNC, setGuardandoNC] = useState(false);
-  var [ncGuardado, setNcGuardado] = useState(false);
-var [busqNuevo, setBusqNuevo] = useState('');
-var [cantNueva, setCantNueva] = useState('');
-var [artSeleccionado, setArtSeleccionado] = useState(null);
-var [showDropdown, setShowDropdown] = useState(false);
+function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, nuevasLineas, setNuevasLineas, productosProveedor, loadingProds, guardandoNC, setGuardandoNC, ncGuardado, setNcGuardado, busqNuevo, setBusqNuevo, cantNueva, setCantNueva, artSeleccionado, setArtSeleccionado, showDropdown, setShowDropdown }) {
+var isEdit = editandoOrden === g.nOrden;
 
-useEffect(function() {
-  if (!isEdit) {
-    setBusqNuevo(''); setArtSeleccionado(null); setCantNueva(''); setShowDropdown(false);
-  }
-}, [isEdit]);
 
 function agregarLinea() {
   if (!artSeleccionado || !cantNueva || parseFloat(cantNueva) <= 0) { alert('Selecciona un artículo e ingresa una cantidad mayor a 0.'); return; }
@@ -380,6 +367,9 @@ export default function AjustePedidos() {
 var [nuevasLineasMap, setNuevasLineasMap] = useState({});
 var [productosProveedorActual, setProductosProveedorActual] = useState([]);
 var [loadingProdsActual, setLoadingProdsActual] = useState(false);
+var [ncGuardandoMap, setNcGuardandoMap] = useState({});
+var [ncGuardadoMap, setNcGuardadoMap] = useState({});
+var [addingStateMap, setAddingStateMap] = useState({});
 
   useEffect(function(){
     cargarPendientes();
@@ -692,6 +682,18 @@ nuevasLineas={nuevasLineasMap[g.nOrden] || []}
 setNuevasLineas={function(v){ setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]: typeof v === 'function' ? v(p[g.nOrden]||[]) : v}); }); }}
 productosProveedor={productosProveedorActual}
 loadingProds={loadingProdsActual}
+guardandoNC={ncGuardandoMap[g.nOrden]||false}
+setGuardandoNC={function(vv){ setNcGuardandoMap(function(p){ return Object.assign({},p,{[g.nOrden]:vv}); }); }}
+ncGuardado={ncGuardadoMap[g.nOrden]||false}
+setNcGuardado={function(vv){ setNcGuardadoMap(function(p){ return Object.assign({},p,{[g.nOrden]:vv}); }); }}
+busqNuevo={(addingStateMap[g.nOrden]||{}).busqNuevo||''}
+setBusqNuevo={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.busqNuevo=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
+cantNueva={(addingStateMap[g.nOrden]||{}).cantNueva||''}
+setCantNueva={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.cantNueva=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
+artSeleccionado={(addingStateMap[g.nOrden]||{}).artSeleccionado||null}
+setArtSeleccionado={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.artSeleccionado=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
+showDropdown={(addingStateMap[g.nOrden]||{}).showDropdown||false}
+setShowDropdown={function(vv){ setAddingStateMap(function(p){ var s=Object.assign({},p[g.nOrden]||{}); s.showDropdown=vv; return Object.assign({},p,{[g.nOrden]:s}); }); }}
                     />
 </div>
                 </div>
