@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v34 - fix: parseFloat inline en HD (reemplaza parsearTextoANumero no-definida)
+ * SheetsOrderForm.tsx v35 - fix: semaforo Completado = hasFact && hasNPS (sin requerir obsFactura)
  * - Metadata (factura, NPS) se lee de TODAS las filas, no solo la primera
  * - key estables en lista y contenido expandido eliminan error insertBefore
  */
@@ -39,8 +39,8 @@ function getSemaforoHP(p) {
   var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
   var hasDoc = !!(p.obsFactura && String(p.obsFactura).trim() && p.obsFactura !== '---');
   var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasDoc && hasNPS) return '🟢';
-  if (hasFact || hasDoc || hasNPS) return '🟡';
+  if (hasFact && hasNPS) return '🟢';
+  if (hasFact || hasNPS) return '🟡';
   return '🔴';
 }
 
@@ -440,8 +440,8 @@ function getSemaforoHD(p) {
   var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
   var hasDoc = !!(p.obsFactura && String(p.obsFactura).trim() && p.obsFactura !== '---');
   var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasDoc && hasNPS) return '🟢';
-  if (hasFact || hasDoc || hasNPS) return '🟡';
+  if (hasFact && hasNPS) return '🟢';
+  if (hasFact || hasNPS) return '🟡';
   return '🔴';
 }
 
