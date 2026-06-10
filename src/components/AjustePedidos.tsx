@@ -466,7 +466,7 @@ var [addingStateMap, setAddingStateMap] = useState({});
     });
     setCantidadesEdit(cants);
     setObsModificacion('');
-    setEditandoOrden(g.nOrden);
+    requestAnimationFrame(function(){ setEditandoOrden(g.nOrden); });
 setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]:[]}); });
 if (g.proveedor) {
   setProductosProveedorActual([]);
