@@ -1,6 +1,6 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v8
+ * AjustePedidos.tsx v9 - agrega referencias nuevas al editar pedido
  * Fix: PDF ahora usa la misma estructura que generarPDF en SheetsOrderForm
  * - Mismos campos (Sede, Direccion, Telefono Sede, Horario, Encargado / Proveedor, NIT, Tel, Contacto, Correo)
  * - Misma tabla (Articulo, Unidad, Cantidad, Total)
@@ -14,7 +14,7 @@
  */
 import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download, Search } from 'lucide-react';
-import { actualizarPedido, actualizarFactura, getProveedores, getAllDatos } from '../services/googleSheets';
+import { actualizarPedido, actualizarFactura, getProveedores, getAllDatos, getProductosByProveedor, appendPedido } from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
 const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
@@ -40,12 +40,43 @@ function validarProveedorFGH(pm) {
 }
 
 // --- DetalleOrden ----------------------------------------------------------
-function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError }) {
+function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, modificadoPor, setModificadoPor, obsModificacion, setObsModificacion, guardando, iniciarEdicion, guardarCambios, cancelarEdicion, proveedoresMeta, minMaxConvertido, notaCredito, setNotaCredito, onPDFError, nuevasLineas, setNuevasLineas }) {
   var isEdit = editandoOrden === g.nOrden;
   var lineas = g.lineas || [];
   var pm = getProvMeta(proveedoresMeta, g.proveedor);
   var [guardandoNC, setGuardandoNC] = useState(false);
   var [ncGuardado, setNcGuardado] = useState(false);
+var [busqNuevo, setBusqNuevo] = useState('');
+var [productosProveedor, setProductosProveedor] = useState([]);
+var [loadingProds, setLoadingProds] = useState(false);
+var [cantNueva, setCantNueva] = useState('');
+var [artSeleccionado, setArtSeleccionado] = useState(null);
+var [showDropdown, setShowDropdown] = useState(false);
+
+// Cargar productos del proveedor cuando se entra en modo edicion
+useEffect(function() {
+  if (isEdit && productosProveedor.length === 0 && g.proveedor) {
+    setLoadingProds(true);
+    getProductosByProveedor(g.proveedor).then(function(prods) {
+      setProductosProveedor(prods || []);
+      setLoadingProds(false);
+    }).catch(function(){ setLoadingProds(false); });
+  }
+  if (!isEdit) {
+    setBusqNuevo(''); setArtSeleccionado(null); setCantNueva(''); setShowDropdown(false);
+  }
+}, [isEdit]);
+
+function agregarLinea() {
+  if (!artSeleccionado || !cantNueva || parseFloat(cantNueva) <= 0) { alert('Selecciona un artículo e ingresa una cantidad mayor a 0.'); return; }
+  var existe = (nuevasLineas || []).find(function(l){ return l.codigo === artSeleccionado.codigo; });
+  if (existe) { alert('Este artículo ya fue agregado. Ajusta la cantidad en la lista.'); return; }
+  var existeEnPedido = (g.lineas || []).find(function(l){ return l.codigo === artSeleccionado.codigo; });
+  if (existeEnPedido) { alert('Este artículo ya existe en el pedido. Edita su cantidad directamente en la tabla.'); return; }
+  var linea = { codigo: artSeleccionado.codigo, articulo: artSeleccionado.articulo, unidad: artSeleccionado.unidad || '', cantidad: parseFloat(cantNueva) || 0 };
+  setNuevasLineas(function(prev){ return (prev || []).concat([linea]); });
+  setBusqNuevo(''); setArtSeleccionado(null); setCantNueva(''); setShowDropdown(false);
+}
 
   function handleDescargarPDF() {
     var pmActual = (proveedoresMeta || []).find(function(p) {
@@ -204,7 +235,73 @@ function DetalleOrden({ g, editandoOrden, cantidadesEdit, setCantidadesEdit, mod
         </table>
       </div>
 
-      {/* Botones */}
+      {/* Panel agregar articulo - solo en modo edicion */}
+{isEdit && (
+<div className="mb-3 p-3 bg-blue-50 border border-blue-200 rounded-xl">
+<div className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-2">+ Agregar artículo al pedido</div>
+<div className="flex flex-col sm:flex-row gap-2 mb-2">
+<div className="flex-1 relative">
+<input type="text" value={busqNuevo} onChange={function(e){ setBusqNuevo(e.target.value); setArtSeleccionado(null); setShowDropdown(true); }}
+onFocus={function(){ setShowDropdown(true); }}
+className="w-full px-2 py-1.5 bg-white border border-blue-300 rounded-lg text-xs focus:outline-none focus:border-blue-500" placeholder="Buscar artículo del proveedor..."/>
+{showDropdown && busqNuevo.length > 0 && (
+<div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+{loadingProds ? (
+<div className="px-3 py-2 text-xs text-slate-400">Cargando...</div>
+) : (function(){
+var q = busqNuevo.trim().toLowerCase();
+var resultados = productosProveedor.filter(function(p){
+return (p.articulo||'').toLowerCase().includes(q) || (p.codigo||'').toLowerCase().includes(q);
+}).slice(0, 20);
+if (resultados.length === 0) return (<div className="px-3 py-2 text-xs text-slate-400">Sin resultados</div>);
+return resultados.map(function(p){
+return (<button key={p.codigo} type="button" onMouseDown={function(e){ e.preventDefault(); setArtSeleccionado(p); setBusqNuevo(p.articulo + ' (' + p.codigo + ')'); setShowDropdown(false); }}
+className="w-full text-left px-3 py-2 text-xs hover:bg-blue-50 border-b border-slate-100 last:border-0 flex items-center justify-between">
+<span className="font-medium text-slate-800">{p.articulo}</span>
+<span className="text-slate-400 font-mono ml-2">{p.codigo}</span>
+</button>);
+});
+})()}
+</div>
+)}
+</div>
+<input type="number" min="0.01" step="0.01" value={cantNueva} onChange={function(e){ setCantNueva(e.target.value); }}
+className="w-24 px-2 py-1.5 bg-white border border-blue-300 rounded-lg text-xs focus:outline-none focus:border-blue-500 text-center" placeholder="Cant."/>
+<button type="button" onClick={agregarLinea}
+className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 flex-shrink-0">
+Agregar
+</button>
+</div>
+{artSeleccionado && <div className="text-xs text-blue-700 bg-blue-100 rounded-lg px-2 py-1">✓ Seleccionado: <strong>{artSeleccionado.articulo}</strong> — {artSeleccionado.unidad}</div>}
+{(nuevasLineas || []).length > 0 && (
+<div className="mt-2 rounded-lg overflow-hidden border border-blue-200">
+<table className="w-full text-xs">
+<thead><tr className="bg-blue-600 text-white"><th className="py-1.5 px-2 text-left">Código</th><th className="py-1.5 px-2 text-left">Artículo</th><th className="py-1.5 px-2 text-center w-16">Unidad</th><th className="py-1.5 px-2 text-center w-20">Cant.</th><th className="py-1.5 px-2 w-8"></th></tr></thead>
+<tbody>
+{(nuevasLineas || []).map(function(nl, ni){
+return (<tr key={nl.codigo + '_' + ni} className="bg-white border-b border-blue-100">
+<td className="py-1 px-2 font-mono text-slate-500">{nl.codigo}</td>
+<td className="py-1 px-2 font-medium text-slate-800">{nl.articulo}</td>
+<td className="py-1 px-2 text-center text-slate-500">{nl.unidad||'---'}</td>
+<td className="py-1 px-2 text-center">
+<input type="number" min="0.01" step="0.01" value={nl.cantidad}
+onChange={function(e){ setNuevasLineas(function(prev){ return prev.map(function(x,xi){ return xi===ni ? Object.assign({},x,{cantidad:parseFloat(e.target.value)||0}) : x; }); }); }}
+className="w-14 text-center py-0.5 border border-blue-200 rounded text-xs font-bold focus:outline-none"/>
+</td>
+<td className="py-1 px-2 text-center">
+<button type="button" onClick={function(){ setNuevasLineas(function(prev){ return prev.filter(function(_,xi){ return xi!==ni; }); }); }}
+className="text-red-400 hover:text-red-600 font-bold text-sm leading-none">×</button>
+</td>
+</tr>);
+})}
+</tbody>
+</table>
+</div>
+)}
+</div>
+)}
+
+{/* Botones */}
       <div className="flex gap-2 flex-wrap">
         {!isEdit ? (
           <>
@@ -290,6 +387,7 @@ export default function AjustePedidos() {
   var [proveedoresMeta, setProveedoresMeta] = useState([]);
   var [minMaxConvertido, setMinMaxConvertido] = useState({});
   var [notaCreditoMap, setNotaCreditoMap] = useState({});
+var [nuevasLineasMap, setNuevasLineasMap] = useState({});
 
   useEffect(function(){
     cargarPendientes();
@@ -385,11 +483,13 @@ export default function AjustePedidos() {
     setCantidadesEdit(cants);
     setObsModificacion('');
     setTimeout(function(){ setEditandoOrden(g.nOrden); }, 0);
+setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]:[]}); });
   }
 
   function cancelarEdicion() {
     setEditandoOrden(null);
     setCantidadesEdit({});
+setNuevasLineasMap({});
   }
 
   async function guardarCambios(g) {
@@ -413,7 +513,30 @@ export default function AjustePedidos() {
     setCantidadesEdit({});
     if (errores > 0) { setErr(errores + ' linea(s) no pudieron actualizarse.'); }
     else { setSuccess('Cambios guardados exitosamente en Drive.'); setTimeout(function(){ setSuccess(''); }, 5000); }
-    await cargarPendientes();
+    // Guardar nuevas lineas via appendPedido
+var nuevasLineas = nuevasLineasMap[g.nOrden] || [];
+for (var j = 0; j < nuevasLineas.length; j++) {
+  var nl = nuevasLineas[j];
+  try {
+    var rr = await appendPedido({
+      fecha: g.fecha,
+      sede: g.sede,
+      proveedor: g.proveedor,
+      codigo: nl.codigo || '',
+      articulo: nl.articulo || '',
+      unidad: nl.unidad || '',
+      cantidad: nl.cantidad || 0,
+      responsable: modificadoPor,
+      correoResponsable: '',
+      notas: obsModificacion || 'Linea agregada en ajuste',
+      medioPago: g.medioPago || 'contado',
+      numeroOrden: g.nOrden
+    });
+    if (!rr.ok) { console.warn('Error agregando linea:', rr.error); errores++; }
+  } catch(e3) { console.warn('[appendNuevaLinea]', e3.message); errores++; }
+}
+setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]:[]}); });
+await cargarPendientes();
   }
 
   var sedesDisp = [...new Set(grupos.map(function(g){ return g.sede; }))].filter(Boolean).sort();
@@ -563,6 +686,8 @@ export default function AjustePedidos() {
                       notaCredito={notaCreditoMap[g.nOrden] !== undefined ? notaCreditoMap[g.nOrden] : (g.notaCredito || '')}
                       setNotaCredito={function(v){ setNotaCreditoMap(function(p){ return Object.assign({},p,{[g.nOrden]:v}); }); }}
                       onPDFError={function(msg){ setErr(msg); }}
+nuevasLineas={nuevasLineasMap[g.nOrden] || []}
+setNuevasLineas={function(v){ setNuevasLineasMap(function(p){ return Object.assign({},p,{[g.nOrden]: typeof v === 'function' ? v(p[g.nOrden]||[]) : v}); }); }}
                     />
                   )}
                 </div>
