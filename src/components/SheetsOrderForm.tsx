@@ -133,8 +133,13 @@ function HistorialPedidos({ proveedoresMeta }) {
       var lista = Object.values(mapa).reverse();
       var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
-      // Solo pedidos SIN número de pedido sistema asignado
-      setPedidos(lista.filter(function(p) { return !p.numeroPedidoSistema || p.numeroPedidoSistema.trim() === '' || p.numeroPedidoSistema === '---'; }));
+      // Mostrar SOLO los pedidos que aún NO tienen Número de Factura registrado.
+      // En esta hoja el N° de Factura está en la columna M (índice 12), que el parser carga en fechaEntrega.
+      // Apenas la columna M tenga un valor, el pedido deja de mostrarse aquí.
+      setPedidos(lista.filter(function(p) {
+        var numFactura = String(p.fechaEntrega || '').trim();
+        return numFactura === '' || numFactura === '---';
+      }));
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
   }
@@ -1265,6 +1270,3 @@ export default function SheetsOrderForm() {
     </div>
   );
 }
-
- 
- 
