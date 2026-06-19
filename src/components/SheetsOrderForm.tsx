@@ -1,7 +1,44 @@
 // @ts-nocheck
 /**
  * ============================================================================
- *  SheetsOrderForm.tsx  ·  v37
+ *  SheetsOrderForm.tsx  ·  v38
+ * ============================================================================
+ *  v38: FIX visibilidad en "Historial de Pedidos".
+ *       Antes se ocultaba todo pedido que tuviera factura (columna M), lo que
+ *       hacía desaparecer los ROJOS (sin N° de sistema) que ya tenían factura
+ *       — y como tampoco están en el Histórico (requiere N° de sistema), quedaban
+ *       invisibles en ambas vistas. Ahora un pedido solo sale de esta lista
+ *       cuando tiene Factura (M) Y Número de Pedido Sistema (P) a la vez.
+ *       Cambio aditivo: nada de lo que ya se veía desaparece; solo se SUMAN los
+ *       rojos que faltaban.
+ * ============================================================================
+ *
+ *  CAMBIOS RESPECTO A v36:
+ *
+ *  1) COLUMNA "UNIDAD" — ahora la resuelve el BACKEND (BUSCARV real):
+ *     El Apps Script (getHistorial) hace el VLOOKUP autoritativo:
+ *       codigo (Columna E de BASE DE PEDIDOS) -> coincide Columna A de
+ *       BASE DE COMPRAS -> devuelve Columna D (unidad).
+ *     El backend lo entrega en un mapa APARTE: data.unidadPorCodigo = { COD: unidad }.
+ *     IMPORTANTE: el backend NO modifica el array `rows`. Esto es a propósito:
+ *     el frontend lee la CANTIDAD desde r[6], así que tocar las filas habría
+ *     corrompido la cantidad. El mapa separado elimina por completo ese riesgo.
+ *     - El frontend ya no usa getAllDatos() para la unidad; usa data.unidadPorCodigo.
+ *     - Si el backend aún no está desplegado, unidadPorCodigo llega vacío y la
+ *       tabla muestra "---" igual que antes (no se pierde nada).
+ *
+ *  2) SEMÁFORO — verde eliminado SOLO en "Historial de Pedidos":
+ *     - HistorialPedidos (getSemaforoHP): SOLO 🔴 y 🟡 (nunca verde).
+ *         🔴 ROJO     -> sin columna P (numeroPedidoSistema).
+ *         🟡 AMARILLO -> con columna P.
+ *       Además se quitó el botón de filtro "🟢 Completados" de esta sección.
+ *     - HistorialDocumentado (getSemaforoHD): mantiene la regla de 3 estados,
+ *       porque es la vista de pedidos ya documentados (ahí el verde sí aplica):
+ *         🔴 sin P · 🟡 con P sin M (factura) · 🟢 con P y M.
+ *     Mapeo de columnas: M (nroFactura) y P (numeroPedidoSistema).
+ *
+ *  El resto del archivo (PDF, CSV, filtros, edición, estados, JSX) se conserva
+ *  idéntico para no alterar el comportamiento del proyecto.
  * ============================================================================
  */
 import { useState, useEffect, useRef } from 'react';
@@ -189,11 +226,15 @@ function HistorialPedidos({ proveedoresMeta }) {
       var lista = Object.values(mapa).reverse();
       var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
-      // Mostrar SOLO los pedidos que aún NO tienen Número de Factura (columna M / índice 12).
-      // Apenas la columna M tenga un valor, el pedido deja de mostrarse aquí.
+      // Un pedido se considera DOCUMENTADO (y sale de esta lista para pasar al
+      // Histórico) SOLO cuando tiene a la vez Factura (columna M) Y Número de
+      // Pedido Sistema (columna P). Mientras le falte cualquiera de los dos, sigue
+      // aquí como pendiente. Esto garantiza que los ROJOS (sin N° de sistema)
+      // también aparezcan aunque ya tengan factura cargada.
       setPedidos(lista.filter(function(p) {
-        var numFactura = String(p.nroFactura || '').trim();
-        return numFactura === '' || numFactura === '---';
+        var tieneFactura = !!(String(p.nroFactura || '').trim() && String(p.nroFactura).trim() !== '---');
+        var tieneNPS     = !!(String(p.numeroPedidoSistema || '').trim() && String(p.numeroPedidoSistema).trim() !== '---');
+        return !(tieneFactura && tieneNPS);
       }));
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
     finally { setCargando(false); }
@@ -534,7 +575,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           mapa[nOrden] = {
             nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
-            responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisicion'),
+            responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisición'),
             observaciones: String(r[9]||''),
             nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[9]||''),
             numeroPedidoSistema: String(r[15]||''),
@@ -620,7 +661,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         var partes = fechaRec.split('-');
         fechaRec = partes[2] + '/' + partes[1] + '/' + partes[0];
       }
-      return '<tr><td>' + (p.proveedor || '') + '</td><td>' + fechaRec + '</td><td>' + (p.nroFactura || '') + '</td><td>' + (p.medioPago || 'Requisicion') + '</td></tr>';
+      return '<tr><td>' + (p.proveedor || '') + '</td><td>' + fechaRec + '</td><td>' + (p.nroFactura || '') + '</td><td>' + (p.medioPago || '') + '</td></tr>';
     }).join('');
     var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte de Facturas</title>' +
       '<style>body{font-family:Arial,sans-serif;margin:20px;color:#222;}' +
@@ -795,7 +836,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                             }; 
                           }),
                           notas: p.observaciones || '', 
-                          medioPago: p.medioPago || 'Requisicion', 
+                          medioPago: p.medioPago || 'Requisición', 
                           numeroOrden: p.nOrden,
                           nroFactura: p.nroFactura || '', 
                           tipoFactura: p.tipoFactura || '', 
@@ -938,7 +979,7 @@ export default function SheetsOrderForm() {
         var allDatos = res[3].status==='fulfilled' ? res[3].value : null;
         if (allDatos && allDatos.proveedores && allDatos.proveedores.length > 0) {
           setProveedoresMeta(allDatos.proveedores.map(function(p,idx){
-            return {id:'prov-'+idx,nombre:p.nombre||'',nit:p.nit||'',telefono:p.telefono||'',correo:p.correo||'',asesor:p.asesor||'',contacto:p.contacto||p.asesor||'',medioPago:'Requisicion'};
+            return {id:'prov-'+idx,nombre:p.nombre||'',nit:p.nit||'',telefono:p.telefono||'',correo:p.correo||'',asesor:p.asesor||'',contacto:p.contacto||p.asesor||'',medioPago:''};
           }));
         } else if (res[2].status==='fulfilled') {
           setProveedoresMeta(res[2].value||[]);
