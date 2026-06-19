@@ -3,34 +3,6 @@
  * ============================================================================
  *  SheetsOrderForm.tsx  ·  v37
  * ============================================================================
- *
- *  CAMBIOS RESPECTO A v36:
- *
- *  1) COLUMNA "UNIDAD" — ahora la resuelve el BACKEND (BUSCARV real):
- *     El Apps Script (getHistorial) hace el VLOOKUP autoritativo:
- *       codigo (Columna E de BASE DE PEDIDOS) -> coincide Columna A de
- *       BASE DE COMPRAS -> devuelve Columna D (unidad).
- *     El backend lo entrega en un mapa APARTE: data.unidadPorCodigo = { COD: unidad }.
- *     IMPORTANTE: el backend NO modifica el array `rows`. Esto es a propósito:
- *     el frontend lee la CANTIDAD desde r[6], así que tocar las filas habría
- *     corrompido la cantidad. El mapa separado elimina por completo ese riesgo.
- *     - El frontend ya no usa getAllDatos() para la unidad; usa data.unidadPorCodigo.
- *     - Si el backend aún no está desplegado, unidadPorCodigo llega vacío y la
- *       tabla muestra "---" igual que antes (no se pierde nada).
- *
- *  2) SEMÁFORO — verde eliminado SOLO en "Historial de Pedidos":
- *     - HistorialPedidos (getSemaforoHP): SOLO 🔴 y 🟡 (nunca verde).
- *         🔴 ROJO     -> sin columna P (numeroPedidoSistema).
- *         🟡 AMARILLO -> con columna P.
- *       Además se quitó el botón de filtro "🟢 Completados" de esta sección.
- *     - HistorialDocumentado (getSemaforoHD): mantiene la regla de 3 estados,
- *       porque es la vista de pedidos ya documentados (ahí el verde sí aplica):
- *         🔴 sin P · 🟡 con P sin M (factura) · 🟢 con P y M.
- *     Mapeo de columnas: M (nroFactura) y P (numeroPedidoSistema).
- *
- *  El resto del archivo (PDF, CSV, filtros, edición, estados, JSX) se conserva
- *  idéntico para no alterar el comportamiento del proyecto.
- * ============================================================================
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
@@ -562,7 +534,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           mapa[nOrden] = {
             nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
-            responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisición'),
+            responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisicion'),
             observaciones: String(r[9]||''),
             nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[9]||''),
             numeroPedidoSistema: String(r[15]||''),
@@ -648,7 +620,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         var partes = fechaRec.split('-');
         fechaRec = partes[2] + '/' + partes[1] + '/' + partes[0];
       }
-      return '<tr><td>' + (p.proveedor || '') + '</td><td>' + fechaRec + '</td><td>' + (p.nroFactura || '') + '</td><td>' + (p.medioPago || '') + '</td></tr>';
+      return '<tr><td>' + (p.proveedor || '') + '</td><td>' + fechaRec + '</td><td>' + (p.nroFactura || '') + '</td><td>' + (p.medioPago || 'Requisicion') + '</td></tr>';
     }).join('');
     var html = '<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Reporte de Facturas</title>' +
       '<style>body{font-family:Arial,sans-serif;margin:20px;color:#222;}' +
@@ -823,7 +795,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                             }; 
                           }),
                           notas: p.observaciones || '', 
-                          medioPago: p.medioPago || 'Requisición', 
+                          medioPago: p.medioPago || 'Requisicion', 
                           numeroOrden: p.nOrden,
                           nroFactura: p.nroFactura || '', 
                           tipoFactura: p.tipoFactura || '', 
@@ -966,7 +938,7 @@ export default function SheetsOrderForm() {
         var allDatos = res[3].status==='fulfilled' ? res[3].value : null;
         if (allDatos && allDatos.proveedores && allDatos.proveedores.length > 0) {
           setProveedoresMeta(allDatos.proveedores.map(function(p,idx){
-            return {id:'prov-'+idx,nombre:p.nombre||'',nit:p.nit||'',telefono:p.telefono||'',correo:p.correo||'',asesor:p.asesor||'',contacto:p.contacto||p.asesor||'',medioPago:''};
+            return {id:'prov-'+idx,nombre:p.nombre||'',nit:p.nit||'',telefono:p.telefono||'',correo:p.correo||'',asesor:p.asesor||'',contacto:p.contacto||p.asesor||'',medioPago:'Requisicion'};
           }));
         } else if (res[2].status==='fulfilled') {
           setProveedoresMeta(res[2].value||[]);
