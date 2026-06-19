@@ -861,7 +861,7 @@ export default function SheetsOrderForm() {
   var [responsable, setResponsable] = useState(function(){ return localStorage.getItem('ped_responsable') || ''; });
   var [correo, setCorreo] = useState(function(){ return localStorage.getItem('ped_correo') || ''; });
   var [notas, setNotas] = useState('');
-  var [medioPago, setMedioPago] = useState('contado');
+  var [medioPago, setMedioPago] = useState('Requisicion');
   var [busqArticulo, setBusqArticulo] = useState('');
   var [provSearch, setProvSearch] = useState('');
   var [todosArticulos, setTodosArticulos] = useState([]);
@@ -994,7 +994,7 @@ export default function SheetsOrderForm() {
       var errores=0;
       for(var i=0;i<snap.lineas.length;i++){
         try {
-          await appendPedido({fecha:snap.fecha,sede:snap.sede,proveedor:snap.prov,codigo:snap.lineas[i].codigo||'',articulo:snap.lineas[i].articulo||'',unidad:snap.lineas[i].unidad||'',cantidad:snap.lineas[i].cantidad||0,responsable:snap.resp,correoResponsable:snap.correo,notas:snap.notas,medioPago:snap.medioPago||'contado',numeroOrden:String(snap.orden)});
+          await appendPedido({fecha:snap.fecha,sede:snap.sede,proveedor:snap.prov,codigo:snap.lineas[i].codigo||'',articulo:snap.lineas[i].articulo||'',unidad:snap.lineas[i].unidad||'',cantidad:snap.lineas[i].cantidad||0,responsable:snap.resp,correoResponsable:snap.correo,notas:snap.notas,medioPago:snap.medioPago||'Requisicion',numeroOrden:String(snap.orden)});
         } catch(e2){console.warn('[appendPedido]',e2.message);errores++;}
       }
       setCantidades({}); setNotas(''); setSuccess(true);
