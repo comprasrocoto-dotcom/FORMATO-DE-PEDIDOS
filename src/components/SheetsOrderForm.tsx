@@ -163,7 +163,7 @@ function HistorialPedidos({ proveedoresMeta }) {
             observaciones: String(r[9]||''),
             nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[14]||''),
             numeroPedidoSistema: String(r[15]||''),
-            notaCredito: '',
+            notaCredito: String(r[16]||''),
             fechaEntrega: String(r[11]||''),
             articulos: []
           };
@@ -183,7 +183,7 @@ function HistorialPedidos({ proveedoresMeta }) {
         if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[13]).trim();
         if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].obsFactura = String(r[14]).trim();
         if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[15]).trim();
-        // Nota de Crédito no tiene columna en esta hoja (16 columnas A..P)
+        if (r[16] && String(r[16]).trim() && String(r[16]).trim() !== '---') mapa[nOrden].notaCredito = String(r[16]).trim();
         if (r[11] && String(r[11]).trim() && String(r[11]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[11]).trim();
       });
       var lista = Object.values(mapa).reverse();
@@ -429,6 +429,10 @@ function HistorialPedidos({ proveedoresMeta }) {
                             <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Nota de crédito</label>
                             <input type="text" value={fd.notaCredito||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{notaCredito:e.target.value}); return n; }); }} className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-400" placeholder="Ej: NC-001..."/>
                           </div>
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5">Fecha de Entrega Pedido</label>
+                            <input type="date" value={fd.fechaEntrega||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{fechaEntrega:e.target.value}); return n; }); }} className="w-full px-2 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-400"/>
+                          </div>
                           <div className="flex gap-2 pt-1">
                             <button onClick={function(){ guardarFactura(p.nOrden); }}
                               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white" style={{background:'#1a3c6e'}}>Guardar</button>
@@ -542,7 +546,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
             observaciones: String(r[9]||''),
             nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[14]||''),
             numeroPedidoSistema: String(r[15]||''),
-            notaCredito: '',
+            notaCredito: String(r[16]||''),
             articulos: []
           };
         }
@@ -561,7 +565,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[13]).trim();
         if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].obsFactura = String(r[14]).trim();
         if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[15]).trim();
-        // Nota de Crédito no tiene columna en esta hoja (16 columnas A..P)
+        if (r[16] && String(r[16]).trim() && String(r[16]).trim() !== '---') mapa[nOrden].notaCredito = String(r[16]).trim();
         if (r[11] && String(r[11]).trim() && String(r[11]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[11]).trim();
       });
       var lista = Object.values(mapa).reverse();
