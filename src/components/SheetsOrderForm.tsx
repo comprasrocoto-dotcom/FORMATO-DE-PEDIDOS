@@ -107,37 +107,36 @@ function HistorialPedidos({ proveedoresMeta }) {
           mapa[nOrden] = {
             nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
-            responsable: String(r[9]||'---'), medioPago: String(r[11]||'Requisición'),
-            observaciones: String(r[10]||''),
-            nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
-            numeroPedidoSistema: String(r[16]||''),
-            notaCredito: String(r[17]||''),
-            fechaEntrega: String(r[12]||''),
+            responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisición'),
+            observaciones: String(r[9]||''),
+            nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[9]||''),
+            numeroPedidoSistema: String(r[15]||''),
+            notaCredito: String(r[14]||''),
+            fechaEntrega: String(r[11]||''),
             articulos: []
           };
         }
         if (r[5] || r[4]) {
           mapa[nOrden].articulos.push({
             codigo: String(r[4]||''), articulo: String(r[5]||''),
-            unidad: String(r[6]||''), cantidad: String(r[7]||''),
+            unidad: '', cantidad: String(r[6]||''),
           });
         }
         // update metadata from any row
-        if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].nroFactura = String(r[13]).trim();
-        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[14]).trim();
-        if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].obsFactura = String(r[15]).trim();
-        if (r[16] && String(r[16]).trim() && String(r[16]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[16]).trim();
-        if (r[17] && String(r[17]).trim() && String(r[17]).trim() !== '---') mapa[nOrden].notaCredito = String(r[17]).trim();
-        if (r[12] && String(r[12]).trim() && String(r[12]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[12]).trim();
+        if (r[12] && String(r[12]).trim() && String(r[12]).trim() !== '---') mapa[nOrden].nroFactura = String(r[12]).trim();
+        if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[13]).trim();
+        if (r[9] && String(r[9]).trim() && String(r[9]).trim() !== '---') mapa[nOrden].obsFactura = String(r[9]).trim();
+        if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[15]).trim();
+        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].notaCredito = String(r[14]).trim();
+        if (r[11] && String(r[11]).trim() && String(r[11]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[11]).trim();
       });
       var lista = Object.values(mapa).reverse();
       var sds = [...new Set(lista.map(function(p){ return p.sede; }))].filter(Boolean).sort();
       setSedesDisp(sds);
-      // Mostrar SOLO los pedidos que aún NO tienen Número de Factura registrado.
-      // En esta hoja el N° de Factura está en la columna M (índice 12), que el parser carga en fechaEntrega.
+      // Mostrar SOLO los pedidos que aún NO tienen Número de Factura (columna M / índice 12).
       // Apenas la columna M tenga un valor, el pedido deja de mostrarse aquí.
       setPedidos(lista.filter(function(p) {
-        var numFactura = String(p.fechaEntrega || '').trim();
+        var numFactura = String(p.nroFactura || '').trim();
         return numFactura === '' || numFactura === '---';
       }));
     } catch(e) { setErr('Error: ' + (e.message||'Error de red')); }
@@ -492,27 +491,27 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           mapa[nOrden] = {
             nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
-            responsable: String(r[9]||'---'), medioPago: String(r[11]||'Requisición'),
-            observaciones: String(r[10]||''),
-            nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
-            numeroPedidoSistema: String(r[16]||''),
-            notaCredito: String(r[17]||''),
+            responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisición'),
+            observaciones: String(r[9]||''),
+            nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[9]||''),
+            numeroPedidoSistema: String(r[15]||''),
+            notaCredito: String(r[14]||''),
             articulos: []
           };
         }
         if (r[5] || r[4]) {
           mapa[nOrden].articulos.push({
             codigo: String(r[4]||''), articulo: String(r[5]||''),
-            unidad: String(r[6]||''), cantidad: String(r[7]||''),
+            unidad: '', cantidad: String(r[6]||''),
           });
         }
         // update metadata from any row
-        if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].nroFactura = String(r[13]).trim();
-        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[14]).trim();
-        if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].obsFactura = String(r[15]).trim();
-        if (r[16] && String(r[16]).trim() && String(r[16]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[16]).trim();
-        if (r[17] && String(r[17]).trim() && String(r[17]).trim() !== '---') mapa[nOrden].notaCredito = String(r[17]).trim();
-        if (r[12] && String(r[12]).trim() && String(r[12]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[12]).trim();
+        if (r[12] && String(r[12]).trim() && String(r[12]).trim() !== '---') mapa[nOrden].nroFactura = String(r[12]).trim();
+        if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[13]).trim();
+        if (r[9] && String(r[9]).trim() && String(r[9]).trim() !== '---') mapa[nOrden].obsFactura = String(r[9]).trim();
+        if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[15]).trim();
+        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].notaCredito = String(r[14]).trim();
+        if (r[11] && String(r[11]).trim() && String(r[11]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[11]).trim();
       });
       var lista = Object.values(mapa).reverse();
       // Solo pedidos CON número de pedido sistema asignado
