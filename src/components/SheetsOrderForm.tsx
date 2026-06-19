@@ -107,7 +107,7 @@ function HistorialPedidos({ proveedoresMeta }) {
           mapa[nOrden] = {
             nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
-            responsable: String(r[9]||'---'), medioPago: String(r[11]||'contado'),
+            responsable: String(r[9]||'---'), medioPago: String(r[11]||'Requisición'),
             observaciones: String(r[10]||''),
             nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
             numeroPedidoSistema: String(r[16]||''),
@@ -143,7 +143,7 @@ function HistorialPedidos({ proveedoresMeta }) {
   async function guardarFactura(nOrden) {
     var fd = facturaData[nOrden] || {};
     try {
-      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'contado', obsFactura: fd.obsFactura||'', notaCredito: fd.notaCredito||'', fechaEntrega: fd.fechaEntrega||'' });
+      await actualizarFactura({ nOrden, nroFactura: fd.nroFactura||'', tipoFactura: fd.tipoFactura||'', obsFactura: fd.obsFactura||'', notaCredito: fd.notaCredito||'', fechaEntrega: fd.fechaEntrega||'' });
       setEditandoFactura(null);
       await cargarHistorial();
     } catch(e) { alert('Error guardando factura: ' + (e.message||'Error')); }
@@ -246,7 +246,7 @@ function HistorialPedidos({ proveedoresMeta }) {
             var isOpen = expandido === p.nOrden;
             var isEditFac = editandoFactura === p.nOrden;
             var isEditNPS = editandoNPS === p.nOrden;
-            var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura||'contado', obsFactura: p.obsFactura, notaCredito: p.notaCredito||'' };
+            var fd = facturaData[p.nOrden] || { nroFactura: p.nroFactura, tipoFactura: p.tipoFactura||'', obsFactura: p.obsFactura, notaCredito: p.notaCredito||'' };
             var artsVis = articuloBusq ? p.articulos.filter(function(a){ return (a.articulo||'').toLowerCase().includes(articuloBusq.toLowerCase())||(a.codigo||'').toLowerCase().includes(articuloBusq.toLowerCase()); }) : p.articulos;
             var pm = getProvMeta(p.proveedor);
             return (
@@ -283,7 +283,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                         generarPDF({ sede:p.sede, sedeDireccion:'---', sedeTelefono:'---', sedeHorario:'---', encargado:p.responsable,
                           proveedorNombre:p.proveedor, provNit:pm.nit, provTel:pm.telefono, provCorreo:pm.correo, provContacto:pm.contacto,
                           lineas:p.articulos.map(function(a){ return {articulo:a.articulo,unidad:a.unidad||'',cantidad:Number(a.cantidad)||0,valorUnitario:0,codigo:a.codigo||''}; }),
-                          notas:p.observaciones||'', medioPago:p.medioPago||'contado', numeroOrden:p.nOrden,
+                          notas:p.observaciones||'', medioPago:p.medioPago||'Requisicion', numeroOrden:p.nOrden,
                           nroFactura:p.nroFactura||'', tipoFactura:p.tipoFactura||'', obsFactura:p.obsFactura||'',
                           numeroPedidoSistema:p.numeroPedidoSistema||'', notaCredito:p.notaCredito||'' });
                       }} className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
@@ -324,7 +324,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                         </div>
                         {!isEditFac && (
                           <button onClick={function(){
-                            setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||'',notaCredito:p.notaCredito||'',fechaEntrega:p.fechaEntrega||''}; return n; });
+                            setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'',obsFactura:p.obsFactura||'',notaCredito:p.notaCredito||'',fechaEntrega:p.fechaEntrega||''}; return n; });
                             setEditandoFactura(p.nOrden);
                           }} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-semibold">
                             <Edit3 className="w-3 h-3"/> Editar
@@ -348,7 +348,7 @@ function HistorialPedidos({ proveedoresMeta }) {
                             </div>
                             <div>
                               <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Tipo</label>
-                              <select value={fd.tipoFactura||'contado'} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }}
+                              <select value={fd.tipoFactura||''} onChange={function(e){ setFacturaData(function(prev){ var n=Object.assign({},prev); n[p.nOrden]=Object.assign({},n[p.nOrden]||{},{tipoFactura:e.target.value}); return n; }); }}
                                 className="w-full px-2 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-blue-500">
                                 <option value="contado">Contado</option>
                                 <option value="credito">Credito</option>
@@ -487,7 +487,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           mapa[nOrden] = {
             nOrden, fecha: String(r[1]||'---').split('GMT')[0].trim().split('T')[0]||String(r[1]||'---'),
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
-            responsable: String(r[9]||'---'), medioPago: String(r[11]||'contado'),
+            responsable: String(r[9]||'---'), medioPago: String(r[11]||'Requisición'),
             observaciones: String(r[10]||''),
             nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''),
             numeroPedidoSistema: String(r[16]||''),
@@ -524,7 +524,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
     if (Object.keys(d).length === 0) { alert('No hay cambios que guardar.'); return; }
     setGuardandoDoc(true);
     try {
-      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'contado', obsFactura: d.obsFactura||'', notaCredito: d.notaCredito||'', fechaEntrega: d.fechaEntrega||'' });
+      var r = await actualizarFactura({ nOrden: nOrden, nroFactura: d.nroFactura||'', tipoFactura: d.tipoFactura||'', obsFactura: d.obsFactura||'', notaCredito: d.notaCredito||'', fechaEntrega: d.fechaEntrega||'' });
       if (!r.ok) { alert('Error guardando factura: ' + (r.error||'')); return; }
       if (d.numeroPedidoSistema !== undefined) {
         var r2 = await actualizarNumeroPedidoSistema({ nOrden: nOrden, numeroPedidoSistema: d.numeroPedidoSistema });
@@ -744,7 +744,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                             }; 
                           }),
                           notas: p.observaciones || '', 
-                          medioPago: p.medioPago || 'contado', 
+                          medioPago: p.medioPago || 'Requisición', 
                           numeroOrden: p.nOrden,
                           nroFactura: p.nroFactura || '', 
                           tipoFactura: p.tipoFactura || '', 
@@ -758,7 +758,7 @@ export function HistorialDocumentado({ proveedoresMeta }) {
                         className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white shadow-sm flex-shrink-0 hover:opacity-90 transition-opacity" style={{background:'#1a3c6e'}}>
                         <Download className="w-3.5 h-3.5"/> CSV
                       </button>
-              <button onClick={function(e){ e.stopPropagation(); setEditandoDoc(p.nOrden); setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'contado',obsFactura:p.obsFactura||''}; return n; }); }}
+              <button onClick={function(e){ e.stopPropagation(); setEditandoDoc(p.nOrden); setEditDataDoc(function(prev){ var n=Object.assign({},prev); n[p.nOrden]={nroFactura:p.nroFactura||'',tipoFactura:p.tipoFactura||'',obsFactura:p.obsFactura||''}; return n; }); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white shadow-sm hover:opacity-90" style={{background:'#4f46e5'}}>
                 <Edit3 className="w-3 h-3"/> Editar
               </button>
@@ -1048,7 +1048,7 @@ export default function SheetsOrderForm() {
         provContacto: provMeta ? (provMeta.contacto || provMeta.asesor || '---') : '---',
         lineas: lineasSeleccionadas,
         notas: notas,
-        medioPago: medioPago || 'contado',
+        medioPago: medioPago || 'Requisición',
         numeroOrden: Math.floor(Date.now()/1000),
         nroFactura: '',
         tipoFactura: '',
