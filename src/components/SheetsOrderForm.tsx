@@ -3,43 +3,6 @@
  * ============================================================================
  *  SheetsOrderForm.tsx  ·  v38
  * ============================================================================
- *  v38: FIX visibilidad en "Historial de Pedidos".
- *       Antes se ocultaba todo pedido que tuviera factura (columna M), lo que
- *       hacía desaparecer los ROJOS (sin N° de sistema) que ya tenían factura
- *       — y como tampoco están en el Histórico (requiere N° de sistema), quedaban
- *       invisibles en ambas vistas. Ahora un pedido solo sale de esta lista
- *       cuando tiene Factura (M) Y Número de Pedido Sistema (P) a la vez.
- *       Cambio aditivo: nada de lo que ya se veía desaparece; solo se SUMAN los
- *       rojos que faltaban.
- * ============================================================================
- *
- *  CAMBIOS RESPECTO A v36:
- *
- *  1) COLUMNA "UNIDAD" — ahora la resuelve el BACKEND (BUSCARV real):
- *     El Apps Script (getHistorial) hace el VLOOKUP autoritativo:
- *       codigo (Columna E de BASE DE PEDIDOS) -> coincide Columna A de
- *       BASE DE COMPRAS -> devuelve Columna D (unidad).
- *     El backend lo entrega en un mapa APARTE: data.unidadPorCodigo = { COD: unidad }.
- *     IMPORTANTE: el backend NO modifica el array `rows`. Esto es a propósito:
- *     el frontend lee la CANTIDAD desde r[6], así que tocar las filas habría
- *     corrompido la cantidad. El mapa separado elimina por completo ese riesgo.
- *     - El frontend ya no usa getAllDatos() para la unidad; usa data.unidadPorCodigo.
- *     - Si el backend aún no está desplegado, unidadPorCodigo llega vacío y la
- *       tabla muestra "---" igual que antes (no se pierde nada).
- *
- *  2) SEMÁFORO — verde eliminado SOLO en "Historial de Pedidos":
- *     - HistorialPedidos (getSemaforoHP): SOLO 🔴 y 🟡 (nunca verde).
- *         🔴 ROJO     -> sin columna P (numeroPedidoSistema).
- *         🟡 AMARILLO -> con columna P.
- *       Además se quitó el botón de filtro "🟢 Completados" de esta sección.
- *     - HistorialDocumentado (getSemaforoHD): mantiene la regla de 3 estados,
- *       porque es la vista de pedidos ya documentados (ahí el verde sí aplica):
- *         🔴 sin P · 🟡 con P sin M (factura) · 🟢 con P y M.
- *     Mapeo de columnas: M (nroFactura) y P (numeroPedidoSistema).
- *
- *  El resto del archivo (PDF, CSV, filtros, edición, estados, JSX) se conserva
- *  idéntico para no alterar el comportamiento del proyecto.
- * ============================================================================
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
@@ -198,9 +161,9 @@ function HistorialPedidos({ proveedoresMeta }) {
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
             responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisición'),
             observaciones: String(r[9]||''),
-            nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[9]||''),
+            nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[14]||''),
             numeroPedidoSistema: String(r[15]||''),
-            notaCredito: String(r[14]||''),
+            notaCredito: '',
             fechaEntrega: String(r[11]||''),
             articulos: []
           };
@@ -218,9 +181,9 @@ function HistorialPedidos({ proveedoresMeta }) {
         // update metadata from any row
         if (r[12] && String(r[12]).trim() && String(r[12]).trim() !== '---') mapa[nOrden].nroFactura = String(r[12]).trim();
         if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[13]).trim();
-        if (r[9] && String(r[9]).trim() && String(r[9]).trim() !== '---') mapa[nOrden].obsFactura = String(r[9]).trim();
+        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].obsFactura = String(r[14]).trim();
         if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[15]).trim();
-        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].notaCredito = String(r[14]).trim();
+        // Nota de Crédito no tiene columna en esta hoja (16 columnas A..P)
         if (r[11] && String(r[11]).trim() && String(r[11]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[11]).trim();
       });
       var lista = Object.values(mapa).reverse();
@@ -577,9 +540,9 @@ export function HistorialDocumentado({ proveedoresMeta }) {
             sede: String(r[2]||'---'), proveedor: String(r[3]||'---'),
             responsable: String(r[8]||'---'), medioPago: String(r[10]||'Requisición'),
             observaciones: String(r[9]||''),
-            nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[9]||''),
+            nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[14]||''),
             numeroPedidoSistema: String(r[15]||''),
-            notaCredito: String(r[14]||''),
+            notaCredito: '',
             articulos: []
           };
         }
@@ -596,9 +559,9 @@ export function HistorialDocumentado({ proveedoresMeta }) {
         // update metadata from any row
         if (r[12] && String(r[12]).trim() && String(r[12]).trim() !== '---') mapa[nOrden].nroFactura = String(r[12]).trim();
         if (r[13] && String(r[13]).trim() && String(r[13]).trim() !== '---') mapa[nOrden].tipoFactura = String(r[13]).trim();
-        if (r[9] && String(r[9]).trim() && String(r[9]).trim() !== '---') mapa[nOrden].obsFactura = String(r[9]).trim();
+        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].obsFactura = String(r[14]).trim();
         if (r[15] && String(r[15]).trim() && String(r[15]).trim() !== '---') mapa[nOrden].numeroPedidoSistema = String(r[15]).trim();
-        if (r[14] && String(r[14]).trim() && String(r[14]).trim() !== '---') mapa[nOrden].notaCredito = String(r[14]).trim();
+        // Nota de Crédito no tiene columna en esta hoja (16 columnas A..P)
         if (r[11] && String(r[11]).trim() && String(r[11]).trim() !== '---') mapa[nOrden].fechaEntrega = String(r[11]).trim();
       });
       var lista = Object.values(mapa).reverse();
