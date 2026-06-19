@@ -1,148 +1,117 @@
-# Sistema de Pedidos - Compras Rocoto
+# Sistema de Pedidos - Compras Rocoto (InsumoMaster)
 
-Aplicacion web de gestion de compras conectada a **Google Drive (Sheets)** y **Firebase**, desplegada automaticamente via **Vercel** desde **GitHub**.
+Aplicacion web de gestion de pedidos de compra para Restaurantes Rocoto.
+Los datos viven en Google Sheets y se acceden a traves de un backend en Google Apps Script.
+La aplicacion se construye con Vite + React y se despliega en Vercel.
 
-**URL produccion:** https://formato-de-pedidos.vercel.app
-
----
+URL de produccion: https://formato-de-pedidos.vercel.app
 
 ## Arquitectura del Sistema
 
 ```
 GitHub (codigo fuente)
-    |
-    v
-Vercel (despliegue automatico en cada push)
-    |
-    |-- Lee datos de --> Google Sheets (Proveedores, Productos, Sedes)
-    |-- Guarda en ----> Firebase Firestore (Pedidos, Consecutivos)
-    |-- Genera -------> PDF descargable en el navegador
+   |
+   v
+Vercel (despliegue automatico en cada push a main, via integracion Git nativa)
+   |
+   |-- Lee y escribe datos --> Google Apps Script Web App (?action=getDatos, appendPedido, etc.)
+   |                                   |
+   |                                   v
+   |                            Google Sheets (FORMATO DE PEDIDOS)
+   |
+   |-- Genera --------------> PDF descargable en el navegador (jsPDF via CDN)
 ```
 
----
+NOTA IMPORTANTE: toda la lectura y escritura de datos pasa por el Apps Script Web App.
+La aplicacion NO usa la Google Sheets API directa, ni Firebase en su flujo actual.
 
-## Modulos
+## Modulos (pestanas de la app)
 
-### Tab 1: Catalogo Firebase
-- Lista de insumos y proveedores almacenados en Firestore
-- - Filtros por proveedor, categoria, busqueda
-  - - Vista lista o tarjetas por proveedor
-    - - Generacion de PDF de orden de compra
-     
-      - ### Tab 2: Pedido desde Drive (NUEVO)
-      - - Lee proveedores directamente de Google Sheets (hoja PRINCIPAL)
-        - - Carga sedes desde la hoja SEDE
-          - - Para cada proveedor carga sus productos desde su hoja individual
-            - - Genera PDF profesional con encabezado, tabla de productos y firma
-              - - Guarda el consecutivo en Firebase
-               
-                - ---
+- Pedido desde Drive: crea pedidos leyendo proveedores, sedes y productos desde el Sheet (via Apps Script). Genera un PDF de orden de compra y guarda el pedido en el Sheet.
+- Historico de Pedidos: consulta los pedidos registrados, con filtros por sede y busqueda.
+- Ajuste de Pedidos: edita cantidades y datos de pedidos existentes.
 
-                ## Configuracion Inicial
+## Configuracion Inicial
 
-                ### 1. Clonar el repositorio
-                ```bash
-                git clone https://github.com/comprasrocoto-dotcom/FORMATO-DE-PEDIDOS.git
-                cd FORMATO-DE-PEDIDOS
-                npm install
-                ```
+### 1. Clonar el repositorio
+```
+git clone https://github.com/comprasrocoto-dotcom/FORMATO-DE-PEDIDOS.git
+cd FORMATO-DE-PEDIDOS
+npm install
+```
 
-                ### 2. Variables de entorno
-                Copia `.env.example` como `.env.local` y completa:
+### 2. Variables de entorno
 
-                ```env
-                GEMINI_API_KEY=tu_clave_gemini
-                VITE_SHEETS_ID=1Yhpeb3aOJiW05XIEWcMPIjLl_ibr9xVa
-                VITE_SHEETS_API_KEY=tu_google_api_key
-                ```
+Copia `.env.example` como `.env.local` y completa el valor:
 
-                ### 3. Obtener Google Sheets API Key
-                1. Ve a https://console.cloud.google.com
-                2. 2. Crea o selecciona un proyecto
-                   3. 3. Busca **"Google Sheets API"** y habilitala
-                      4. 4. Ve a **Credenciales** > **Crear credenciales** > **Clave de API**
-                         5. 5. Restringe la clave a:
-                            6.    - Aplicaciones HTTP/sitio web
-                                  -    - Dominios: `localhost`, `*.vercel.app`, tu dominio custom
-                                       - 6. Copia la clave en `VITE_SHEETS_API_KEY`
-                                        
-                                         7. > **IMPORTANTE:** El Google Spreadsheet debe tener acceso publico (compartir > cualquier persona con el enlace puede ver) O el API Key debe tener los permisos correctos.
-                                            >
-                                            > ### 4. Ejecutar localmente
-                                            > ```bash
-                                            > npm run dev
-                                            > # Abre http://localhost:3000
-                                            > ```
-                                            >
-                                            > ---
-                                            >
-                                            > ## Despliegue en Vercel (automatico desde GitHub)
-                                            >
-                                            > El proyecto ya esta conectado a Vercel. Cada push a `main` despliega automaticamente.
-                                            >
-                                            > Para configurar variables de entorno en Vercel:
-                                            > 1. Ve a https://vercel.com/comprasrocoto-dotcom/formato-de-pedidos/settings/environment-variables
-                                            > 2. 2. Agrega:
-                                            >    3.    - `VITE_SHEETS_ID` = ID del spreadsheet
-                                            >          -    - `VITE_SHEETS_API_KEY` = tu API key de Google
-                                            >               -    - `GEMINI_API_KEY` = tu clave de Gemini
-                                            >                
-                                            >                    - ---
-                                            >
-                                            > ## Estructura de Google Sheets
-                                            >
-                                            > El spreadsheet `FORMATO DE PEDIDOS.xlsx` debe tener:
-                                            >
-                                            > | Hoja | Descripcion | Columnas |
-                                            > |------|-------------|---------|
-                                            > | `PRINCIPAL` | Lista de proveedores | A: Nombre, B: Telefono, C: Correo, D: Asesor, E: Medio Pago |
-                                            > | `SEDE` | Sedes de entrega | A: Nombre, B: Direccion, C: Hora Entrega, D: Telefono |
-                                            > | `BASE DE PEDIDOS` | Registro de pedidos (escritura) | Auto-generado |
-                                            > | `[NOMBRE PROVEEDOR]` | Hoja individual por proveedor | A: Codigo, B: Articulo, C: SubArticulo, D: Pedido |
-                                            >
-                                            > ---
-                                            >
-                                            > ## Estructura de Archivos
-                                            >
-                                            > ```
-                                            > src/
-                                            >   components/
-                                            >     SheetsOrderForm.tsx   # Formulario pedido conectado a Sheets (NUEVO)
-                                            >     InsumoTable.tsx       # Tabla de insumos Firebase
-                                            >     ProveedorCard.tsx     # Tarjeta por proveedor Firebase
-                                            >     Filters.tsx           # Barra de filtros
-                                            >   services/
-                                            >     googleSheets.ts       # Servicio API Google Sheets (NUEVO)
-                                            >     db.ts                 # Servicio Firebase Firestore
-                                            >   data/
-                                            >     mockData.ts           # Datos de respaldo Firebase
-                                            >   lib/
-                                            >     firebase.ts           # Configuracion Firebase
-                                            >     utils.ts              # Utilidades
-                                            >   App.tsx                 # Componente principal con tabs
-                                            >   types.ts                # Tipos TypeScript
-                                            > ```
-                                            >
-                                            > ---
-                                            >
-                                            > ## Generacion de PDF
-                                            >
-                                            > El sistema genera PDFs automaticamente usando `html2pdf.js` con:
-                                            > - Encabezado con logo ROCOTO y numero de orden
-                                            > - - Informacion del proveedor (izquierda)
-                                            >   - - Sede de entrega (derecha)
-                                            >     - - Tabla de productos con codigo, articulo, subArticulo y cantidad
-                                            >       - - Observaciones y firma del responsable
-                                            >         - - Formato carta, margenes amplios
-                                            >          
-                                            >           - ---
-                                            >
-                                            > ## Proximos pasos recomendados
-                                            >
-                                            > 1. **Escribir pedidos en Sheets:** Agrega un Cloud Function en Firebase para escribir en Google Sheets usando una Service Account (sin exponer credenciales en el frontend)
-                                            > 2. 2. **Envio de correo:** Usa Firebase Extensions > Trigger Email para enviar el PDF al proveedor automaticamente
-                                            >    3. 3. **Autenticacion:** Agrega Firebase Auth para controlar quien puede hacer pedidos
-                                            >       4. 4. **Historial:** Conecta la hoja `BASE DE PEDIDOS` para mostrar pedidos anteriores en la web
-                                            >          5. 
+```
+VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/TU_DESPLIEGUE/exec
+```
 
-<!-- deploy trigger 1779494924608 -->
+Esta es la unica variable que la aplicacion necesita actualmente. Apunta al Web App de Apps Script desplegado que sirve y recibe los datos del Sheet.
+
+### 3. Ejecutar localmente
+
+```
+npm run dev
+```
+
+Abre http://localhost:3000
+
+## Despliegue en Vercel
+
+El proyecto esta conectado a Vercel mediante la integracion Git nativa. Cada push a la rama `main` dispara un despliegue de produccion automatico. Los push a otras ramas generan un despliegue de Preview con su propia URL temporal.
+
+Para configurar variables de entorno en Vercel: Settings > Environment Variables > agregar `VITE_APPS_SCRIPT_URL`.
+
+## Estructura de Google Sheets
+
+El spreadsheet "FORMATO DE PEDIDOS" contiene, entre otras, las siguientes hojas:
+
+| Hoja | Descripcion |
+| --- | --- |
+| PROVEEDORES | Lista de proveedores y sus datos de contacto |
+| ARTICULOS | Articulos / productos por proveedor |
+| CATALOGO_COMPRAS | Catalogo de compras |
+| MASTER_PEDIDO / DETALLE_PEDIDO | Estructura de pedidos |
+| BASE DE PEDIDOS | Registro historico de pedidos (escritura) |
+| BASE DE COMPRAS | Registro de compras |
+| UNIDAD DE MEDIDA | Unidades y factores de conversion |
+| SEDE | Sedes de entrega |
+| MAXIMO Y MINIMOS | Minimos y maximos por sede/producto |
+
+La forma exacta de leer cada hoja la define el backend de Apps Script (ver `apps-script-backend.js`).
+
+## Estructura de Archivos (src/)
+
+```
+src/
+  App.tsx              # Componente principal con las 3 pestanas
+  main.tsx             # Punto de entrada
+  index.css            # Estilos (Tailwind)
+  types.ts             # Tipos TypeScript
+  components/
+    SheetsOrderForm.tsx  # Formulario de pedido + historial + PDF
+    AjustePedidos.tsx    # Ajuste de pedidos existentes
+  services/
+    googleSheets.ts      # Cliente del backend Apps Script
+  utils/
+    pdfGenerator.ts      # Generacion de PDF con jsPDF
+
+apps-script-backend.js   # Codigo del backend (Web App de Apps Script)
+```
+
+## Generacion de PDF
+
+El PDF de la orden de compra se genera en el navegador con jsPDF (cargado por CDN). Incluye encabezado, datos de proveedor y sede, tabla de productos y totales.
+
+## Codigo legacy (no usado actualmente)
+
+El repositorio conserva archivos de una arquitectura anterior basada en Firebase (`firebase-*.json`, `firestore.rules`, `src/lib/firebase.ts`, `src/services/db.ts`, `src/components/InsumoTable.tsx`, `src/components/ProveedorCard.tsx`, `src/components/Filters.tsx`, `src/data/mockData.ts`). El flujo actual de la aplicacion NO los utiliza.
+
+## Proximos pasos recomendados
+
+- Reactivar el chequeo de tipos (quitar los @ts-nocheck).
+- Dividir el componente SheetsOrderForm.tsx en piezas mas pequenas.
+- Agregar autenticacion para controlar quien puede crear pedidos.
+- Validar las entradas de texto libre en el formulario.
