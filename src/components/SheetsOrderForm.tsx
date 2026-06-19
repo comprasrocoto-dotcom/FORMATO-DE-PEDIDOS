@@ -1,8 +1,36 @@
 // @ts-nocheck
 /**
- * SheetsOrderForm.tsx v35 - fix: semaforo Completado = hasFact && hasNPS (sin requerir obsFactura)
- * - Metadata (factura, NPS) se lee de TODAS las filas, no solo la primera
- * - key estables en lista y contenido expandido eliminan error insertBefore
+ * ============================================================================
+ *  SheetsOrderForm.tsx  ·  v37
+ * ============================================================================
+ *
+ *  CAMBIOS RESPECTO A v36:
+ *
+ *  1) COLUMNA "UNIDAD" — ahora la resuelve el BACKEND (BUSCARV real):
+ *     El Apps Script (getHistorial) hace el VLOOKUP autoritativo:
+ *       codigo (Columna E de BASE DE PEDIDOS) -> coincide Columna A de
+ *       BASE DE COMPRAS -> devuelve Columna D (unidad).
+ *     El backend lo entrega en un mapa APARTE: data.unidadPorCodigo = { COD: unidad }.
+ *     IMPORTANTE: el backend NO modifica el array `rows`. Esto es a propósito:
+ *     el frontend lee la CANTIDAD desde r[6], así que tocar las filas habría
+ *     corrompido la cantidad. El mapa separado elimina por completo ese riesgo.
+ *     - El frontend ya no usa getAllDatos() para la unidad; usa data.unidadPorCodigo.
+ *     - Si el backend aún no está desplegado, unidadPorCodigo llega vacío y la
+ *       tabla muestra "---" igual que antes (no se pierde nada).
+ *
+ *  2) SEMÁFORO — verde eliminado SOLO en "Historial de Pedidos":
+ *     - HistorialPedidos (getSemaforoHP): SOLO 🔴 y 🟡 (nunca verde).
+ *         🔴 ROJO     -> sin columna P (numeroPedidoSistema).
+ *         🟡 AMARILLO -> con columna P.
+ *       Además se quitó el botón de filtro "🟢 Completados" de esta sección.
+ *     - HistorialDocumentado (getSemaforoHD): mantiene la regla de 3 estados,
+ *       porque es la vista de pedidos ya documentados (ahí el verde sí aplica):
+ *         🔴 sin P · 🟡 con P sin M (factura) · 🟢 con P y M.
+ *     Mapeo de columnas: M (nroFactura) y P (numeroPedidoSistema).
+ *
+ *  El resto del archivo (PDF, CSV, filtros, edición, estados, JSX) se conserva
+ *  idéntico para no alterar el comportamiento del proyecto.
+ * ============================================================================
  */
 import { useState, useEffect, useRef } from 'react';
 import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, CheckCircle, Search, Filter, FileText, Edit3, Archive } from 'lucide-react';
@@ -34,14 +62,61 @@ function generarCSV(pedido) {
   setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
 }
 
-// Semáforo para HistorialPedidos
+/**
+ * Resuelve la unidad de un código usando el mapa { COD: unidad } que entrega
+ * el backend en data.unidadPorCodigo (VLOOKUP servidor: BASE DE COMPRAS A->D).
+ * La comparación es case-insensitive (como BUSCARV en Sheets).
+ * Devuelve '' si no se encuentra, para que la tabla muestre '---' (sin perder dato).
+ *
+ * @param {Object<string,string>} mapaUnidades  Keys en MAYÚSCULAS.
+ * @param {string} codigo
+ * @returns {string}
+ */
+function resolverUnidad(mapaUnidades, codigo) {
+  var cod = String(codigo || '').trim().toUpperCase();
+  return (mapaUnidades && mapaUnidades[cod]) ? mapaUnidades[cod] : '';
+}
+
+/**
+ * Semáforo para HISTORIAL DE PEDIDOS (pendientes de documentar).
+ * SOLO dos estados: el verde NUNCA aparece aquí.
+ *   🔴 ROJO     -> sin columna P (numeroPedidoSistema sin asignar)
+ *   🟡 AMARILLO -> con columna P (numeroPedidoSistema asignado)
+ *
+ * @param {object} p
+ * @returns {'🔴'|'🟡'}
+ */
 function getSemaforoHP(p) {
-  var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
-  var hasDoc = !!(p.obsFactura && String(p.obsFactura).trim() && p.obsFactura !== '---');
-  var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasNPS) return '🟢';
-  if (hasFact || hasNPS) return '🟡';
-  return '🔴';
+  // Columna P = numeroPedidoSistema
+  var tieneNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
+  return tieneNPS ? '🟡' : '🔴';
+}
+
+/**
+ * Semáforo para HISTÓRICO DE PEDIDOS (ya documentados). Mantiene 3 estados:
+ *   🔴 ROJO     -> sin columna P (numeroPedidoSistema)        [máxima prioridad]
+ *   🟡 AMARILLO -> con columna P pero sin columna M (nroFactura)
+ *   🟢 VERDE    -> con columna M y columna P
+ *
+ * @param {object} p
+ * @returns {'🔴'|'🟡'|'🟢'}
+ */
+function getSemaforoHD(p) {
+  // Columna M = nroFactura
+  var tieneFactura = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
+  // Columna P = numeroPedidoSistema
+  var tieneNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
+
+  if (!tieneNPS) return '🔴';
+  if (!tieneFactura) return '🟡';
+  return '🟢';
+}
+
+// Helper: color de fondo para el círculo del semáforo.
+function getColorSemaforo(em) {
+  if (em === '🟢') return '#00c853';
+  if (em === '🟡') return '#ffea00';
+  return '#ff4d4d';
 }
 
 // ─── HistorialPedidos ─────────────────────────────────────────────────────────
@@ -98,6 +173,11 @@ function HistorialPedidos({ proveedoresMeta }) {
       var data = await res.json();
       if (!data.ok) { setErr(data.error || 'Error cargando historial.'); return; }
       var rows = data.rows || [];
+
+      // Mapa { COD: unidad } resuelto por el backend (VLOOKUP BASE DE COMPRAS A->D).
+      // Si el backend aún no lo envía, queda vacío y la unidad cae a '---'.
+      var mapaUnidades = data.unidadPorCodigo || {};
+
       var mapa = {};
       rows.forEach(function(r) {
         if (!Array.isArray(r)) return;
@@ -117,9 +197,13 @@ function HistorialPedidos({ proveedoresMeta }) {
           };
         }
         if (r[5] || r[4]) {
+          // Columna E (r[4]) -> código del artículo. Resolvemos su unidad (columna D de BASE DE COMPRAS).
+          var codArt = String(r[4]||'');
           mapa[nOrden].articulos.push({
-            codigo: String(r[4]||''), articulo: String(r[5]||''),
-            unidad: '', cantidad: String(r[6]||''),
+            codigo: codArt,
+            articulo: String(r[5]||''),
+            unidad: resolverUnidad(mapaUnidades, codArt),
+            cantidad: String(r[6]||''),
           });
         }
         // update metadata from any row
@@ -236,7 +320,7 @@ function HistorialPedidos({ proveedoresMeta }) {
         <div className="flex gap-2">
           <button onClick={function(){ setFiltroEstadoDoc('todos'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='todos'?'bg-slate-700 text-white border-slate-700':'bg-white text-slate-600 border-slate-200 hover:border-slate-400')}>Todos</button>
           <button onClick={function(){ setFiltroEstadoDoc('pendientes'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='pendientes'?'bg-red-600 text-white border-red-600':'bg-white text-slate-600 border-slate-200 hover:border-red-400')}>🔴 Pendientes</button>
-          <button onClick={function(){ setFiltroEstadoDoc('completados'); }} className={"px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all " + (filtroEstadoDoc==='completados'?'bg-green-600 text-white border-green-600':'bg-white text-slate-600 border-slate-200 hover:border-green-400')}>🟢 Completados</button>
+          {/* Botón "🟢 Completados" eliminado: en Historial de Pedidos solo hay rojo y amarillo */}
           {(sedeFiltro || busqHP || fechaDesdeHP || fechaHastaHP || filtroEstadoDoc !== 'todos') && <span className="ml-auto text-xs text-slate-500 self-center">{pedidosFiltrados.length} resultado(s)</span>}
         </div>
       </div>
@@ -439,23 +523,6 @@ function HistorialPedidos({ proveedoresMeta }) {
 }
 
 // ─── HistorialDocumentado ─────────────────────────────────────────────────────
-// Semaforo para HistorialDocumentado
-function getSemaforoHD(p) {
-  var hasFact = !!(p.nroFactura && String(p.nroFactura).trim() && p.nroFactura !== '---');
-  var hasDoc = !!(p.obsFactura && String(p.obsFactura).trim() && p.obsFactura !== '---');
-  var hasNPS = !!(p.numeroPedidoSistema && String(p.numeroPedidoSistema).trim() && p.numeroPedidoSistema !== '---');
-  if (hasFact && hasNPS) return '🟢';
-  if (hasFact || hasNPS) return '🟡';
-  return '🔴';
-}
-
-// Helper: color de fondo para semaforo visual
-function getColorSemaforo(em) {
-  if (em === '🟢') return '#00c853';
-  if (em === '🟡') return '#ffea00';
-  return '#ff4d4d';
-}
-
 export function HistorialDocumentado({ proveedoresMeta }) {
   var [sedeFiltro, setSedeFiltro] = useState('');
   var [articuloBusq, setArticuloBusq] = useState('');
@@ -482,6 +549,10 @@ export function HistorialDocumentado({ proveedoresMeta }) {
       var data = await res.json();
       if (!data.ok) { setErr(data.error || 'Error cargando historial.'); return; }
       var rows = data.rows || [];
+
+      // Mapa { COD: unidad } resuelto por el backend (VLOOKUP BASE DE COMPRAS A->D).
+      var mapaUnidades = data.unidadPorCodigo || {};
+
       var mapa = {};
       rows.forEach(function(r) {
         if (!Array.isArray(r)) return;
@@ -500,9 +571,13 @@ export function HistorialDocumentado({ proveedoresMeta }) {
           };
         }
         if (r[5] || r[4]) {
+          // Columna E (r[4]) -> código del artículo. Resolvemos su unidad (columna D de BASE DE COMPRAS).
+          var codArt = String(r[4]||'');
           mapa[nOrden].articulos.push({
-            codigo: String(r[4]||''), articulo: String(r[5]||''),
-            unidad: '', cantidad: String(r[6]||''),
+            codigo: codArt,
+            articulo: String(r[5]||''),
+            unidad: resolverUnidad(mapaUnidades, codArt),
+            cantidad: String(r[6]||''),
           });
         }
         // update metadata from any row
