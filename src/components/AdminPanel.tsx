@@ -42,7 +42,9 @@ const SHEETS: any = {
     campos: [
       { name: 'ID_Proveedor', label: 'ID Proveedor', type: 'text', key: true, required: true },
       { name: 'Razon_Social', label: 'Razón Social', type: 'text' },
-      { name: 'Telefono_Contacto', label: 'Teléfono', type: 'text' },
+      { name: 'Nombre_Comercial', label: 'Nombre Comercial', type: 'text' },
+      { name: 'Telefono_Contacto1', label: 'Teléfono 1', type: 'text' },
+      { name: 'Telefono_Contacto2', label: 'Teléfono 2', type: 'text' },
       { name: 'Correo_Contacto', label: 'Correo', type: 'text' },
       { name: 'Asesor_Contacto', label: 'Asesor', type: 'text' },
     ],
@@ -55,14 +57,51 @@ const SHEETS: any = {
     campos: [
       { name: 'Codigo_Barras', label: 'Artículo', type: 'ref', refSheet: 'ARTICULOS', key: true, required: true },
       { name: 'ID_Proveedor', label: 'Proveedor', type: 'ref', refSheet: 'PROVEEDORES', key: true, required: true },
-      { name: 'Prioridad', label: 'Prioridad', type: 'number' },
-      { name: 'Precio_Negociado', label: 'Precio Negociado', type: 'number' },
+      { name: 'Prioridad', label: 'Prioridad', type: 'priority' },
+      { name: 'Precio_Negociado', label: 'Precio Negociado', type: 'money' },
       { name: 'Estado_Aprobado_Suspendido', label: 'Estado', type: 'select', options: ['Aprobado', 'Suspendido'] },
+    ],
+    // Columnas de solo lectura resueltas desde ARTICULOS por Codigo_Barras
+    extra: [
+      { label: 'Referencia',  field: 'Codigo_Referencia' },
+      { label: 'Categoría',   field: 'Subfamilia_Categoria' },
+      { label: 'U.M. HiOPOS', field: 'UniMedida_Formato_HiOPOS' },
+      { label: 'U.M. Compra', field: 'UniMedida_Compra' },
     ],
   },
 };
 
 const SHEET_ORDER = ['ARTICULOS', 'PROVEEDORES', 'CATALOGO_COMPRAS'];
+
+// Prioridad: 1 = más alta, 3 = más baja, con colores.
+const PRIO: any = {
+  '1': { label: 'Alta',  cls: 'bg-emerald-100 text-emerald-700 border border-emerald-300' },
+  '2': { label: 'Media', cls: 'bg-amber-100 text-amber-700 border border-amber-300' },
+  '3': { label: 'Baja',  cls: 'bg-rose-100 text-rose-700 border border-rose-300' },
+};
+
+// Formatea estilo Colombia: miles con punto, decimales con coma (2 dec).
+function formatMoneyCO(v: any) {
+  if (v === '' || v === null || v === undefined) return '—';
+  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/\./g, '').replace(',', '.'));
+  if (isNaN(n)) return String(v);
+  return n.toLocaleString('es-CO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// Convierte lo que el usuario escribe (con coma o punto) a Number para guardar.
+function parseMoney(str: any) {
+  if (str === '' || str === null || str === undefined) return '';
+  let s = String(str).trim().replace(/[^0-9.,-]/g, '');
+  if (s.indexOf(',') >= 0) s = s.replace(/\./g, '').replace(',', '.'); // coma = decimal
+  const n = parseFloat(s);
+  return isNaN(n) ? '' : n;
+}
+
+// Número almacenado -> texto editable con coma decimal (para el input de dinero).
+function moneyToInput(v: any) {
+  if (v === '' || v === null || v === undefined) return '';
+  return String(v).replace('.', ',');
+}
 
 export default function AdminPanel() {
   // sesión
@@ -149,6 +188,19 @@ export default function AdminPanel() {
     return { ARTICULOS: artMap, PROVEEDORES: provMap };
   }, [data]);
 
+  // Mapa de artículo COMPLETO por Codigo_Barras (para columnas resueltas del catálogo).
+  const artByCode = useMemo(() => {
+    const m: any = {};
+    (data.ARTICULOS || []).forEach((a: any) => {
+      m[String(a.Codigo_Barras || '').trim().toUpperCase()] = a;
+    });
+    return m;
+  }, [data]);
+
+  function articuloDe(codigo: any) {
+    return artByCode[String(codigo || '').trim().toUpperCase()] || null;
+  }
+
   function refLabel(refSheet: string, value: any) {
     const m = refLabels[refSheet] || {};
     return m[String(value || '').trim().toUpperCase()] || '';
@@ -183,7 +235,12 @@ export default function AdminPanel() {
   function abrirEditar(record: any) {
     const cfg = SHEETS[activeSheet];
     const copia: any = {};
-    cfg.campos.forEach((c: any) => { copia[c.name] = record[c.name] !== undefined ? record[c.name] : ''; });
+    cfg.campos.forEach((c: any) => {
+      let v = record[c.name] !== undefined ? record[c.name] : '';
+      if (c.type === 'money') v = moneyToInput(v);          // a texto con coma para editar
+      else if (c.type === 'priority') v = (v === '' ? '' : String(v));
+      copia[c.name] = v;
+    });
     setEsNuevo(false);
     setForm(copia);
     setOkMsg('');
@@ -215,6 +272,8 @@ export default function AdminPanel() {
     cfg.campos.forEach((c: any) => {
       let v = form[c.name];
       if (c.type === 'number') v = (v === '' || v === null || v === undefined) ? '' : Number(v);
+      else if (c.type === 'money') v = parseMoney(v);
+      else if (c.type === 'priority') v = (v === '' || v === null || v === undefined) ? '' : Number(v);
       record[c.name] = v;
     });
 
@@ -383,9 +442,9 @@ export default function AdminPanel() {
                   {cfg.campos.map((c: any) => (
                     <th key={c.name} className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">{c.label}</th>
                   ))}
-                  {activeSheet === 'CATALOGO_COMPRAS' && (
-                    <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Detalle</th>
-                  )}
+                  {activeSheet === 'CATALOGO_COMPRAS' && cfg.extra.map((x: any) => (
+                    <th key={x.field} className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">{x.label}</th>
+                  ))}
                   <th className="py-2.5 px-3 text-center text-white font-bold uppercase tracking-wider w-24">Acciones</th>
                 </tr>
               </thead>
@@ -394,12 +453,25 @@ export default function AdminPanel() {
                   <tr key={i} className={'border-b border-slate-100 ' + (i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60')}>
                     {cfg.campos.map((c: any) => (
                       <td key={c.name} className="py-2 px-3 text-slate-700">
-                        {c.name === 'Estado_Aprobado_Suspendido' ? (
+                        {c.type === 'priority' ? (
+                          (r[c.name] !== '' && r[c.name] != null) ? (
+                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-bold ' + ((PRIO[String(r[c.name])] || {}).cls || 'bg-slate-100 text-slate-500')}>
+                              {String(r[c.name])}{PRIO[String(r[c.name])] ? ' · ' + PRIO[String(r[c.name])].label : ''}
+                            </span>
+                          ) : '—'
+                        ) : c.type === 'money' ? (
+                          <span className="font-medium text-slate-800">$ {formatMoneyCO(r[c.name])}</span>
+                        ) : c.name === 'Estado_Aprobado_Suspendido' ? (
                           <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold ' +
                             (String(r[c.name]).toLowerCase().indexOf('suspend') >= 0
                               ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
                             {r[c.name] || '---'}
                           </span>
+                        ) : c.type === 'ref' ? (
+                          <div>
+                            <div className="font-mono font-semibold text-slate-800">{r[c.name] || '---'}</div>
+                            <div className="text-[11px] text-slate-500">{refLabel(c.refSheet, r[c.name]) || '—'}</div>
+                          </div>
                         ) : c.key ? (
                           <span className="font-mono font-semibold text-slate-800">{r[c.name] || '---'}</span>
                         ) : (
@@ -407,12 +479,14 @@ export default function AdminPanel() {
                         )}
                       </td>
                     ))}
-                    {activeSheet === 'CATALOGO_COMPRAS' && (
-                      <td className="py-2 px-3 text-slate-500">
-                        <div className="text-slate-800 font-medium">{refLabel('ARTICULOS', r.Codigo_Barras) || '—'}</div>
-                        <div className="text-[11px]">{refLabel('PROVEEDORES', r.ID_Proveedor) || '—'}</div>
-                      </td>
-                    )}
+                    {activeSheet === 'CATALOGO_COMPRAS' && cfg.extra.map((x: any) => {
+                      const art = articuloDe(r.Codigo_Barras);
+                      return (
+                        <td key={x.field} className="py-2 px-3 text-slate-600">
+                          {art && String(art[x.field] ?? '').trim() !== '' ? String(art[x.field]) : '—'}
+                        </td>
+                      );
+                    })}
                     <td className="py-2 px-3">
                       <div className="flex items-center justify-center gap-1.5">
                         <button onClick={() => abrirEditar(r)} title="Editar"
@@ -473,6 +547,24 @@ export default function AdminPanel() {
                         <option value="">Seleccionar...</option>
                         {c.options.map((o: string) => <option key={o} value={o}>{o}</option>)}
                       </select>
+                    ) : c.type === 'priority' ? (
+                      <select
+                        value={form[c.name] || ''}
+                        onChange={(e) => setCampo(c.name, e.target.value)}
+                        className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-cyan-500">
+                        <option value="">Seleccionar...</option>
+                        <option value="1">1 — Alta</option>
+                        <option value="2">2 — Media</option>
+                        <option value="3">3 — Baja</option>
+                      </select>
+                    ) : c.type === 'money' ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        placeholder="0,00"
+                        value={form[c.name] ?? ''}
+                        onChange={(e) => setCampo(c.name, e.target.value)}
+                        className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-cyan-500" />
                     ) : (
                       <input
                         type={c.type === 'number' ? 'number' : 'text'}
