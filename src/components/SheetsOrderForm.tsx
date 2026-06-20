@@ -9,7 +9,7 @@ import { ShoppingCart, User, Truck, RefreshCw, Save, Download, AlertCircle, Chec
 import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getProductosConMinMax,  getSubfamiliasByProveedor,  getSedes,  appendPedido, invalidarCache, actualizarFactura, actualizarNumeroPedidoSistema, getAllDatos} from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
-const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+import { APPS_SCRIPT_URL as ENDPOINT } from '../config';
 
 function validarProveedorFGH(provMeta) {
   if (!provMeta) return false;
