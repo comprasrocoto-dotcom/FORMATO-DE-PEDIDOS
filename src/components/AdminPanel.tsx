@@ -6,10 +6,10 @@
 //  Las llaves (Codigo_Barras, ID_Proveedor) relacionan las hojas; en el catálogo
 //  se eligen mediante listas que muestran el nombre comercial / razón social.
 // ============================================================================
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Lock, ShieldCheck, RefreshCw, Plus, Search, Edit3, Trash2, Save, X,
-  Package, Truck, ClipboardList, AlertCircle, CheckCircle, LogOut,
+  Package, Truck, ClipboardList, AlertCircle, CheckCircle, LogOut, ChevronDown,
 } from 'lucide-react';
 import { adminGetData, adminUpsert, adminDelete } from '../services/adminApi';
 
@@ -101,6 +101,82 @@ function parseMoney(str: any) {
 function moneyToInput(v: any) {
   if (v === '' || v === null || v === undefined) return '';
   return String(v).replace('.', ',');
+}
+
+// Une partes no vacías con " - " (para etiquetas tipo "código - nombre - ...").
+function joinDash(parts: any[]) {
+  return parts.map((x) => String(x ?? '').trim()).filter(Boolean).join('  -  ');
+}
+
+// ── Buscador con selección (combobox) para llaves foráneas ───────────────────
+function RefSelect({ value, options, disabled, onChange, placeholder }: any) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const wrapRef = useRef<any>(null);
+
+  const selected = options.find((o: any) => String(o.value) === String(value));
+
+  const filtradas = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    const base = s
+      ? options.filter((o: any) => o.label.toLowerCase().includes(s) || String(o.value).toLowerCase().includes(s))
+      : options;
+    return base.slice(0, 80);
+  }, [q, options]);
+
+  useEffect(() => {
+    function onDoc(e: any) { if (wrapRef.current && !wrapRef.current.contains(e.target)) { setOpen(false); setQ(''); } }
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+
+  if (disabled) {
+    return (
+      <div className="w-full px-2.5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-500">
+        {selected ? selected.label : (String(value || '') || '—')}
+      </div>
+    );
+  }
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button type="button" onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-left focus:outline-none focus:border-cyan-500 hover:border-slate-300">
+        <span className={selected ? 'text-slate-800 truncate' : 'text-slate-400'}>
+          {selected ? selected.label : (placeholder || 'Buscar y seleccionar...')}
+        </span>
+        <ChevronDown className={'w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ' + (open ? 'rotate-180' : '')} />
+      </button>
+
+      {open && (
+        <div className="mt-1 border border-slate-200 rounded-lg bg-white shadow-md overflow-hidden">
+          <div className="p-2 border-b border-slate-100 relative">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
+              placeholder="Escribe para buscar..."
+              className="w-full pl-7 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:outline-none focus:border-cyan-500" />
+          </div>
+          <div className="max-h-52 overflow-y-auto">
+            {filtradas.length === 0 ? (
+              <div className="px-3 py-3 text-slate-400 text-xs text-center">Sin resultados</div>
+            ) : (
+              filtradas.map((o: any) => (
+                <button type="button" key={o.value}
+                  onClick={() => { onChange(o.value); setOpen(false); setQ(''); }}
+                  className={'w-full text-left px-3 py-2 text-xs hover:bg-cyan-50 border-b border-slate-50 last:border-0 ' +
+                    (String(o.value) === String(value) ? 'bg-cyan-50 font-semibold text-cyan-800' : 'text-slate-700')}>
+                  {o.label}
+                </button>
+              ))
+            )}
+            {options.length > 80 && q.trim() === '' && (
+              <div className="px-3 py-2 text-[10px] text-slate-400 bg-slate-50">Mostrando 80 de {options.length}. Escribe para filtrar.</div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function AdminPanel() {
@@ -210,13 +286,13 @@ export default function AdminPanel() {
     if (refSheet === 'ARTICULOS') {
       return (data.ARTICULOS || []).map((a: any) => ({
         value: String(a.Codigo_Barras || ''),
-        label: (a.Codigo_Barras || '') + ' — ' + (a.Articulo_Comercial || a.Articulo_HiOPOS || ''),
+        label: joinDash([a.Codigo_Barras, a.Articulo_HiOPOS, a.UniMedida_Formato_HiOPOS, a.Articulo_Comercial]),
       }));
     }
     if (refSheet === 'PROVEEDORES') {
       return (data.PROVEEDORES || []).map((p: any) => ({
         value: String(p.ID_Proveedor || ''),
-        label: (p.ID_Proveedor || '') + ' — ' + (p.Razon_Social || ''),
+        label: joinDash([p.ID_Proveedor, p.Razon_Social, p.Nombre_Comercial]),
       }));
     }
     return [];
@@ -529,16 +605,13 @@ export default function AdminPanel() {
                     </label>
 
                     {c.type === 'ref' ? (
-                      <select
+                      <RefSelect
                         value={form[c.name] || ''}
+                        options={refOptions(c.refSheet)}
                         disabled={bloqueadoLlave}
-                        onChange={(e) => setCampo(c.name, e.target.value)}
-                        className="w-full px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-cyan-500 disabled:opacity-60">
-                        <option value="">Seleccionar...</option>
-                        {refOptions(c.refSheet).map((o: any) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
+                        onChange={(v: any) => setCampo(c.name, v)}
+                        placeholder="Buscar y seleccionar..."
+                      />
                     ) : c.type === 'select' ? (
                       <select
                         value={form[c.name] || ''}
