@@ -9,7 +9,7 @@
  * - v9: Agrega getProductosConMinMax para cargar productos con minimo/maximo por proveedor
  */
 
-const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL || 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTSclSTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+import { APPS_SCRIPT_URL } from '../config';
 
 let cachedDatos: any = null;
 let cacheTimestamp = 0;
