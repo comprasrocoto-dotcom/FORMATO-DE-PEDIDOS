@@ -8,8 +8,7 @@
 
 // IMPORTANTE: si re-despliegas el Apps Script con otra URL, actualízala aquí
 // (es la misma que usan SheetsOrderForm.tsx y googleSheets.ts).
-const ADMIN_ENDPOINT =
-  'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+import { APPS_SCRIPT_URL as ADMIN_ENDPOINT } from '../config';
 
 async function postAdmin(payload: any): Promise<any> {
   try {
