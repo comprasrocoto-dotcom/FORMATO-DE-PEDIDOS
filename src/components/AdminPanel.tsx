@@ -107,68 +107,77 @@ function RefSelect({ value, options, disabled, onChange, placeholder }: any) {
   const [q, setQ] = useState('');
   const wrapRef = useRef<any>(null);
 
-  const selected = options.find((o: any) => String(o.value) === String(value));
+  const selected = options.find((o: any) => String(o.value) === String(value)) || null;
+  const selectedLabel = selected ? selected.label : '';
+
+  // Texto visible: mientras está ABIERTO muestra lo que escribes (q);
+  // cuando está CERRADO muestra la opción elegida. Sin efectos que reescriban.
+  const display = open ? q : selectedLabel;
 
   const filtradas = useMemo(() => {
     const términos = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    const base = términos.length === 0
-      ? options
-      : options.filter((o: any) => {
-          const texto = (o.label + ' ' + o.value).toLowerCase();
-          return términos.every((t: string) => texto.includes(t)); // todas las palabras deben coincidir
-        });
-    return base.slice(0, 80);
+    if (términos.length === 0) return options.slice(0, 100);
+    return options.filter((o: any) => {
+      const texto = (o.label + ' ' + o.value).toLowerCase();
+      return términos.every((w: string) => texto.includes(w)); // TODAS las palabras
+    }).slice(0, 100);
   }, [q, options]);
 
+  // Cerrar al hacer clic afuera (y limpiar el texto de búsqueda).
   useEffect(() => {
-    function onDoc(e: any) { if (wrapRef.current && !wrapRef.current.contains(e.target)) { setOpen(false); setQ(''); } }
+    function onDoc(e: any) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) { setOpen(false); setQ(''); }
+    }
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, []);
 
   if (disabled) {
     return (
-      <div className="w-full px-2.5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-500">
-        {selected ? selected.label : (String(value || '') || '—')}
+      <div className="w-full px-2.5 py-2 bg-slate-100 border border-slate-200 rounded-lg text-xs text-slate-500 truncate">
+        {selectedLabel || (String(value || '') || '—')}
       </div>
     );
   }
 
   return (
-    <div ref={wrapRef} className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-left focus:outline-none focus:border-cyan-500 hover:border-slate-300">
-        <span className={selected ? 'text-slate-800 truncate' : 'text-slate-400'}>
-          {selected ? selected.label : (placeholder || 'Buscar y seleccionar...')}
-        </span>
-        <ChevronDown className={'w-4 h-4 text-slate-400 flex-shrink-0 transition-transform ' + (open ? 'rotate-180' : '')} />
-      </button>
+    <div ref={wrapRef} className="relative w-full">
+      <div className="relative flex items-center">
+        <Search className="absolute left-2.5 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
+        <input
+          type="text"
+          value={display}
+          onChange={(e) => { setQ(e.target.value); if (!open) setOpen(true); }}
+          onFocus={() => { setOpen(true); setQ(''); }}
+          placeholder={placeholder || 'Escribe para buscar...'}
+          className="w-full pl-8 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs focus:outline-none focus:border-cyan-500 hover:border-slate-300 text-slate-800 truncate"
+        />
+        <ChevronDown className={'absolute right-2.5 w-4 h-4 text-slate-400 pointer-events-none transition-transform ' + (open ? 'rotate-180' : '')} />
+      </div>
 
       {open && (
-        <div className="mt-1 border border-slate-200 rounded-lg bg-white shadow-md overflow-hidden">
-          <div className="p-2 border-b border-slate-100 relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-            <input autoFocus value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Escribe para buscar..."
-              className="w-full pl-7 pr-2 py-1.5 bg-slate-50 border border-slate-200 rounded text-xs focus:outline-none focus:border-cyan-500" />
-          </div>
-          <div className="max-h-52 overflow-y-auto">
-            {filtradas.length === 0 ? (
-              <div className="px-3 py-3 text-slate-400 text-xs text-center">Sin resultados</div>
-            ) : (
-              filtradas.map((o: any) => (
-                <button type="button" key={o.value}
-                  onClick={() => { onChange(o.value); setOpen(false); setQ(''); }}
-                  className={'w-full text-left px-3 py-2 text-xs hover:bg-cyan-50 border-b border-slate-50 last:border-0 ' +
-                    (String(o.value) === String(value) ? 'bg-cyan-50 font-semibold text-cyan-800' : 'text-slate-700')}>
-                  {o.label}
-                </button>
-              ))
-            )}
-            {options.length > 80 && q.trim() === '' && (
-              <div className="px-3 py-2 text-[10px] text-slate-400 bg-slate-50">Mostrando 80 de {options.length}. Escribe para filtrar.</div>
-            )}
-          </div>
+        <div className="absolute left-0 right-0 top-full z-[60] mt-1 border border-slate-200 rounded-lg bg-white shadow-xl max-h-60 overflow-y-auto">
+          {filtradas.length === 0 ? (
+            <div className="px-3 py-3 text-slate-400 text-xs text-center">Sin resultados{q.trim() ? ' para "' + q.trim() + '"' : ''}</div>
+          ) : (
+            filtradas.map((o: any) => (
+              <button
+                type="button"
+                key={o.value}
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => { onChange(o.value); setQ(''); setOpen(false); }}
+                className={'w-full text-left px-3 py-2 text-xs hover:bg-cyan-50 border-b border-slate-50 last:border-0 block truncate ' +
+                  (String(o.value) === String(value) ? 'bg-cyan-50 font-semibold text-cyan-800' : 'text-slate-700')}
+              >
+                {o.label}
+              </button>
+            ))
+          )}
+          {options.length > 100 && q.trim() === '' && (
+            <div className="sticky bottom-0 px-3 py-1.5 text-[10px] text-slate-400 bg-slate-50 border-t border-slate-100">
+              Mostrando 100 de {options.length}. Escribe para filtrar.
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -648,15 +657,15 @@ export default function AdminPanel() {
       {/* Modal de formulario (crear / editar) */}
       {form && (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-8 overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4" style={{ background: '#1a3c6e' }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-8">
+            <div className="flex items-center justify-between px-5 py-4 rounded-t-2xl" style={{ background: '#1a3c6e' }}>
               <div className="text-white font-bold text-sm flex items-center gap-2">
                 {esNuevo ? <Plus className="w-4 h-4" /> : <Edit3 className="w-4 h-4" />}
                 {esNuevo ? 'Nuevo en ' : 'Editar en '} {cfg.label}
               </div>
               <button onClick={() => setForm(null)} className="text-white/80 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto">
+            <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
               {cfg.campos.map((c: any) => {
                 const bloqueadoLlave = c.key && !esNuevo; // no se cambia la llave al editar
                 return (
