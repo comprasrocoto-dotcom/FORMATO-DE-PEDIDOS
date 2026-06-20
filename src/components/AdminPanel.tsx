@@ -478,7 +478,7 @@ export default function AdminPanel() {
             <ShieldCheck className="w-5 h-5 text-cyan-300" />
             <div>
               <div className="text-white font-bold text-sm">Panel de Administración</div>
-              <div className="text-blue-300 text-xs">Artículos · Proveedores · Catálogo de Compras</div>
+              <div className="text-blue-300 text-xs">Artículos · Proveedores · Catálogo de Compras · buscador v2</div>
             </div>
           </div>
           <div className="flex items-center gap-2">
