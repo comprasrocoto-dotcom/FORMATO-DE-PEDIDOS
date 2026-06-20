@@ -1,8 +1,6 @@
 // @ts-nocheck
 /**
- * AjustePedidos.tsx v10b
- * Fix: insertBefore crash - iniciarEdicion sincrono, carga productos via useEffect
- * Fix: reemplazado {isEdit && ...} por display:none para evitar crash DOM
+ * AjustePedidos.tsx v15
  */
 import { useState, useEffect, useRef } from 'react';
 import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Download, Search, Plus } from 'lucide-react';
@@ -296,8 +294,8 @@ export default function AjustePedidos() {
       var rows = data.rows || []; var mapa = {};
       rows.forEach(function(r) {
         if (!Array.isArray(r)) return; var nOrden = String(r[0] || ''); if (!nOrden) return;
-        if (!mapa[nOrden]) { mapa[nOrden] = { nOrden, fecha: String(r[1]||'---').split('T')[0]||String(r[1]||'---'), sede: String(r[2]||'---'), proveedor: String(r[3]||'---'), responsable: String(r[9]||'---'), medioPago: String(r[11]||'contado'), nroFactura: String(r[13]||''), tipoFactura: String(r[14]||''), obsFactura: String(r[15]||''), numeroPedidoSistema: String(r[16]||''), notaCredito: String(r[17]||''), lineas: [] }; }
-        if (r[4] || r[5]) { mapa[nOrden].lineas.push({ nOrden, fecha: mapa[nOrden].fecha, sede: mapa[nOrden].sede, proveedor: mapa[nOrden].proveedor, codigo: String(r[4]||''), articulo: String(r[5]||''), unidad: String(r[6]||''), cantidad: parseFloat(String(r[7]||'0'))||0, responsable: mapa[nOrden].responsable, observaciones: String(r[10]||''), medioPago: mapa[nOrden].medioPago }); }
+        if (!mapa[nOrden]) { mapa[nOrden] = { nOrden, fecha: String(r[1]||'---').split('T')[0]||String(r[1]||'---'), sede: String(r[2]||'---'), proveedor: String(r[3]||'---'), responsable: String(r[8]||'---'), medioPago: String(r[10]||'contado'), nroFactura: String(r[12]||''), tipoFactura: String(r[13]||''), obsFactura: String(r[14]||''), numeroPedidoSistema: String(r[15]||''), notaCredito: String(r[16]||''), lineas: [] }; }
+        if (r[4] || r[5]) { mapa[nOrden].lineas.push({ nOrden, fecha: mapa[nOrden].fecha, sede: mapa[nOrden].sede, proveedor: mapa[nOrden].proveedor, codigo: String(r[4]||''), articulo: String(r[5]||''), unidad: '', cantidad: parseFloat(String(r[6]||'0'))||0, responsable: mapa[nOrden].responsable, observaciones: String(r[9]||''), medioPago: mapa[nOrden].medioPago }); }
       });
       var gs = Object.values(mapa).reverse(); setGrupos(gs);
       var ncMap = {}; gs.forEach(function(g){ ncMap[g.nOrden] = g.notaCredito || ''; }); setNotaCreditoMap(ncMap);
