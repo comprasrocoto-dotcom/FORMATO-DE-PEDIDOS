@@ -1,8 +1,9 @@
 // @ts-nocheck
 import SheetsOrderForm, { HistorialDocumentado } from './components/SheetsOrderForm';
 import AjustePedidos from './components/AjustePedidos';
+import AdminPanel from './components/AdminPanel';
 import { useState, Component } from 'react';
-import { ShoppingBag, Edit3, Archive, RefreshCw } from 'lucide-react';
+import { ShoppingBag, Edit3, Archive, RefreshCw, ShieldCheck } from 'lucide-react';
 
 class ErrorBoundary extends Component {
   constructor(props) { super(props); this.state = { hasError: false }; }
@@ -54,6 +55,10 @@ className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibo
 className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all " + (tab==='ajuste'?'bg-white/20 text-white':'text-cyan-300 hover:text-white hover:bg-white/10')}>
 <Edit3 className="w-3.5 h-3.5"/> Ajuste de Pedidos
 </button>
+<button onClick={function(){setTab('admin');}}
+className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all " + (tab==='admin'?'bg-white/20 text-white':'text-cyan-300 hover:text-white hover:bg-white/10')}>
+<ShieldCheck className="w-3.5 h-3.5"/> Admin
+</button>
 </nav>
 </div>
 </div>
@@ -65,6 +70,7 @@ className={"flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibo
 <HistorialDocumentado proveedoresMeta={proveedoresMeta}/>
 )}
 {tab === 'ajuste' && <AjustePedidos />}
+{tab === 'admin' && <AdminPanel />}
 </ErrorBoundary>
 </main>
 </div>
