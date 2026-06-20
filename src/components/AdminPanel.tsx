@@ -61,13 +61,6 @@ const SHEETS: any = {
       { name: 'Precio_Negociado', label: 'Precio Negociado', type: 'money' },
       { name: 'Estado_Aprobado_Suspendido', label: 'Estado', type: 'select', options: ['Aprobado', 'Suspendido'] },
     ],
-    // Columnas de solo lectura resueltas desde ARTICULOS por Codigo_Barras
-    extra: [
-      { label: 'Referencia',  field: 'Codigo_Referencia' },
-      { label: 'Categoría',   field: 'Subfamilia_Categoria' },
-      { label: 'U.M. HiOPOS', field: 'UniMedida_Formato_HiOPOS' },
-      { label: 'U.M. Compra', field: 'UniMedida_Compra' },
-    ],
   },
 };
 
@@ -117,10 +110,13 @@ function RefSelect({ value, options, disabled, onChange, placeholder }: any) {
   const selected = options.find((o: any) => String(o.value) === String(value));
 
   const filtradas = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    const base = s
-      ? options.filter((o: any) => o.label.toLowerCase().includes(s) || String(o.value).toLowerCase().includes(s))
-      : options;
+    const términos = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const base = términos.length === 0
+      ? options
+      : options.filter((o: any) => {
+          const texto = (o.label + ' ' + o.value).toLowerCase();
+          return términos.every((t: string) => texto.includes(t)); // todas las palabras deben coincidir
+        });
     return base.slice(0, 80);
   }, [q, options]);
 
@@ -277,6 +273,26 @@ export default function AdminPanel() {
     return artByCode[String(codigo || '').trim().toUpperCase()] || null;
   }
 
+  // Mapa de proveedor COMPLETO por ID_Proveedor.
+  const provById = useMemo(() => {
+    const m: any = {};
+    (data.PROVEEDORES || []).forEach((p: any) => {
+      m[String(p.ID_Proveedor || '').trim().toUpperCase()] = p;
+    });
+    return m;
+  }, [data]);
+
+  function proveedorDe(id: any) {
+    return provById[String(id || '').trim().toUpperCase()] || null;
+  }
+
+  // Nombre del proveedor: Razón Social + Nombre Comercial (sin ID).
+  function proveedorNombre(id: any) {
+    const p = proveedorDe(id);
+    if (!p) return String(id || '') || '—';
+    return joinDash([p.Razon_Social, p.Nombre_Comercial]) || (String(id || '') || '—');
+  }
+
   function refLabel(refSheet: string, value: any) {
     const m = refLabels[refSheet] || {};
     return m[String(value || '').trim().toUpperCase()] || '';
@@ -379,16 +395,20 @@ export default function AdminPanel() {
   // ── Filtro de la tabla ───────────────────────────────────────────────────────
   const filas = useMemo(() => {
     const cfg = SHEETS[activeSheet];
-    const q = busq.trim().toLowerCase();
+    const términos = busq.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const rows = data[activeSheet] || [];
-    if (!q) return rows;
-    return rows.filter((r: any) =>
-      cfg.campos.some((c: any) => String(r[c.name] || '').toLowerCase().includes(q)) ||
-      (activeSheet === 'CATALOGO_COMPRAS' && (
-        refLabel('ARTICULOS', r.Codigo_Barras).toLowerCase().includes(q) ||
-        refLabel('PROVEEDORES', r.ID_Proveedor).toLowerCase().includes(q)
-      ))
-    );
+    if (términos.length === 0) return rows;
+    return rows.filter((r: any) => {
+      let texto = cfg.campos.map((c: any) => String(r[c.name] ?? '')).join(' ');
+      if (activeSheet === 'CATALOGO_COMPRAS') {
+        const art = articuloDe(r.Codigo_Barras);
+        const prov = proveedorDe(r.ID_Proveedor);
+        if (art) texto += ' ' + [art.Codigo_Referencia, art.Subfamilia_Categoria, art.Articulo_HiOPOS, art.UniMedida_Formato_HiOPOS, art.Articulo_Comercial, art.UniMedida_Compra].join(' ');
+        if (prov) texto += ' ' + [prov.Razon_Social, prov.Nombre_Comercial].join(' ');
+      }
+      texto = texto.toLowerCase();
+      return términos.every((t: string) => texto.includes(t)); // todas las palabras
+    });
   }, [data, activeSheet, busq, refLabels]);
 
   // ───────────────────────────── LOGIN ─────────────────────────────────────────
@@ -515,54 +535,95 @@ export default function AdminPanel() {
             <table className="w-full text-xs whitespace-nowrap">
               <thead className="sticky top-0 z-10">
                 <tr style={{ background: '#1a3c6e' }}>
-                  {cfg.campos.map((c: any) => (
-                    <th key={c.name} className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">{c.label}</th>
-                  ))}
-                  {activeSheet === 'CATALOGO_COMPRAS' && cfg.extra.map((x: any) => (
-                    <th key={x.field} className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">{x.label}</th>
-                  ))}
+                  {activeSheet === 'CATALOGO_COMPRAS' ? (
+                    <>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Código de Barras</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Categoría</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Referencia</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Nombre y Unidad HiOPOS</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Nombre y Unidad Comercial</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Proveedor</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Prioridad</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Precio Negociado</th>
+                      <th className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">Estado</th>
+                    </>
+                  ) : (
+                    cfg.campos.map((c: any) => (
+                      <th key={c.name} className="py-2.5 px-3 text-left text-white font-bold uppercase tracking-wider">{c.label}</th>
+                    ))
+                  )}
                   <th className="py-2.5 px-3 text-center text-white font-bold uppercase tracking-wider w-24">Acciones</th>
                 </tr>
               </thead>
               <tbody>
-                {filas.map((r: any, i: number) => (
+                {filas.map((r: any, i: number) => {
+                  const art = activeSheet === 'CATALOGO_COMPRAS' ? articuloDe(r.Codigo_Barras) : null;
+                  return (
                   <tr key={i} className={'border-b border-slate-100 ' + (i % 2 === 0 ? 'bg-white' : 'bg-slate-50/60')}>
-                    {cfg.campos.map((c: any) => (
-                      <td key={c.name} className="py-2 px-3 text-slate-700">
-                        {c.type === 'priority' ? (
-                          (r[c.name] !== '' && r[c.name] != null) ? (
-                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-bold ' + ((PRIO[String(r[c.name])] || {}).cls || 'bg-slate-100 text-slate-500')}>
-                              {String(r[c.name])}{PRIO[String(r[c.name])] ? ' · ' + PRIO[String(r[c.name])].label : ''}
-                            </span>
-                          ) : '—'
-                        ) : c.type === 'money' ? (
-                          <span className="font-medium text-slate-800">$ {formatMoneyCO(r[c.name])}</span>
-                        ) : c.name === 'Estado_Aprobado_Suspendido' ? (
-                          <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold ' +
-                            (String(r[c.name]).toLowerCase().indexOf('suspend') >= 0
-                              ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
-                            {r[c.name] || '---'}
-                          </span>
-                        ) : c.type === 'ref' ? (
-                          <div>
-                            <div className="font-mono font-semibold text-slate-800">{r[c.name] || '---'}</div>
-                            <div className="text-[11px] text-slate-500">{refLabel(c.refSheet, r[c.name]) || '—'}</div>
-                          </div>
-                        ) : c.key ? (
-                          <span className="font-mono font-semibold text-slate-800">{r[c.name] || '---'}</span>
-                        ) : (
-                          String(r[c.name] ?? '') || '---'
-                        )}
-                      </td>
-                    ))}
-                    {activeSheet === 'CATALOGO_COMPRAS' && cfg.extra.map((x: any) => {
-                      const art = articuloDe(r.Codigo_Barras);
-                      return (
-                        <td key={x.field} className="py-2 px-3 text-slate-600">
-                          {art && String(art[x.field] ?? '').trim() !== '' ? String(art[x.field]) : '—'}
+                    {activeSheet === 'CATALOGO_COMPRAS' ? (
+                      <>
+                        {/* 1. Código de Barras */}
+                        <td className="py-2 px-3"><span className="font-mono font-semibold text-slate-800">{r.Codigo_Barras || '---'}</span></td>
+                        {/* 2. Categoría */}
+                        <td className="py-2 px-3 text-slate-600">{art && String(art.Subfamilia_Categoria ?? '').trim() ? String(art.Subfamilia_Categoria) : '—'}</td>
+                        {/* 3. Referencia */}
+                        <td className="py-2 px-3 text-slate-600">{art && String(art.Codigo_Referencia ?? '').trim() ? String(art.Codigo_Referencia) : '—'}</td>
+                        {/* 4. Nombre y Unidad HiOPOS */}
+                        <td className="py-2 px-3">
+                          <div className="text-slate-800 font-medium">{art && String(art.Articulo_HiOPOS ?? '').trim() ? String(art.Articulo_HiOPOS) : '—'}</div>
+                          <div className="text-[11px] text-slate-500">{art && String(art.UniMedida_Formato_HiOPOS ?? '').trim() ? String(art.UniMedida_Formato_HiOPOS) : ''}</div>
                         </td>
-                      );
-                    })}
+                        {/* 5. Nombre y Unidad Comercial */}
+                        <td className="py-2 px-3">
+                          <div className="text-slate-800 font-medium">{art && String(art.Articulo_Comercial ?? '').trim() ? String(art.Articulo_Comercial) : '—'}</div>
+                          <div className="text-[11px] text-slate-500">{art && String(art.UniMedida_Compra ?? '').trim() ? String(art.UniMedida_Compra) : ''}</div>
+                        </td>
+                        {/* 6. Proveedor (Razón Social + Nombre Comercial, sin ID) */}
+                        <td className="py-2 px-3 text-slate-700">{proveedorNombre(r.ID_Proveedor)}</td>
+                        {/* 7. Prioridad */}
+                        <td className="py-2 px-3">
+                          {(r.Prioridad !== '' && r.Prioridad != null) ? (
+                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-bold ' + ((PRIO[String(r.Prioridad)] || {}).cls || 'bg-slate-100 text-slate-500')}>
+                              {String(r.Prioridad)}{PRIO[String(r.Prioridad)] ? ' · ' + PRIO[String(r.Prioridad)].label : ''}
+                            </span>
+                          ) : '—'}
+                        </td>
+                        {/* 8. Precio Negociado */}
+                        <td className="py-2 px-3"><span className="font-medium text-slate-800">$ {formatMoneyCO(r.Precio_Negociado)}</span></td>
+                        {/* 9. Estado */}
+                        <td className="py-2 px-3">
+                          <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold ' +
+                            (String(r.Estado_Aprobado_Suspendido).toLowerCase().indexOf('suspend') >= 0
+                              ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
+                            {r.Estado_Aprobado_Suspendido || '---'}
+                          </span>
+                        </td>
+                      </>
+                    ) : (
+                      cfg.campos.map((c: any) => (
+                        <td key={c.name} className="py-2 px-3 text-slate-700">
+                          {c.type === 'priority' ? (
+                            (r[c.name] !== '' && r[c.name] != null) ? (
+                              <span className={'px-2 py-0.5 rounded-full text-[10px] font-bold ' + ((PRIO[String(r[c.name])] || {}).cls || 'bg-slate-100 text-slate-500')}>
+                                {String(r[c.name])}{PRIO[String(r[c.name])] ? ' · ' + PRIO[String(r[c.name])].label : ''}
+                              </span>
+                            ) : '—'
+                          ) : c.type === 'money' ? (
+                            <span className="font-medium text-slate-800">$ {formatMoneyCO(r[c.name])}</span>
+                          ) : c.name === 'Estado_Aprobado_Suspendido' ? (
+                            <span className={'px-2 py-0.5 rounded-full text-[10px] font-semibold ' +
+                              (String(r[c.name]).toLowerCase().indexOf('suspend') >= 0
+                                ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700')}>
+                              {r[c.name] || '---'}
+                            </span>
+                          ) : c.key ? (
+                            <span className="font-mono font-semibold text-slate-800">{r[c.name] || '---'}</span>
+                          ) : (
+                            String(r[c.name] ?? '') || '---'
+                          )}
+                        </td>
+                      ))
+                    )}
                     <td className="py-2 px-3">
                       <div className="flex items-center justify-center gap-1.5">
                         <button onClick={() => abrirEditar(r)} title="Editar"
@@ -576,7 +637,8 @@ export default function AdminPanel() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
