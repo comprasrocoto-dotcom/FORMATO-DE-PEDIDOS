@@ -7,7 +7,7 @@ import { RefreshCw, Edit3, Save, X, AlertCircle, CheckCircle, Package, Clock, Do
 import { actualizarPedido, actualizarFactura, getProveedores, getAllDatos, appendPedido, getProductosByProveedor } from '../services/googleSheets';
 import { generarPDF } from '../utils/pdfGenerator';
 
-const ENDPOINT = 'https://script.google.com/macros/s/AKfycbzlfjOyyYCGj5AaSTScISTq3rEL3b8AB9en2LYKsbhmZ8P3goP9J15NC7QVt1ePgIAWCA/exec';
+import { APPS_SCRIPT_URL as ENDPOINT } from '../config';
 
 function getProvMeta(proveedoresMeta, nombre) {
   if (!proveedoresMeta || !nombre) return { nit:'---', telefono:'---', correo:'---', contacto:'---' };
