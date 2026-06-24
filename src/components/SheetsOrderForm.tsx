@@ -1,7 +1,16 @@
 // @ts-nocheck
 /**
  * ============================================================================
- *  SheetsOrderForm.tsx  ·  v38
+ *  SheetsOrderForm.tsx  ·  v39
+ * ============================================================================
+ *  CAMBIO v38 -> v39 (FIX ZONA HORARIA COLOMBIA):
+ *  - Se elimina el uso de new Date().toISOString() para generar la fecha del
+ *    pedido, porque toISOString() devuelve la fecha en UTC (GMT+0). Como
+ *    Colombia es GMT-5, al caer la tarde/noche la fecha "saltaba" al día
+ *    siguiente.
+ *  - Ahora la fecha se calcula con fechaBogotaISO(), que fuerza la zona
+ *    America/Bogota independientemente de cómo esté configurado el reloj del
+ *    dispositivo del usuario. Devuelve siempre YYYY-MM-DD.
  * ============================================================================
  */
 import { useState, useEffect, useRef } from 'react';
@@ -10,6 +19,31 @@ import { getProveedorSheetNames,  getProveedores,  getProductosByProveedor, getP
 import { generarPDF } from '../utils/pdfGenerator';
 
 import { APPS_SCRIPT_URL as ENDPOINT } from '../config';
+
+/**
+ * Devuelve la fecha de HOY en formato YYYY-MM-DD según la zona horaria de
+ * Colombia (America/Bogota), SIN depender de la zona configurada en el
+ * dispositivo del usuario.
+ *
+ * Por qué: new Date().toISOString() entrega la fecha/hora en UTC (GMT+0).
+ * Como Colombia va 5 horas atrás (GMT-5), a partir de la tarde/noche el día
+ * en UTC ya había cambiado, así que el pedido se guardaba con la fecha del día
+ * siguiente. Forzar 'America/Bogota' corrige esto de raíz y también protege
+ * contra dispositivos con la zona horaria mal configurada.
+ *
+ * Se usa el locale 'en-CA' porque formatea como YYYY-MM-DD, exactamente el
+ * formato que el resto de la app espera (filtros e <input type="date">).
+ *
+ * @returns {string} Fecha local de Colombia en formato YYYY-MM-DD.
+ */
+function fechaBogotaISO() {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(new Date());
+}
 
 function validarProveedorFGH(provMeta) {
   if (!provMeta) return false;
@@ -1045,7 +1079,8 @@ export default function SheetsOrderForm() {
       provTel:provMeta?provMeta.telefono||'---':'---',
       provCorreo:provMeta?provMeta.correo||'---':'---',
       provContacto:provMeta?(provMeta.contacto||provMeta.asesor||'---'):'---',
-      orden:Math.floor(Date.now()/1000),fecha:new Date().toISOString().split('T')[0]
+      // FIX v39: fecha en hora de Colombia (America/Bogota), no en UTC.
+      orden:Math.floor(Date.now()/1000),fecha:fechaBogotaISO()
     };
     try {
       localStorage.setItem('ped_responsable',snap.resp);
